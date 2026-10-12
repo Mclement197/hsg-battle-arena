@@ -25,7 +25,7 @@
   const state = {
     data: null, period: 7, model: '', measure: 'tokens', historyLimit: 20,
     skillsExpanded: false, selectedDay: -1, days: [], models: [], pending: false,
-    stale: false, today: '', controller: null
+    stale: false, today: '', controller: null, page: 'overview'
   };
 
   function element(tag, className, content) {
@@ -98,6 +98,10 @@
     assert(isDay(data.range.start) && isDay(data.range.end) && data.range.start <= data.range.end && data.range.timeZone === TZ);
     assert(Array.isArray(data.daily) && Array.isArray(data.skills) && Array.isArray(data.requests));
     assert(isObject(data.coverage) && isNumber(data.coverage.sessions) && Array.isArray(data.coverage.notes));
+    for (const key of ['agents', 'agentDaily', 'skillCatalog', 'tasks']) assert(data[key] == null || Array.isArray(data[key]));
+    for (const row of data.agents ?? []) assert(isObject(row) && isString(row.id) && isString(row.name) && isNumber(row.scopedSessions));
+    for (const row of data.skillCatalog ?? []) assert(isObject(row) && isString(row.id) && isString(row.name) && (row.description == null || isString(row.description)));
+    for (const row of data.tasks ?? []) assert(isObject(row) && isString(row.id) && isString(row.title) && isInstant(row.observedAt));
     assert(data.coverage.notes.every(isString) && isString(data.coverage.skillMetric) && isString(data.coverage.historyMetric));
     data.daily.forEach((row) => {
       assert(isObject(row) && isDay(row.date) && isString(row.model) && isString(row.provider));
@@ -194,6 +198,8 @@
     $('timeline-empty').querySelector('p').textContent = 'Refresh to try loading your snapshot again.';
     $('model-chart').replaceChildren(emptyState('No snapshot loaded', 'Model usage will appear when data is available.'));
     $('skills-list').replaceChildren(emptyState('No snapshot loaded', 'Skill attribution will appear when data is available.'));
+    $('agents-list').replaceChildren(emptyState('No snapshot loaded', 'The agent directory will appear when data is available.'));
+    $('tasks-list').replaceChildren(emptyState('No snapshot loaded', 'Recorded work will appear when data is available.'));
     $('history-table-wrap').hidden = true;
     $('history-empty').hidden = false;
     setText('history-empty-title', 'No snapshot loaded');
@@ -219,6 +225,7 @@
       showShell();
       populateModels();
       renderSnapshot();
+      renderRoute(false);
       announce('Usage snapshot loaded. ' + count(data.daily.length) + ' daily model records available.');
     } catch (error) {
       showShell();
@@ -275,7 +282,12 @@
     setText('skill-metric', (data.coverage.skillMetric || 'No skill attribution details were supplied.') + ' Counts cover the whole snapshot and do not change with date or model filters.');
     setText('history-metric', data.coverage.historyMetric || 'Metadata-inferred agent activity, not user prompts or individual provider calls.');
     setText('skills-subtitle', 'Whole snapshot: ' + data.range.start + ' to ' + data.range.end);
+    const detailCoverage = data.coverage.details;
+    setText('agents-coverage', detailCoverage ? 'Directory coverage: ' + detailCoverage.agents + '. Configured agents may be outside AFP accounting scope.' : 'Configured agent coverage unavailable in this snapshot.');
+    setText('skills-coverage', detailCoverage ? 'Skill directory coverage: ' + detailCoverage.skills + '. Counts are observed instruction reads only.' : 'Skill catalog coverage unavailable in this snapshot.');
+    setText('activity-coverage', detailCoverage ? 'Task coverage: ' + detailCoverage.tasks + '. ' + detailCoverage.taskMetric + ' ' + detailCoverage.toolStepMetric : 'Task detail coverage unavailable; run history is inferred from metadata.');
     renderSkills();
+    renderAgents();
     renderFiltered();
     updateFreshness();
   }
@@ -300,6 +312,11 @@
     });
     state.models = [...modelMap.values()].sort((a, b) => b.totalTokens - a.totalTokens || a.model.localeCompare(b.model));
     const leader = state.models[0];
+    const modelHref = pageUrl('models', { ...(state.period !== 7 ? { period: state.period } : {}), ...(state.model ? { filter: state.model } : {}) });
+    $('metric-tokens-link').href = modelHref;
+    $('metric-calls-link').href = modelHref;
+    $('metric-model-link').href = leader && leader.totalTokens > 0 ? pageUrl('models', { model: leader.model, ...(state.period !== 7 ? { period: state.period } : {}), ...(state.model ? { filter: state.model } : {}) }) : modelHref;
+    $('metric-model-link').querySelector('.metric-action').textContent = leader && leader.totalTokens > 0 ? 'View model details →' : 'View models →';
     setText('metric-tokens', covered ? compact(totals.totalTokens) : '—');
     $('metric-tokens').title = covered ? count(totals.totalTokens) + ' total tokens' : 'Selected dates are outside snapshot coverage';
     setText('metric-tokens-note', covered ? count(totals.totalTokens) + ' recorded tokens' : 'Outside snapshot coverage');
@@ -310,8 +327,8 @@
     setText('metric-model-note', leader && totals.totalTokens > 0 ? percentFormat.format(leader.totalTokens / totals.totalTokens) + ' of selected tokens' : covered ? 'No recorded tokens in this view' : 'Outside snapshot coverage');
     const skillCount = data.skills.reduce((sum, skill) => sum + skill.count, 0);
     setText('metric-skills', data.skills.length ? compact(skillCount) : '—');
-    $('metric-skills').title = data.skills.length ? count(skillCount) + ' attributed skill uses across the whole snapshot' : 'No named skill attribution in this snapshot';
-    setText('metric-skills-note', data.skills.length ? count(data.skills.length) + ' named skills · whole snapshot' : 'No named attribution available');
+    $('metric-skills').title = data.skills.length ? count(skillCount) + ' observed instruction reads across the whole snapshot' : 'No named skill attribution in this snapshot';
+    setText('metric-skills-note', data.skills.length ? count(data.skills.length) + ' named skills · whole snapshot' : 'No named reads available');
     let rangeLabel = formatRange(range.start, range.end) + ', ' + range.end.slice(0, 4);
     if (!covered) rangeLabel += ' · outside snapshot';
     else if (start !== range.start || end !== range.end) rangeLabel += ' · partial coverage';
@@ -339,6 +356,7 @@
     renderTimeline();
     renderModels();
     renderHistory();
+    renderDetails();
   }
 
   function renderTimeline() {
@@ -425,9 +443,9 @@
     if (!models.length || !total) list.append(emptyState('No recorded ' + unit, 'Choose another model or time range to compare usage.'));
     else models.slice(0, 6).forEach((model, index) => {
       const name = model.model || 'Unspecified model';
-      const button = element('button', 'model-row');
-      button.type = 'button';
-      button.setAttribute('aria-label', name + ': ' + count(model[key]) + ' ' + unit + ', ' + percentFormat.format(model[key] / total) + '. Filter to this model.');
+      const button = element('a', 'model-row');
+      button.href = pageUrl('models', { model: model.model });
+      button.setAttribute('aria-label', name + ': ' + count(model[key]) + ' ' + unit + ', ' + percentFormat.format(model[key] / total) + '. View usage details.');
       const heading = element('span', 'model-row-top');
       heading.append(element('span', 'model-name', name), element('span', 'model-percent', percentFormat.format(model[key] / total)));
       const bar = svgElement('svg', { class: 'model-bar', viewBox: '0 0 300 6', preserveAspectRatio: 'none', 'aria-hidden': 'true' });
@@ -436,57 +454,111 @@
       const footer = element('span', 'model-row-bottom');
       footer.append(element('span', 'model-provider', [...model.providers].join(', ') || 'Provider unspecified'), element('span', 'model-amount', compact(model[key]) + ' ' + unit));
       button.append(heading, bar, footer);
-      button.addEventListener('click', () => {
-        state.model = model.model;
-        state.historyLimit = 20;
-        $('model-filter').value = state.model;
-        renderFiltered();
-        $('model-filter').focus({ preventScroll: true });
-        announce('Filtered to ' + name + '. Choose All models to reset.');
-      });
       list.append(button);
     });
-    setText('models-note', models.length > 6 ? 'Top 6 shown; the table includes all ' + count(models.length) + ' models. Select a model to filter.' : state.model ? 'Showing one model. Choose All models above to compare again.' : 'Select a model to filter. Bars scale to the leading model.');
+    setText('models-note', models.length > 6 ? 'Top 6 shown; the table includes all ' + count(models.length) + ' models. Select a model for details.' : state.model ? 'Showing one model. Choose All models above to compare again.' : 'Select a model for details. Bars scale to the leading model.');
     if (!models.length) tableMessage($('model-table-body'), 5, 'No recorded model usage in this view.');
-    else $('model-table-body').replaceChildren(...models.map((model) => tableRow([
-      model.model || 'Unspecified model', [...model.providers].join(', ') || 'Unspecified', count(model.totalTokens), count(model.requests),
-      model.missingCost ? (model.cost > 0 ? currencyFormat.format(model.cost) + ' known (incomplete)' : 'Unavailable') : currencyFormat.format(model.cost)
-    ])));
+    else $('model-table-body').replaceChildren(...models.map((model) => {
+      const row = tableRow([model.model || 'Unspecified model', [...model.providers].join(', ') || 'Unspecified', count(model.totalTokens), count(model.requests),
+        model.missingCost ? (model.cost > 0 ? currencyFormat.format(model.cost) + ' known (incomplete)' : 'Unavailable') : currencyFormat.format(model.cost)]);
+      const link = element('a', 'text-link', model.model || 'Unspecified model');
+      link.href = pageUrl('models', { model: model.model });
+      row.children[0].replaceChildren(link);
+      return row;
+    }));
   }
 
   function renderSkills() {
-    const skills = [...state.data.skills].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-    const visible = state.skillsExpanded ? skills : skills.slice(0, 6);
-    if (!skills.length) $('skills-list').replaceChildren(emptyState('No named skill attribution', 'This snapshot does not contain attributed skill counts. That does not mean no skills were used. See the coverage explanation above.'));
-    else $('skills-list').replaceChildren(...visible.map((skill) => {
-      const row = element('article', 'skill-row');
-      const content = element('div');
-      content.append(element('h3', 'skill-name', skill.name || 'Unnamed skill'));
-      if (skill.description) content.append(element('p', 'skill-description', skill.description));
-      const lastUsed = element('p', 'skill-time', skill.lastUsedAt ? 'Last observed ' + fullDateFormat.format(new Date(skill.lastUsedAt)) + ' Zurich' : 'Last observation unavailable');
-      const badge = element('span', 'skill-count', count(skill.count));
-      badge.setAttribute('aria-label', count(skill.count) + ' attributed uses');
-      content.append(lastUsed);
-      row.append(content, badge);
-      return row;
+    if (!state.data) return;
+    const catalog = state.data.skillCatalog;
+    const rows = catalog ?? state.data.skills.map((skill) => ({ ...skill, id: skill.name, observedReads: skill.count, lastObservedAt: skill.lastUsedAt, description: null }));
+    const query = $('skills-search').value.trim().toLocaleLowerCase();
+    $('skills-clear-search').hidden = !query;
+    const skills = rows.filter((row) => !query || (row.name + ' ' + (row.description ?? '')).toLocaleLowerCase().includes(query))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const visible = state.skillsExpanded || query ? skills : skills.slice(0, 12);
+    $('skills-list').replaceChildren(...visible.map((skill) => {
+      const link = element('a', 'skill-row entity-link');
+      link.href = pageUrl('skills', { skill: skill.id });
+      const body = element('span');
+      body.append(element('strong', 'skill-name', skill.name), element('span', 'skill-description', skill.description || 'Public description unavailable'));
+      link.append(body, element('span', 'skill-count', skill.observedReads == null ? 'Reads unavailable' : count(skill.observedReads) + ' reads'));
+      return link;
     }));
-    $('skills-more').hidden = skills.length <= 6;
+    if (!skills.length) $('skills-list').replaceChildren(emptyState(query ? 'No matching skills' : 'Skill directory unavailable',
+      query ? 'Try another name or description, or clear the search.' : catalog == null ? 'This snapshot has no public skill directory.' : 'No published skills in this snapshot.'));
+    $('skills-more').hidden = !!query || skills.length <= 12;
     $('skills-more').textContent = state.skillsExpanded ? 'Show fewer skills' : 'Show all ' + count(skills.length) + ' skills';
     $('skills-more').setAttribute('aria-expanded', String(state.skillsExpanded));
+    setText('skills-subtitle', catalog == null ? 'Named instruction reads only · directory unavailable' : 'Main agent skill directory · public descriptions');
+    setText('skill-metric', 'Observed instruction reads are not completed skill executions. Counts cover the whole snapshot, not the selected date or model.');
+  }
+
+  function renderAgents() {
+    if (!state.data) return;
+    const agents = state.data.agents;
+    if (agents == null) return $('agents-list').replaceChildren(emptyState('Directory unavailable', 'This snapshot has no configured agent directory. Refresh when metadata is available.'));
+    if (!agents.length) return $('agents-list').replaceChildren(emptyState('No agents published', 'No configured agents were included in this public directory.'));
+    $('agents-list').replaceChildren(...agents.map((agent) => {
+      const link = element('a', 'directory-row entity-link'); link.href = pageUrl('agents', { agent: agent.id });
+      link.append(element('strong', '', agent.name), element('span', '', agent.role || 'Role unavailable'),
+        element('small', '', agent.usageState === 'observed' ? count(agent.scopedSessions) + ' scoped sessions' : 'No scoped usage claim'));
+      return link;
+    }));
+  }
+
+  function taskMoment(task) {
+    const ongoing = ['running', 'queued'].includes(task.status) && !task.endedAt;
+    const lastRunAt = (state.data?.requests ?? []).filter((row) => row.taskId === task.id)
+      .reduce((latest, row) => !latest || Date.parse(row.at) > Date.parse(latest) ? row.at : latest, null);
+    return { ongoing, at: ongoing ? task.observedAt : task.endedAt || task.startedAt || lastRunAt,
+      label: ongoing ? (task.status === 'queued' ? 'Queued at snapshot · since ' : 'Running at snapshot · since ') + (task.startedAt ? fullDateFormat.format(new Date(task.startedAt)) + ' Zurich' : 'start unavailable') :
+        task.endedAt ? 'Ended ' + fullDateFormat.format(new Date(task.endedAt)) + ' Zurich' :
+          task.startedAt ? 'Started ' + fullDateFormat.format(new Date(task.startedAt)) + ' Zurich' :
+            lastRunAt ? 'Latest recorded run ' + fullDateFormat.format(new Date(lastRunAt)) + ' Zurich' : 'Work date unavailable' };
+  }
+  function renderTasks(query) {
+    const tasks = state.data.tasks;
+    $('undated-task-note').hidden = true;
+    if (tasks == null) { state.taskCount = 0; $('tasks-list').replaceChildren(emptyState('Task details unavailable', 'This snapshot contains inferred run activity only.')); return; }
+    const range = currentRange();
+    const undated = tasks.filter((task) => !taskMoment(task).at).length;
+    if (undated) {
+      setText('undated-task-note', count(undated) + ' task ' + (undated === 1 ? 'record has' : 'records have') + ' no known work date and ' + (undated === 1 ? 'is' : 'are') + ' excluded from this date-filtered list.');
+      $('undated-task-note').hidden = false;
+    }
+    const matches = tasks.filter((task) => {
+      const moment = taskMoment(task);
+      const inTime = moment.ongoing ? dateKey(task.startedAt || task.observedAt) <= range.end && dateKey(task.observedAt) >= range.start :
+        !!moment.at && within(dateKey(moment.at), range.start, range.end);
+      return inTime && (!query || (task.title + ' ' + (task.summary || '') + ' ' + task.agentId).toLocaleLowerCase().includes(query));
+    }).sort((a, b) => Date.parse(taskMoment(b).at) - Date.parse(taskMoment(a).at) || a.id.localeCompare(b.id));
+    state.taskCount = matches.length;
+    $('tasks-list').replaceChildren(...matches.map((task) => {
+      const link = element('a', 'directory-row entity-link'); link.href = pageUrl('activity', { task: task.id });
+      const agent = state.data.agents?.find((item) => item.id === task.agentId);
+      link.append(element('strong', '', task.title), element('span', '', task.summary || 'Public summary unavailable'),
+        element('small', '', (agent?.name || task.agentId) + ' · ' + task.status + ' · ' + taskMoment(task).label));
+      return link;
+    }));
+    if (!matches.length) $('tasks-list').replaceChildren(emptyState(query ? 'No matching work' : 'No recorded tasks in this view', query ? 'Change or clear your search.' : 'Try another date range; coverage may be incomplete.'));
   }
 
   function renderHistory() {
     if (!state.data) return;
     const range = currentRange();
     const query = $('history-search').value.trim().toLocaleLowerCase();
-    const rows = state.requestRows.filter((row) => within(row.day, range.start, range.end) && within(row.day, state.data.range.start, state.data.range.end) && (!state.model || row.model === state.model) && (!query || (row.description + ' ' + row.model).toLocaleLowerCase().includes(query)));
+    $('activity-clear-search').hidden = !query;
+    const rows = state.requestRows.filter((row) => within(row.day, range.start, range.end) && within(row.day, state.data.range.start, state.data.range.end) && (!query || (row.description + ' ' + row.model).toLocaleLowerCase().includes(query)));
     const visible = rows.slice(0, state.historyLimit);
-    setText('history-count', count(rows.length) + (rows.length === 1 ? ' entry' : ' entries'));
+    renderTasks(query);
+    setText('history-count', count(rows.length) + (rows.length === 1 ? ' run' : ' runs'));
     $('history-table-wrap').hidden = !rows.length;
-    $('history-empty').hidden = rows.length > 0;
+    $('runs-heading').hidden = !rows.length;
+    $('history-empty').hidden = rows.length > 0 || state.taskCount > 0;
     $('clear-search').hidden = !query;
     setText('history-empty-title', query ? 'No matching activity' : 'No activity in this view');
-    setText('history-empty-message', query ? 'Try a different search, or clear it to see activity in the selected period.' : 'Try another time range or model. Available history depends on the snapshot coverage.');
+    setText('history-empty-message', query ? 'Try a different search, or clear it to see activity in the selected period.' : 'Try another time range. Available history depends on snapshot coverage.');
     const statusClass = (status) => {
       if (/^(ok|success|completed|complete|done)$/i.test(status)) return 'status-success';
       if (/^(error|failed|failure|aborted)$/i.test(status)) return 'status-error';
@@ -500,30 +572,228 @@
       date.dateTime = request.at;
       date.title = fullDateFormat.format(new Date(request.at)) + ' (Europe/Zurich)';
       when.append(date, element('span', 'request-time', timeFormat.format(new Date(request.at))));
-      const description = element('td', 'request-description', request.description || 'Description unavailable');
-      const model = element('td');
-      model.append(element('span', 'request-model', request.model || 'Unspecified model'));
-      const tokens = element('td', 'number-cell');
-      tokens.append(element('span', 'request-tokens', tokenLabel(request.totalTokens)));
-      const details = element('details', 'token-details');
-      const summary = element('summary', '', 'Breakdown');
-      summary.setAttribute('aria-label', 'Token breakdown for activity on ' + fullDateFormat.format(new Date(request.at)));
-      const breakdown = element('dl');
-      categories.forEach(([key, label]) => {
-        const item = element('div');
-        item.append(element('dt', '', label), element('dd', '', tokenLabel(request[key])));
-        breakdown.append(item);
-      });
-      details.append(summary, breakdown);
-      tokens.append(details);
+      const description = element('td', 'request-description');
+      const activityLink = element('a', 'text-link', request.description || 'Inferred activity');
+      activityLink.href = pageUrl('activity', { run: request.id });
+      description.append(activityLink);
+      const agentCell = element('td');
+      const agent = state.data.agents?.find((item) => item.id === request.agentId);
+      if (agent) { const link = element('a', 'text-link', agent.name); link.href = pageUrl('agents', { agent: agent.id }); agentCell.append(link); }
+      else agentCell.append(element('span', '', request.agentId || 'Unavailable'));
+      const steps = element('td', 'number-cell', request.observedToolSteps == null ? 'Unavailable' : count(request.observedToolSteps));
       const status = element('td');
       status.append(element('span', 'status-badge ' + statusClass(request.status), request.status || 'Unspecified'));
-      row.append(when, description, model, tokens, status);
+      row.append(when, description, agentCell, steps, status);
       return row;
     }));
-    setText('history-showing', rows.length ? 'Showing ' + count(visible.length) + ' of ' + count(rows.length) + ' entries' : 'No entries to show');
+    setText('history-showing', rows.length ? 'Showing ' + count(visible.length) + ' of ' + count(rows.length) + ' runs' : 'No runs to show');
     $('history-more').hidden = visible.length >= rows.length;
   }
+
+  const pages = ['overview', 'models', 'agents', 'skills', 'activity'];
+  const titles = { overview: 'Usage overview', models: 'Models', agents: 'Configured agents', skills: 'Skills', activity: 'Activity' };
+  function currentPage() {
+    const path = (window.location?.pathname || '/usage').replace(/\/$/, '');
+    return pages.find((page) => page !== 'overview' && path === '/usage/' + page) || 'overview';
+  }
+  function queryValue(name) {
+    const pair = (window.location?.search || '').replace(/^\?/, '').split('&').find((item) => item.split('=')[0] === name);
+    if (!pair) return '';
+    try { return decodeURIComponent(pair.slice(name.length + 1).replace(/\+/g, ' ')); } catch { return ''; }
+  }
+  function pageUrl(page, params = {}) {
+    if (state.data && currentPage() === page) {
+      if (['overview', 'models', 'activity'].includes(page) && state.period !== 7 && params.period === undefined) params = { ...params, period: state.period };
+      if (['overview', 'models'].includes(page) && state.model && params.filter === undefined) params = { ...params, filter: state.model };
+      const q = page === 'skills' ? $('skills-search').value.trim() : page === 'activity' ? $('history-search').value.trim() : '';
+      if (q && params.q === undefined) params = { ...params, q };
+    }
+    const query = Object.entries(params).filter(([, value]) => value !== '' && value != null)
+      .map(([name, value]) => encodeURIComponent(name) + '=' + encodeURIComponent(value)).join('&');
+    return '/usage' + (page === 'overview' ? '' : '/' + page) + (query ? '?' + query : '');
+  }
+  function syncFilters() {
+    if (!window.history?.replaceState) return;
+    const page = currentPage();
+    const key = { models: 'model', agents: 'agent', skills: 'skill', activity: queryValue('task') ? 'task' : 'run' }[page];
+    const params = {};
+    if (key && queryValue(key)) params[key] = queryValue(key);
+    if (['overview', 'models', 'activity'].includes(page)) {
+      if (state.period !== 7) params.period = state.period;
+      if (state.model && page !== 'activity') params.filter = state.model;
+    }
+    const q = page === 'skills' ? $('skills-search').value.trim() : page === 'activity' ? $('history-search').value.trim() : '';
+    if (q) params.q = q;
+    window.history.replaceState(null, '', pageUrl(page, params));
+  }
+  function restoreFilters() {
+    const period = Number(queryValue('period'));
+    state.period = [1, 7, 30].includes(period) ? period : 7;
+    state.model = queryValue('filter');
+    $('model-filter').value = state.model;
+    document.querySelectorAll('[data-period]').forEach((item) => item.setAttribute('aria-pressed', String(Number(item.dataset.period) === state.period)));
+    $('skills-search').value = currentPage() === 'skills' ? queryValue('q') : '';
+    $('history-search').value = currentPage() === 'activity' ? queryValue('q') : '';
+  }
+  function navigate(href, focus = true) {
+    if (window.history?.pushState) { window.history.pushState(null, '', href); renderRoute(focus); }
+    else if (window.location) window.location.href = href;
+  }
+  function detailField(label, value) { const pair = element('div'); pair.append(element('dt', '', label), element('dd', '', value == null || value === '' ? 'Unavailable' : value)); return pair; }
+  function details(id, title, base, entries) {
+    const box = $(id); box.replaceChildren(); box.hidden = false;
+    const back = element('a', 'back-link', '← Back to ' + base); back.href = pageUrl(base);
+    box.append(back, element('h2', '', title));
+    const list = element('dl', 'detail-grid');
+    entries.forEach(([label, value]) => { const pair = element('div');
+      pair.append(element('dt', '', label), element('dd', '', value == null || value === '' ? 'Unavailable' : value)); list.append(pair); });
+    box.append(list); return box;
+  }
+  function detailLink(box, title, href) { const link = element('a', 'detail-action', title + ' →'); link.href = href; box.append(link); }
+  function renderDetails() {
+    for (const id of ['model-detail', 'agent-detail', 'skill-detail', 'activity-detail']) $(id).hidden = true;
+    if (!state.data) return;
+    if (currentPage() === 'models' && queryValue('model')) {
+      const name = queryValue('model'), model = state.models.find((row) => row.model === name);
+      const box = details('model-detail', model ? name : 'Model unavailable', 'models', model ? [
+        ['Recorded tokens', count(model.totalTokens)], ['Model entries', count(model.requests)],
+        ['Provider', [...model.providers].join(', ')], ['Reported cost', model.missingCost ? 'Incomplete or unavailable' : currencyFormat.format(model.cost)]
+      ] : []);
+      if (model) {
+        box.append(element('p', 'fine-print', 'Selected range: ' + $('range-label').textContent + '. Missing token buckets are unavailable, not zero.'));
+        box.append(element('h3', '', 'Token categories'));
+        const buckets = element('dl', 'detail-grid');
+        categories.forEach(([key, label]) => buckets.append(detailField(label, tokenLabel(model[key]))));
+        box.append(buckets, element('h3', '', 'Daily usage in this view'));
+        const range = currentRange();
+        const list = element('ul', 'detail-records');
+        state.data.daily.filter((row) => row.model === name && within(row.date, range.start, range.end) && within(row.date, state.data.range.start, state.data.range.end))
+          .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30).forEach((row) =>
+            list.append(element('li', '', row.date + ' · ' + count(row.totalTokens) + ' tokens · ' + count(row.requests) + ' entries · ' +
+              categories.map(([key, label]) => label + ': ' + tokenLabel(row[key])).join(' · '))));
+        box.append(list);
+      } else box.append(element('p', '', 'No matching model in the selected range. Clear filters or return to all models.'));
+    }
+    if (currentPage() === 'agents' && queryValue('agent')) {
+      const agent = state.data.agents?.find((row) => row.id === queryValue('agent'));
+      const box = details('agent-detail', agent?.name || 'Agent unavailable', 'agents', agent ? [
+        ['Role', agent.role], ['Configured model', agent.configuredModel], ['Runtime', agent.runtime],
+        ['AFP-scoped sessions', count(agent.scopedSessions)],
+        ['Usage evidence', agent.usageState === 'observed' ? 'Observed in scope' : agent.usageState === 'no_scoped_sessions' ? 'No scoped sessions' : 'Unavailable']
+      ] : []);
+      if (agent) {
+        box.append(element('p', 'fine-print', 'Configured does not mean currently running. The directory may be wider than AFP usage scope.'));
+        const daily = (state.data.agentDaily?.filter((row) => row.agentId === agent.id) ?? [])
+          .sort((a, b) => b.date.localeCompare(a.date) || a.model.localeCompare(b.model));
+        if (daily.length) { box.append(element('h3', '', 'Attributed usage · whole snapshot window'));
+          box.append(element('p', 'fine-print', state.data.range.start + ' to ' + state.data.range.end + ' (Europe/Zurich). ' +
+            (daily.length > 10 ? 'Latest 10 of ' + count(daily.length) + ' daily model records shown.' : count(daily.length) + ' daily model records shown.') + ' Not the selected date/model filter.'));
+          const list = element('ul', 'detail-records'); daily.slice(0, 10).forEach((row) => list.append(element('li', '', row.date + ' · ' + row.model + ' · ' + tokenLabel(row.totalTokens) + ' tokens'))); box.append(list); }
+        const tasks = state.data.tasks?.filter((row) => row.agentId === agent.id) ?? [];
+        if (tasks.length) { box.append(element('h3', '', 'Recorded work'));
+          tasks.slice(0, 10).forEach((task) => detailLink(box, task.title, pageUrl('activity', { task: task.id }))); }
+      } else box.append(element('p', '', 'This agent is not in the public directory.'));
+    }
+    if (currentPage() === 'skills' && queryValue('skill')) {
+      const skill = state.data.skillCatalog?.find((row) => row.id === queryValue('skill')) ??
+        state.data.skills.find((row) => row.name === queryValue('skill'));
+      const box = details('skill-detail', skill?.name || 'Skill unavailable', 'skills', skill ? [
+        ['Source', skill.source], ['Eligible', skill.eligible == null ? null : skill.eligible ? 'Yes' : 'No'],
+        ['Disabled', skill.disabled == null ? null : skill.disabled ? 'Yes' : 'No'],
+        ['Visible to selected model', skill.modelVisible == null ? null : skill.modelVisible ? 'Yes' : 'No'],
+        ['User-invocable', skill.userInvocable == null ? null : skill.userInvocable ? 'Yes' : 'No'],
+        ['Observed instruction reads', skill.observedReads == null ? skill.count == null ? null : count(skill.count) : count(skill.observedReads)],
+        ['Last observed', skill.lastObservedAt || skill.lastUsedAt ? fullDateFormat.format(new Date(skill.lastObservedAt || skill.lastUsedAt)) + ' Zurich' : null]
+      ] : []);
+      if (skill) { box.insertBefore(element('p', 'detail-summary', skill.descriptionSource !== 'unavailable' && skill.description ? skill.description : 'Public skill description unavailable.'), box.children[2]);
+        box.append(element('p', 'fine-print', 'Main agent skill directory. Observed instruction reads do not prove execution or completed work.'));
+      } else box.append(element('p', '', 'No matching public skill detail is available.'));
+    }
+    if (currentPage() === 'activity' && (queryValue('task') || queryValue('run'))) {
+      const task = state.data.tasks?.find((row) => row.id === queryValue('task'));
+      const run = state.data.requests.find((row) => row.id === queryValue('run'));
+      const agent = state.data.agents?.find((row) => row.id === (task || run)?.agentId);
+      const box = details('activity-detail', task?.title || run?.description || 'Activity unavailable', 'activity', task ? [
+        ['Agent', agent?.name || task.agentId], ['Status', task.status + ' · ' + task.statusSource.replaceAll('_', ' ')],
+        ['Observed', fullDateFormat.format(new Date(task.observedAt)) + ' Zurich'],
+        ['Started', task.startedAt ? fullDateFormat.format(new Date(task.startedAt)) + ' Zurich' : null],
+        ['Ended', task.endedAt ? fullDateFormat.format(new Date(task.endedAt)) + ' Zurich' : null],
+        ['Duration', task.durationMs == null ? null : Math.round(task.durationMs / 1000) + ' s'],
+        ['Model selection', task.model ? task.model + ' (session selection, not verified per-run use)' : null],
+        ['Observed runs', task.observedRuns == null ? null : count(task.observedRuns)],
+        ['Observed tool steps', task.observedToolSteps == null ? null : count(task.observedToolSteps)],
+        ['Work categories', task.categories?.length ? task.categories.join(' · ') : null]
+      ] : run ? [
+        ['Agent', agent?.name || run.agentId], ['Status', run.status],
+        ['Observed', fullDateFormat.format(new Date(run.at)) + ' Zurich'],
+        ['Started', run.startedAt ? fullDateFormat.format(new Date(run.startedAt)) + ' Zurich' : null],
+        ['Ended', run.endedAt ? fullDateFormat.format(new Date(run.endedAt)) + ' Zurich' : null],
+        ['Duration', run.durationMs == null ? null : Math.round(run.durationMs / 1000) + ' s'],
+        ['Model', run.model === 'Not attributed' ? null : run.model],
+        ['Tokens', run.totalTokens == null ? null : count(run.totalTokens)],
+        ['Observed tool steps', run.observedToolSteps == null ? null : count(run.observedToolSteps)],
+        ['Categories', run.categories?.length ? run.categories.join(' · ') : null]
+      ] : []);
+      if (task) {
+        box.insertBefore(element('p', 'detail-summary', task.summary || (task.titleSource === 'inferred' ? 'Title inferred from public metadata.' : 'Public summary unavailable.')), box.children[2]);
+        if (agent) detailLink(box, 'View ' + agent.name, pageUrl('agents', { agent: agent.id }));
+        const related = state.data.requests.filter((row) => row.taskId === task.id);
+        if (related.length) { box.append(element('h3', '', 'Linked runs'));
+          related.slice(0, 20).forEach((row) => detailLink(box, fullDateFormat.format(new Date(row.at)) + ' · ' + row.description, pageUrl('activity', { run: row.id }))); }
+      } else if (run) {
+        const known = categories.filter(([key]) => run[key] !== null && run[key] !== undefined);
+        if (known.length) { box.append(element('h3', '', 'Known token buckets'));
+          const buckets = element('dl', 'detail-grid'); known.forEach(([key, label]) => buckets.append(detailField(label, count(run[key])))); box.append(buckets); }
+        box.append(element('p', 'fine-print', 'Metadata-inferred run activity, not a prompt or verified provider request. Unknown model and tokens are not zero.'));
+        if (run.taskId && state.data.tasks?.some((row) => row.id === run.taskId)) detailLink(box, 'View related task', pageUrl('activity', { task: run.taskId }));
+      } else box.append(element('p', '', 'This item is not in the current snapshot. Return to the list or refresh.'));
+    }
+  }
+
+  function renderRoute(focus = true) {
+    const page = currentPage(); state.page = page;
+    restoreFilters();
+    if (state.data) { renderSkills(); renderFiltered(); }
+    pages.forEach((name) => { $(name + '-page').hidden = name !== page; });
+    document.querySelectorAll('.nav-link').forEach((link) => {
+      const active = link.getAttribute('href') === '/usage' + (page === 'overview' ? '' : '/' + page);
+      link.classList.toggle('is-active', active);
+      if (active) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+    });
+    $('global-filters').hidden = page === 'agents' || page === 'skills';
+    $('model-control').hidden = page === 'activity';
+    $('models-overview').hidden = page === 'models' && !!queryValue('model');
+    $('agents-list').hidden = page === 'agents' && !!queryValue('agent');
+    $('skills').hidden = page === 'skills' && !!queryValue('skill');
+    $('skills-search').parentNode && ($('skills-search').parentNode.hidden = page === 'skills' && !!queryValue('skill'));
+    $('history').hidden = page === 'activity' && !!(queryValue('task') || queryValue('run'));
+    renderDetails();
+    const isDetail = (page === 'models' && queryValue('model')) || (page === 'agents' && queryValue('agent')) ||
+      (page === 'skills' && queryValue('skill')) || (page === 'activity' && (queryValue('task') || queryValue('run')));
+    setText('page-title', titles[page] + (isDetail ? ' detail' : ''));
+    document.title = titles[page] + ' — AFP Usage';
+    announce(titles[page] + (isDetail ? ' detail' : '') + ' loaded.');
+    if (focus) { $('page-title').focus({ preventScroll: true }); window.scrollTo?.(0, 0); }
+    if (page === 'models' && !isDetail && state.data) renderTimeline();
+  }
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest?.('a[href]');
+    if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target || link.hasAttribute('download')) return;
+    const href = link.getAttribute('href');
+    if (!href?.startsWith('/usage') || !/^\/usage(?:\/(?:models|agents|skills|activity))?(?:\?|$)/.test(href)) return;
+    event.preventDefault(); navigate(href);
+  });
+  window.addEventListener('popstate', () => renderRoute());
+  $('reset-filters').addEventListener('click', () => {
+    state.period = 7; state.model = ''; $('model-filter').value = '';
+    document.querySelectorAll('[data-period]').forEach((item) => item.setAttribute('aria-pressed', String(item.dataset.period === '7')));
+    if (currentPage() === 'activity') $('history-search').value = '';
+    renderFiltered(); syncFilters(); announce('Filters cleared.');
+  });
+  $('skills-search').addEventListener('input', () => { state.skillsExpanded = false; renderSkills(); syncFilters(); announce($('skills-list').children.length + ' matching skills.'); });
+  $('skills-clear-search').addEventListener('click', () => {
+    $('skills-search').value = ''; renderSkills(); syncFilters(); $('skills-search').focus(); announce('Skill search cleared.');
+  });
 
   $('refresh-button').addEventListener('click', () => loadUsage());
   $('retry-button').addEventListener('click', () => loadUsage());
@@ -531,14 +801,14 @@
     state.period = Number(button.dataset.period);
     state.historyLimit = 20;
     document.querySelectorAll('[data-period]').forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
-    renderFiltered();
+    renderFiltered(); syncFilters();
     announce('Showing ' + (state.period === 1 ? 'today' : 'the last ' + state.period + ' days') + ' in Europe/Zurich. Skill counts remain snapshot-wide.');
   }));
   $('model-filter').addEventListener('change', (event) => {
     state.model = event.target.value;
     state.historyLimit = 20;
-    renderFiltered();
-    announce('Showing ' + (state.model || 'all models') + '. Skill counts remain snapshot-wide.');
+    renderFiltered(); syncFilters();
+    announce('Showing ' + (state.model || 'all models') + '. Skill reads remain snapshot-wide; run models are not attributed.');
   });
   document.querySelectorAll('[data-measure]').forEach((button) => button.addEventListener('click', () => {
     state.measure = button.dataset.measure;
@@ -551,16 +821,16 @@
     window.clearTimeout(searchTimer);
     searchTimer = window.setTimeout(() => {
       state.historyLimit = 20;
-      renderHistory();
+      renderHistory(); syncFilters();
       if (state.data) announce($('history-count').textContent + ' match this view.');
     }, 160);
   });
-  $('clear-search').addEventListener('click', () => {
-    $('history-search').value = '';
-    state.historyLimit = 20;
-    renderHistory();
-    $('history-search').focus();
-  });
+  function clearActivitySearch() {
+    $('history-search').value = ''; state.historyLimit = 20;
+    renderHistory(); syncFilters(); $('history-search').focus(); announce('Activity search cleared.');
+  }
+  $('clear-search').addEventListener('click', clearActivitySearch);
+  $('activity-clear-search').addEventListener('click', clearActivitySearch);
   $('history-more').addEventListener('click', () => {
     state.historyLimit += 20;
     renderHistory();
@@ -607,23 +877,6 @@
     resizeObserver.observe($('timeline-chart'));
   }
 
-  const navLinks = [...document.querySelectorAll('.nav-link')];
-  function markSection(id) {
-    navLinks.forEach((link) => {
-      const active = link.getAttribute('href') === '#' + id;
-      link.classList.toggle('is-active', active);
-      if (active) link.setAttribute('aria-current', 'location');
-      else link.removeAttribute('aria-current');
-    });
-  }
-  navLinks.forEach((link) => link.addEventListener('click', () => markSection(link.hash.slice(1))));
-  if ('IntersectionObserver' in window) {
-    const observer = new IntersectionObserver((entries) => {
-      const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-      if (visible.length) markSection(visible[0].target.id);
-    }, { rootMargin: '-5% 0px -65% 0px', threshold: 0 });
-    document.querySelectorAll('.anchor-section').forEach((section) => observer.observe(section));
-  }
 
   // No usage data is persisted. A restored page fetches a fresh public snapshot.
   window.addEventListener('pageshow', (event) => { if (event.persisted) { clearData(); loadUsage(); } });
@@ -633,5 +886,6 @@
     const today = dateKey(Date.now());
     if (today !== state.today) { state.today = today; renderFiltered(); }
   }, 60000);
+  renderRoute(false);
   loadUsage();
 })();

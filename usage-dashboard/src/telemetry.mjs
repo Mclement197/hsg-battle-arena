@@ -126,12 +126,17 @@ const TOOLS = new Map([
   ['skills_read', 'Skill instruction read'], ['sessions_spawn', 'Delegation'],
   ['exec', 'Tool activity'], ['image_generate', 'Media activity']
 ]);
-export function safeSummary(toolNames) {
+export const taskId = (agentId, sessionId) => opaqueId('task', agentId, sessionId);
+export function activityCategories(toolNames) {
   const categories = [...new Set(toolNames.map((tool) => TOOLS.get(tool) ?? 'Tool activity'))].sort();
+  return categories.length ? categories.slice(0, 12) : ['Agent activity'];
+}
+export function safeSummary(toolNames) {
+  const categories = activityCategories(toolNames).filter((name) => name !== 'Agent activity');
   return categories.length ? categories.slice(0, 3).join(' · ') + ' (inferred)' : 'Agent activity';
 }
 export function auditProjection(events, sessions, range) {
-  const allowed = new Map(sessions.map((session) => [sessionKey(session), session]));
+  const allowed = new Map(sessions.flatMap((session) => [session.key, ...(session.aliases ?? [])].map((key) => [sessionKey({ ...session, key }), session])));
   const seen = new Set();
   const runs = new Map();
   let skillReads = 0;
@@ -149,14 +154,17 @@ export function auditProjection(events, sessions, range) {
     if (event.action !== action + 'started' && event.action !== action + 'finished') continue;
     seen.add(event.eventId);
     const runKey = JSON.stringify([session.agentId, session.sessionId, event.runId]);
-    const run = runs.get(runKey) ?? { id: opaqueId('run', session.agentId, session.sessionId, event.runId), at: event.occurredAt, status: 'unknown', terminalAt: -1, names: [], hasRun: false };
+    const run = runs.get(runKey) ?? { id: opaqueId('run', session.agentId, session.sessionId, event.runId), at: event.occurredAt, status: 'unknown', terminalAt: -1, startedAt: null, agentId: safeIdentifier(session.agentId), taskId: taskId(session.agentId, session.sessionId), names: [], steps: new Set(), missingStepIdentity: false, hasRun: false };
     run.at = Math.max(run.at, event.occurredAt);
     if (event.kind === 'agent_run') {
       run.hasRun = true;
+      if (event.action === 'agent.run.started') run.startedAt = run.startedAt === null ? event.occurredAt : Math.min(run.startedAt, event.occurredAt);
       if (event.action === 'agent.run.finished' && event.occurredAt >= run.terminalAt) {
         run.status = event.status; run.terminalAt = event.occurredAt;
       } else if (run.terminalAt < 0) run.status = 'started';
-    } else if (event.action === 'tool.action.finished') {
+    } else {
+      if (nonempty(event.toolCallId)) run.steps.add(event.toolCallId); else run.missingStepIdentity = true;
+      if (event.action !== 'tool.action.finished') { runs.set(runKey, run); continue; }
       const toolKey = JSON.stringify([runKey, event.toolCallId ?? event.eventId]);
       if (!finishedTools.has(toolKey)) {
         finishedTools.add(toolKey);
@@ -166,12 +174,20 @@ export function auditProjection(events, sessions, range) {
     }
     runs.set(runKey, run);
   }
+  const lifecycle = (run) => ({
+    agentId: run.agentId, taskId: run.taskId,
+    startedAt: run.startedAt === null ? null : new Date(run.startedAt).toISOString(),
+    endedAt: run.terminalAt < 0 ? null : new Date(run.terminalAt).toISOString(),
+    durationMs: run.startedAt !== null && run.terminalAt >= run.startedAt ? run.terminalAt - run.startedAt : null,
+    categories: activityCategories(run.names), observedToolSteps: run.missingStepIdentity ? null : run.steps.size || null
+  });
+  const taskActivity = [...runs.values()].map((run) => ({ ...lifecycle(run), observedRuns: run.hasRun ? 1 : null }));
   const requests = [...runs.values()].sort((a, b) => b.at - a.at || a.id.localeCompare(b.id)).slice(0, 100).map((run) => ({
     id: run.id, at: new Date(run.at).toISOString(), model: 'Not attributed',
     description: safeSummary(run.names), input: null, output: null, cacheRead: null,
-    cacheWrite: null, totalTokens: null, status: run.status
+    cacheWrite: null, totalTokens: null, status: run.status, ...lifecycle(run)
   }));
-  return { requests, skillReads, missingIdentity, runCount: runs.size };
+  return { requests, skillReads, missingIdentity, runCount: runs.size, taskActivity };
 }
 
 export function verifiedSessionKeys(sessions) {

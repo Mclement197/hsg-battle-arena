@@ -396,3 +396,100 @@ test('cached source freshness is disclosed without leaking session identifiers',
   assert.ok(snapshot.coverage.notes.some(note=>note.includes('oldest source refresh')));
   assert.ok(!JSON.stringify(snapshot).includes(root.key));
 });
+
+
+test('optional details use only a single root-agent catalog and preserve exact accounting', async () => {
+  const { taskId, descriptionHash } = await import('../src/details.mjs');
+  const { validateSnapshot, publicSnapshot } = await import('../src/handler.mjs');
+  const base = fixture({ sessions: [root, child], audit: [event(), event({ eventId: 'start-proof', action: 'agent.run.started', status: 'started', occurredAt: now.getTime() - 2000 })] });
+  const detailCalls = [];
+  const publicMetadata = { schemaVersion: 1, agents: { main: { name: 'Coordinator', role: 'Project coordination' } },
+    skills: { research: { descriptionHash: descriptionHash('PRIVATE descriptor'), description: 'Review public primary sources.' } },
+    tasks: { [taskId(root.agentId, root.sessionId)]: { title: 'Project reporting', summary: 'Report verified project work.' } } };
+  const rpc = async (method, params) => {
+    if (method === 'agents.list') { detailCalls.push({ method, params }); return { agents: [
+      { id: 'main', name: 'PRIVATE name', workspace: '/home/private', model: { primary: 'openai/gpt-test' }, agentRuntime: { id: 'openclaw' } },
+      { id: 'qa' }, { id: 'idle' } ] }; }
+    if (method === 'skills.status') { detailCalls.push({ method, params }); return { agentId: 'main', skills: [{ name: 'research', description: 'PRIVATE descriptor', source: 'openclaw-managed', eligible: true, disabled: false }] }; }
+    const result = await base.rpc(method, params);
+    const life = s => ({ ...s, label: 'PRIVATE label', task: 'PRIVATE prompt', model: 'gpt-test', modelProvider: 'openai',
+      status: 'done', hasActiveRun: false, startedAt: now.getTime() - 3000, endedAt: now.getTime() - 1000, snapshotAt: now.getTime() });
+    if (method === 'sessions.describe') result.session = life(result.session);
+    if (method === 'sessions.list') result.sessions = result.sessions.map(life);
+    return result;
+  };
+  const snapshot = await collectSnapshot(config, { rpc, now, retryDelays: [], readMetadata: async () => publicMetadata });
+  assert.deepEqual(detailCalls, [{ method: 'agents.list', params: {} }, { method: 'skills.status', params: { agentId: 'main' } }]);
+  assert.equal(snapshot.daily[0].agentId, undefined);
+  assert.deepEqual(mergeDaily(snapshot.agentDaily.map(({ agentId, ...r }) => r)), snapshot.daily);
+  assert.equal(snapshot.agents.find(a => a.id === 'idle').usageState, 'no_scoped_sessions');
+  assert.equal(snapshot.skillCatalog[0].description, 'Review public primary sources.');
+  assert.equal(snapshot.skillCatalog[0].observedReads, null);
+  assert.equal(snapshot.tasks[0].title, 'Project reporting');
+  assert.equal(snapshot.tasks[0].durationMs, 2000);
+  assert.equal(snapshot.requests[0].durationMs, 1000);
+  assert.equal(snapshot.requests[0].model, 'Not attributed');
+  assert.equal(snapshot.requests[0].taskId, snapshot.tasks[0].id);
+  assert.equal(validateSnapshot(snapshot), true);
+  assert.deepEqual(publicSnapshot(snapshot), snapshot);
+  assert.ok(!JSON.stringify(snapshot).includes('PRIVATE'));
+  assert.ok(!JSON.stringify(snapshot).includes(root.key));
+  assert.ok(!base.calls.some(c => c.method === 'sessions.usage' && c.params.agentId === 'idle'));
+});
+
+test('new read-source failures and malformed results do not discard usable core usage', async () => {
+  const f = fixture();
+  const rpc = async (method, params) => {
+    if (method === 'agents.list' || method === 'skills.status') throw new Error('PRIVATE error credentials');
+    return f.rpc(method, params);
+  };
+  let writes = 0;
+  const snapshot = await run(config, { rpc, now, retryDelays: [], readMetadata: async () => { throw new Error('PRIVATE metadata'); },
+    writeSnapshot: async (path, value) => { writes++; assert.equal(value.daily[0].totalTokens, 170); } });
+  assert.equal(writes, 1);
+  assert.equal(snapshot.agents, null);
+  assert.equal(snapshot.skillCatalog, null);
+  assert.equal(snapshot.coverage.details.agents, 'unavailable');
+  assert.equal(snapshot.coverage.details.skills, 'unavailable');
+  assert.equal(snapshot.tasks.length, 1);
+  assert.ok(!JSON.stringify(snapshot).includes('PRIVATE'));
+  const malformed = await collectSnapshot(config, { now, rpc: async (method, params) =>
+    method === 'agents.list' ? { agents: 'not-array' } : method === 'skills.status' ? { skills: null } : f.rpc(method, params),
+    retryDelays: [], readMetadata: async () => ({ schemaVersion: 42 }) });
+  assert.equal(malformed.agents, null);
+  assert.equal(malformed.skillCatalog, null);
+  assert.equal(malformed.daily[0].totalTokens, 170);
+});
+
+test('collector revalidates scope after optional source reads and uses current lifecycle facts', async () => {
+  const f = fixture();
+  let reads = 0;
+  const rpc = async (method, params) => {
+    if (method === 'agents.list' || method === 'skills.status') return null;
+    const result = await f.rpc(method, params);
+    if (method === 'sessions.describe') result.session = { ...root, status: ++reads === 1 ? 'running' : 'done',
+      hasActiveRun: reads === 1, startedAt: now.getTime() - 2000, endedAt: reads === 1 ? null : now.getTime() - 1000 };
+    return result;
+  };
+  const snapshot = await collectSnapshot(config, { rpc, now, retryDelays: [], readMetadata: async () => null });
+  assert.equal(snapshot.tasks[0].status, 'succeeded');
+  assert.equal(snapshot.tasks[0].durationMs, 1000);
+  let changed = false;
+  const unsafeRpc = async (method, params) => {
+    if (method === 'agents.list') { changed = true; return null; }
+    if (method === 'skills.status') return null;
+    if (method === 'sessions.describe' && changed) return { session: { ...root, sessionId: 'new-instance' } };
+    return f.rpc(method, params);
+  };
+  await rejectsCode(collectSnapshot(config, { rpc: unsafeRpc, now, retryDelays: [], readMetadata: async () => null }), 'SESSION_CHANGED_DURING_COLLECTION');
+});
+
+test('the additive CLI method allowlist never admits content or capability endpoints', async () => {
+  const methods = [];
+  const runner = async (command, args) => { methods.push(args[2]); return { stdout: '{}' }; };
+  await gatewayRpc('agents.list', {}, runner);
+  await gatewayRpc('skills.status', { agentId: 'main' }, runner);
+  assert.deepEqual(methods, ['agents.list', 'skills.status']);
+  for (const method of ['tools.effective', 'config.get', 'agents.files.get', 'skills.skillCard', 'tasks.list', 'chat.history'])
+    await rejectsCode(gatewayRpc(method, {}, runner), 'RPC_METHOD_NOT_ALLOWED');
+});

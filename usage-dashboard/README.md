@@ -12,6 +12,18 @@ A public, read-only, responsive AI usage dashboard at **https://afp.mclement.ch/
 
 The dashboard opens without a password. Anyone with the URL can read the sanitized usage snapshot. OpenClaw and Cloudflare credentials, raw prompts, transcripts and private session identifiers are never published.
 
+## Pages and drill-downs
+
+- **Overview:** a concise entry point to the deeper views.
+- **Models:** comparison and individual-model usage, with recorded token buckets and unknowns kept distinct.
+- **Agents:** the configured directory, approved role descriptions, configured models and separately measured AFP activity.
+- **Skills:** the root agent's installed catalogue, reviewed purpose descriptions, availability flags and observed instruction reads.
+- **Activity:** verified session workstreams and recorded agent runs, with public summaries, agent identity, lifecycle evidence, timing and observed tool categories.
+
+The page routes are /usage, /usage/models, /usage/agents, /usage/skills and /usage/activity. Selections and filters use query parameters so links can be shared and browser Back/Forward remains useful. Configuration does not establish that an agent is running or that a skill is executable in every context.
+
+See [the interface brief](DESIGN.md) and [the baseline review](REVIEW.md) for scope and acceptance criteria.
+
 ## Architecture
 
 Node.js 24, standard library only. No production npm dependencies, remote fonts, analytics or CDN assets.
@@ -84,6 +96,16 @@ Install the reviewed observer following [plugin/README.md](plugin/README.md), li
 - Local estimated costs, where recorded, are not a provider invoice.
 
 No dashboard password, login endpoint, or session cookie is used. Public API requests omit credentials; the service only serves a validated, allowlisted snapshot and fixed static assets. Local collection state stays owner-private. OpenClaw authentication is unchanged. Hub, OpenClaw and usage share one trusted origin: paths are not browser security boundaries. Do not cohost untrusted applications here.
+
+### Reviewed public metadata
+
+Directories use the supported read-only agents.list and skills.status APIs. Agent accounting reuses the already scoped session reports rather than collecting account-wide totals. The catalogue describes the root agent's skills; different agents can resolve different catalogues.
+
+The public HTTP boundary validates the optional details through src/public-details.mjs. Authored runtime labels and skill frontmatter are not automatically safe to publish. The reviewed data/public-metadata.json file contains public names/roles, skill descriptions bound to a SHA-256 digest of the installed descriptor, and task titles/summaries keyed by the opaque exact-instance task identifier. It contains no private session keys or raw tasks. Changed or unreviewed descriptions remain unavailable until reviewed. New task instances do not inherit approvals merely because their labels match.
+
+Tasks here are verified session/delegation workstreams, not a complete inventory of human requests. Lifecycle success does not prove product acceptance. Recorded session model selection is not substituted for historical per-run model attribution. Missing timing endpoints, model splits or tool evidence stay unavailable. Tool steps count deduplicated observations, not reasoning steps, and historical coverage is bounded by retention.
+
+The optional detail fields are additive to snapshot v1. Old snapshots remain valid. A failed optional metadata source should mark that directory unavailable or partial while preserving valid core usage. No complete skill instructions, cached transcript summaries or raw task bodies are published.
 
 ## Verification
 

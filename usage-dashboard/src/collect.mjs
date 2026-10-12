@@ -11,9 +11,11 @@ import {
   isChild, allowedProjectRow, usageState, modelDays, dailyRows, buildSnapshot, verifiedSessionKeys
 } from './telemetry.mjs';
 
+import { buildDetails, DETAIL_LIMITS, readPublicMetadata, sessionDetails } from './details.mjs';
+
 const execute = promisify(execFile);
-const READ_METHODS = new Set(['sessions.describe', 'sessions.list', 'sessions.usage', 'audit.activity.list']);
-export const LIMITS = Object.freeze({ sessions: 200, sessionPages: 20, auditPages: 10, auditEvents: 20000, dailyDetails: 80 });
+const READ_METHODS = new Set(['sessions.describe', 'sessions.list', 'sessions.usage', 'audit.activity.list', 'agents.list', 'skills.status']);
+export const LIMITS = Object.freeze({ sessions: 200, sessionPages: 20, auditPages: 10, auditEvents: 20000, dailyDetails: 80, ...DETAIL_LIMITS });
 const META = { includeDerivedTitles: false, includeLastMessage: false, includeActivitySummary: false };
 
 export async function gatewayRpc(method, params, runner = execute) {
@@ -73,7 +75,7 @@ export async function readConfig(configPath) {
 }
 function metadata(row) {
   const identity = sessionIdentity(row);
-  return { ...identity, projectId: row.projectId, parentSessionKey: row.parentSessionKey,
+  return { ...identity, ...sessionDetails(row), projectId: row.projectId, parentSessionKey: row.parentSessionKey,
     spawnedBy: row.spawnedBy, controlOwnerSessionKey: row.controlOwnerSessionKey,
     childSessions: Array.isArray(row.childSessions) ? row.childSessions.filter((key) => typeof key === 'string') : [] };
 }
@@ -228,9 +230,10 @@ export async function readSkillEventFile(filename, io = fs) {
 }
 export async function collectSnapshot(rawConfig, {
   rpc = gatewayRpc, now = new Date(), limits = LIMITS, retryDelays, wait,
-  writeAllowlist = writeSnapshotAtomic, readSkillEvents = readSkillEventFile
+  writeAllowlist = writeSnapshotAtomic, readSkillEvents = readSkillEventFile, readMetadata = readPublicMetadata
 } = {}) {
   const config = validateConfig(rawConfig);
+  limits = { ...LIMITS, ...limits };
   const range = makeRange(now, config.lookbackDays);
   const discover = async () => {
     let discovered;
@@ -261,26 +264,39 @@ export async function collectSnapshot(rawConfig, {
   for (let index = 0; index < sessions.length; index += 1) {
     const report = reports[index];
     const dates = modelDays(report, range);
-    if (range.start === range.end) { rows.push(...dailyRows(report, range, range.start)); continue; }
+    if (range.start === range.end) { rows.push(...dailyRows(report, range, range.start).map((row) => ({ ...row, agentId: sessions[index].agentId }))); continue; }
     if (details.length + dates.length > limits.dailyDetails) {
-      rows.push(...dailyRows(report, range));
+      rows.push(...dailyRows(report, range).map((row) => ({ ...row, agentId: sessions[index].agentId })));
       notes.push('Daily detail query bound reached; affected model token buckets are unknown, not proportionally estimated.');
     } else for (const date of dates) details.push({ session: sessions[index], date });
   }
   for (const detailRows of await mapBounded(details, async ({ session, date }) => {
     const dayRange = { ...range, start: date, end: date };
-    return dailyRows(await usage(session, dayRange), dayRange, date);
+    return dailyRows(await usage(session, dayRange), dayRange, date).map((row) => ({ ...row, agentId: session.agentId }));
   })) rows.push(...detailRows);
   const audit = await collectAudit(rpc, sessions, range, now, limits);
+  // Optional read sources never replace a usable core report with an error or fabricated zero.
+  const optional = async (read) => { try { return await read(); } catch { return null; } };
+  const root = sessions.find((session) => [session.key, ...session.aliases].includes(config.rootSessionKey));
+  const [directory, catalog, metadata] = await Promise.all([
+    optional(() => rpc('agents.list', {})),
+    optional(() => rpc('skills.status', { agentId: root.agentId })),
+    optional(() => readMetadata())
+  ]);
   // Revalidate membership and instance IDs before committing a potentially long collection.
   const current = await discover();
   const identities = (items) => items.map((item) => JSON.stringify([sessionKey(item), item.sessionId, [...item.aliases].sort()])).sort().join('\n');
   if (identities(current) !== identities(sessions)) fail('SESSION_CHANGED_DURING_COLLECTION');
   if (cachedRefreshes.length) notes.push('Active usage is refreshing. Counts include the latest available verified rollups; oldest source refresh: ' + new Date(Math.min(...cachedRefreshes)).toISOString() + '. Very recent model entries may not be included yet.');
   const observedSkills = await readSkillEvents(config.skillEventsPath);
-  return buildSnapshot({ now, range, sessions, rows, events: audit.events,
+  const detailSnapshot = buildDetails({ now, range, sessions: current, rows, events: audit.events, rootSessionKey: config.rootSessionKey,
+    directory, catalog, metadata, limits, auditPartial: audit.notes.length > 0,
+    skillEvents: observedSkills.events, skillEventsAvailable: observedSkills.available });
+  const snapshot = buildSnapshot({ now, range, sessions: current, rows: rows.map(({ agentId, ...row }) => row), events: audit.events,
     skillEvents: observedSkills.events, skillEventsAvailable: observedSkills.available, scopeLabel: config.scopeLabel,
-    notes: [...notes, ...audit.notes, ...observedSkills.notes] });
+    notes: [...notes, ...audit.notes, ...observedSkills.notes, ...detailSnapshot.notes] });
+  return { ...snapshot, agents: detailSnapshot.agents, agentDaily: detailSnapshot.agentDaily, skillCatalog: detailSnapshot.skillCatalog, tasks: detailSnapshot.tasks,
+    coverage: { ...snapshot.coverage, details: detailSnapshot.coverage } };
 }
 export async function writeSnapshotAtomic(snapshotPath, snapshot, io = fs) {
   const temporary = snapshotPath + '.tmp-' + randomUUID();

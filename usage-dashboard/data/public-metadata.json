@@ -1,0 +1,609 @@
+{
+  "schemaVersion": 1,
+  "agents": {
+    "main": {
+      "name": "Coordinator",
+      "role": "Coordinates AFP work, delegates focused assignments, and integrates and verifies the results."
+    },
+    "dev-builder": {
+      "name": "Builder",
+      "role": "Implements application features and backend changes."
+    },
+    "dev-ui": {
+      "name": "UI Engineer",
+      "role": "Designs and implements interfaces and interaction flows."
+    },
+    "dev-qa": {
+      "name": "QA Engineer",
+      "role": "Checks functionality, regressions and release evidence."
+    },
+    "dev-review": {
+      "name": "Reviewer",
+      "role": "Provides an independent review of changes and their risks."
+    },
+    "dev-scout": {
+      "name": "Scout",
+      "role": "Handles focused lookups and mechanical investigation tasks."
+    },
+    "dev-content": {
+      "name": "Content Specialist",
+      "role": "Works on content, copy and documentation."
+    },
+    "dev-security": {
+      "name": "Security Engineer",
+      "role": "Reviews security-sensitive behavior and helps address vulnerabilities."
+    }
+  },
+  "skills": {
+    "1password": {
+      "descriptionHash": "9e58a765c645ce04353b815bc92d6cb57cc5661337d951b190a446a5d1bd0a7b",
+      "description": "Set up and use 1Password CLI for sign-in, desktop integration, and reading or injecting secrets."
+    },
+    "add-model-provider": {
+      "descriptionHash": "781b9910ffe5365f293d4b9a424192d7da5d3a1609e819c47d3514dc183ea2d2",
+      "description": "Add and live-prove a model provider with non-interactive config one-liners, without exposing credentials."
+    },
+    "agent-reach": {
+      "descriptionHash": "98a9492bd087c54137ce93051b3d0df85fa0a5a60e77803b6786415c28eb5d07",
+      "description": "Find information on the web and supported social, video, developer, career and finance platforms. Routes read-only research to available APIs and command-line integrations; does not publish posts or comments."
+    },
+    "apple-notes": {
+      "descriptionHash": "851a5d8aae24df3a0cc5af9b63aa5d83f47a1a16f87f4b0809f09d1a70f88c35",
+      "description": "Create, view, edit, delete, search, move, or export Apple Notes via the memo CLI on macOS."
+    },
+    "apple-reminders": {
+      "descriptionHash": "33ee3a4845b2dda316d70df1715c06403b1a223dd12409497297138f54404c43",
+      "description": "List, add, edit, complete, or delete Apple Reminders and reminder lists via remindctl."
+    },
+    "ask-matt": {
+      "descriptionHash": "785fdddf1164ede901028c50cfedb5da090ddeb3b6d70a6883f213b0e0d89f00",
+      "description": "Ask which skill or flow fits your situation. A router over the skills in this repo."
+    },
+    "bear-notes": {
+      "descriptionHash": "bbca94825fe68628deb03dfebf1e722d73e27c4b1a39e0009ec6b63810edc55f",
+      "description": "Create, search, and manage Bear notes via grizzly CLI."
+    },
+    "blogwatcher": {
+      "descriptionHash": "b625e51bf430f3756731ccdfcc285bb0b7028e9b3b0f553e3fa1e5a6fa5c3227",
+      "description": "Monitor blogs and RSS/Atom feeds for updates using the blogwatcher CLI."
+    },
+    "blucli": {
+      "descriptionHash": "3e71b6ba6745cd528da80c15364ce37be3438c8b83ed436e81d99fcf431a94ca",
+      "description": "BluOS CLI (blu) for discovery, playback, grouping, and volume."
+    },
+    "browser-automation": {
+      "descriptionHash": "7b6e030ee264b2255ac4cee74f3ad03e27445d5c53080ac7f2580c30cbc810fe",
+      "description": "Use when controlling web pages with the OpenClaw browser tool, especially multi-step flows, login checks, tab management, or recovery from stale refs/timeouts."
+    },
+    "camsnap": {
+      "descriptionHash": "d638e8ff56b9b8987e22910fee8f37875b194a5ca5f7870a0095667165ae329e",
+      "description": "Capture frames or clips from RTSP/ONVIF cameras and local webcams, including USB pan/tilt/zoom control."
+    },
+    "canvas": {
+      "descriptionHash": "664fee1945a779ca107841b77bd70e195c6beb0d2fc1a97312f6cd453be183e6",
+      "description": "Present hosted widget documents on a connected macOS panel and control panel visibility or navigation."
+    },
+    "caveman": {
+      "descriptionHash": "39ebfc9caff9fd87c30eeeb81715ee9cd82f34fd6d7cbe9b8a951b7cc44d93c0",
+      "description": "Terse caveman voice: answer first, fluff gone, every technical fact kept. Use for /caveman, \"caveman mode\", \"talk like caveman\", \"be brief\", \"less tokens\". Stays on until \"stop caveman\" or \"normal mode\"."
+    },
+    "chief-of-staff": {
+      "descriptionHash": "a745c230d223ba003dd7b4757029a732b9bb3f75bf1166d63314bb814ccc9cf7",
+      "description": "Pursue a long-running goal in a single session by co-ordinating subagents."
+    },
+    "claude-handoff": {
+      "descriptionHash": "dfa8fc1fdb46c4641bfa8299ab2e7f5db13f4b6231f2bf7fce787ea9e043d09a",
+      "description": "Hand the current conversation off to a fresh background agent that picks up the work immediately."
+    },
+    "clawhub": {
+      "descriptionHash": "033f2eee9d6a8a203a75075e51cc511c5209fb8e8e076dc95b4ab64081478785",
+      "description": "Search ClawHub for plugins by default, or skills when explicitly requested; install, verify, update, uninstall, publish, or sync skills."
+    },
+    "cloud-image-bake": {
+      "descriptionHash": "3b748254965b37f382e12ec9450fbaed2dde8b2715768dc6646d86985b70d6e7",
+      "description": "Bake, select, prove, and safely retire a Cloud Worker image with crabbox and config one-liners."
+    },
+    "code-review": {
+      "descriptionHash": "fa8dbe24364e5ddcdbb2b40e044da67bc3c8419f3a0928fc305a718c628cff0c",
+      "description": "Review changes against both repository standards and the originating specification, using independent assessments of correctness and compliance."
+    },
+    "codebase-design": {
+      "descriptionHash": "63f3b1bed0c9fa4a69c9186b18f1bfecb01d1c636e8a0ff21de8ec096f5a82ea",
+      "description": "Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary."
+    },
+    "coding-agent": {
+      "descriptionHash": "c709446aa9bb0b10adb4501bd454868b853f2462833b304f3aa2dfaff3f67ab7",
+      "description": "Delegate coding work to Codex, Claude Code, or OpenCode as background workers; not simple edits or read-only code lookup."
+    },
+    "configure-channel": {
+      "descriptionHash": "8ca4d2c500dacbb416af4097a97fb762dc97d09353c20774e307a12b3c8e30f0",
+      "description": "Configure and prove a chat channel with non-interactive one-liners; secrets only as SecretRefs."
+    },
+    "control-ui": {
+      "descriptionHash": "a4b88eacbb971b63d7f79cafa7bb2c765680282c3de648b14fe5a934675601ba",
+      "description": "Operate and troubleshoot the OpenClaw Control UI: navigate connected clients, organize sessions, build session dashboards, and handle direct or Tailscale-hosted Gateways."
+    },
+    "design-taste-frontend": {
+      "descriptionHash": "2142f793e222abbed40eafb168695c25171e9d91234753cc5bf2b17688edd17e",
+      "description": "Anti-slop frontend skill for landing pages, portfolios, and redesigns. The agent reads the brief, infers the right design direction, and ships interfaces that do not look templated. Real design systems when applicable, audit-first on redesigns, strict pre-flight check."
+    },
+    "diagnose-gateway": {
+      "descriptionHash": "81cc01ac3126ab9669dea8d07d804c0320bcdc9a721ab0ac577adefeb5c0f7d6",
+      "description": "Diagnose Gateway, config, secrets, channels, and port failures with read-only one-liners."
+    },
+    "diagnosing-bugs": {
+      "descriptionHash": "b78755b7df92745190a4ede0855094538318dbc93e66387eb9410c7fc6c5e10d",
+      "description": "Diagnosis loop for hard bugs and performance regressions. Use when the user says \"diagnose\"/\"debug this\", or reports something broken/throwing/failing/slow."
+    },
+    "diagram-maker": {
+      "descriptionHash": "403c1f37d210cc35861740eaba5194061460801fcc7382fcd47ed464961428c1",
+      "description": "Create SVG/HTML or Excalidraw diagrams for concepts, architecture, flows, and whiteboards."
+    },
+    "discord": {
+      "descriptionHash": "8254f5f9dacd05fbb7af4396837e9156afd47ccd6b6f31ca01ea442ba46907c6",
+      "description": "Discord messaging workflows through OpenClaw's message tool."
+    },
+    "domain-modeling": {
+      "descriptionHash": "971c246c4dfabd7a455054cda5624246bfed460f1dcfa4168f0b044b683fc61a",
+      "description": "Build and sharpen a project's domain model. Use when discussing codebase terminology, writing or editing a GLOSSARY.md, or recording or editing an ADR."
+    },
+    "drawio-skill": {
+      "descriptionHash": "a1f6b9591570b50ae20f110492b889539282f12d97004f28a1b4e18d2e7ff40c",
+      "description": "Create and edit diagrams.net diagrams, including architecture, UML, data models, sequences, networks and process flows. Can convert descriptions or code into editable diagrams and export or review them."
+    },
+    "eightctl": {
+      "descriptionHash": "555a6fd78a079c5cc885cf289721b93e3de58434f491d61bc0211be68b2d50ee",
+      "description": "Control Eight Sleep pods (status, temperature, alarms, schedules)."
+    },
+    "embedded-captions": {
+      "descriptionHash": "b4dcd7233d0095eee92b61c3c7abb7567979b9075159662e91eed88c0a6b2330",
+      "description": "Add verbatim, cinematic or visual-effect captions to an existing single-subject talking-head video without editing its footage. Includes transcription, timing and optional subject masking."
+    },
+    "faceless-explainer": {
+      "descriptionHash": "86fb2cc3670c6d843466ad1695cabe0537c185457fb65e7c8bed29edee140ab3",
+      "description": "Turn arbitrary text — an article, notes, a topic, a brief — into a faceless explainer video: there is no site or footage to capture, so the visuals are invented per scene (typography, abstract graphics, diagrams, data-viz). Use for topic explainers, concept breakdowns, how-tos, listicles. Not a video built from a website (/product-launch-video — promo or tour). Unclear → /hyperframes."
+    },
+    "figma": {
+      "descriptionHash": "384c90ef30ec373ba07b0adeeca38e553593e58cbf26bc31c2fa552ba07e4bab",
+      "description": "Import Figma designs, assets and brand tokens into a HyperFrames video composition, using design frames as motion states rather than simply as slides."
+    },
+    "gemini": {
+      "descriptionHash": "18db9e5aeb7d3f15f28c36182a8fc2a652230003175885981e577ef0d18fca48",
+      "description": "Gemini CLI one-shot prompts, summaries, generation, skills, hooks, MCP, or Gemma routing."
+    },
+    "general-video": {
+      "descriptionHash": "878660fe9ed4bf837b27ae77561cd6c5dc2e1dad99a0e8e6b26a930d953af1eb",
+      "description": "Build custom HyperFrames videos, longer multi-scene pieces, montages, footage remixes and title cards when a more specialized video workflow does not fit."
+    },
+    "gh-issues": {
+      "descriptionHash": "387ab939f4c29c931256ed7cf035b5d40cb5be59ba646f5da73ac08cf00f2dd7",
+      "description": "Fetch GitHub issues, select candidates, spawn background fix agents, open PRs, and optionally process PR review comments."
+    },
+    "gifgrep": {
+      "descriptionHash": "f9076ec6e56f5f45ba2db0280c9f036e50f07905a32e1f77304b559b4d8774d7",
+      "description": "Search GIF providers with CLI/TUI, download results, and extract stills/sheets."
+    },
+    "git-guardrails-claude-code": {
+      "descriptionHash": "ef9934d743dc6751cfe05b27e8cdfe00acf993a714fe62620db0a71117bcd465",
+      "description": "Set up Claude Code hooks to block dangerous git commands (push, reset --hard, clean, branch -D, etc.) before they execute. Use when user wants to prevent destructive git operations, add git safety hooks, or block git push/reset in Claude Code."
+    },
+    "github": {
+      "descriptionHash": "801ab86559a3c416169456cee6c15729c3061d2a705ff32d3dc0bdd9ec0ac2d7",
+      "description": "GitHub CLI for issues, PRs, CI/check logs, comments, reviews, releases, repos, and gh api queries."
+    },
+    "gog": {
+      "descriptionHash": "aa33aeef2e74098bf0eec2aa24d28cc6b6a0efac9f687e036e1d685a3761b351",
+      "description": "Google Workspace CLI for Gmail, Calendar, Drive, Contacts, Sheets, and Docs."
+    },
+    "goplaces": {
+      "descriptionHash": "2784505fa587e46d33c0febaa7db4273af05daf0b17140c5596e308fcfb73e94",
+      "description": "Query Google Places for text search, place details, resolve, reviews, or scriptable JSON via goplaces."
+    },
+    "graft": {
+      "descriptionHash": "c19d994fea3e9284a34b6e7fca42232bc6316edcd89c37ca667150640904d4af",
+      "description": "Explore an indexed codebase through symbols, call relationships and change impact. Requires a usable Graft index; the description does not establish that this project is indexed."
+    },
+    "grill-me": {
+      "descriptionHash": "11070b4d380cead93dbe0b58737899f96eaf05b886fb4805b95c764c0d40baef",
+      "description": "A relentless interview to sharpen a plan or design."
+    },
+    "grill-with-docs": {
+      "descriptionHash": "ed166c9bbf3797f2f99c34c322201936c7cc7183b7c98169550a5a96d47964fa",
+      "description": "A relentless interview to sharpen a plan or design, which also creates docs (ADR's and glossary) as we go."
+    },
+    "grilling": {
+      "descriptionHash": "aefd3e0be77f0961bdfa49de8cf3a5bbba7e55bfbf32c5386aa1a39a42352bcf",
+      "description": "Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases."
+    },
+    "handoff": {
+      "descriptionHash": "ca459f68b5f4d982a5cab8afb4f3e000c928ca70a4dc7079277821560da8beea",
+      "description": "Compact the current conversation into a handoff document for another agent to pick up."
+    },
+    "healthcheck": {
+      "descriptionHash": "618d136420c649f80e677082822b2c5aa71d7d68a8d40e1404002b99768d8cea",
+      "description": "Audit/harden OpenClaw hosts: SSH, firewall, updates, exposure, backups, disk encryption, gateway security."
+    },
+    "himalaya": {
+      "descriptionHash": "10532ceafcf66321c05266a4b6fb743fa4aa10243acfd8c65a915e076db1f4cc",
+      "description": "Himalaya CLI for IMAP/SMTP mail: list, read, search, compose, reply, forward, copy, move, delete."
+    },
+    "hyperframes": {
+      "descriptionHash": "1f0d0a7bb0ce08084c3ac575e67a0f5e18a37d7d3f18875efedc5820b3beb579",
+      "description": "Route requests to create, edit, animate, inspect or render videos and interactive presentations. Selects the appropriate HyperFrames workflow for a brief, website, code change, design, footage or music."
+    },
+    "hyperframes-animation": {
+      "descriptionHash": "a40260d82c3d92da37947ce19a8b56218b5cf8aa17fc3e1504ab13add803dbea",
+      "description": "Plan and implement motion in HyperFrames: animation rules, scene transitions, choreography and runtime adapters including GSAP, Lottie, Three.js, Anime.js, CSS and Web Animations."
+    },
+    "hyperframes-audio": {
+      "descriptionHash": "e8a45d2f71a634339f9d10b4dd63fa454945186f40a00e0ad7bc0587a0cb90a2",
+      "description": "Mix audio already placed in a HyperFrames composition: fades, crossfades, track gain, ducking, effects and automation. Audio sourcing and generation use a separate workflow."
+    },
+    "hyperframes-cli": {
+      "descriptionHash": "5543740a5e00f941b5fdd6c277df7a1c3a4755beee87ad71c283c319236b0e60",
+      "description": "Use the HyperFrames command-line development loop to initialize, inspect, preview, validate, capture, render and publish compositions, including diagnosing render and build failures."
+    },
+    "hyperframes-core": {
+      "descriptionHash": "1e051ddf51246bfde54ea17339ca8336385db17f8343bff30bfb965918cb1591",
+      "description": "The HyperFrames composition contract — build one renderable project. Use for composition structure, the `data-*` timing attributes, `class=\"clip\"`, tracks, sub-compositions, variables, framework-owned media playback, deterministic-render rules, and validation. Read before writing composition HTML."
+    },
+    "hyperframes-creative": {
+      "descriptionHash": "f9433ea4e87a657d7dcca4542a02d2498012b8279fec87917a6d882f1c82fd45",
+      "description": "Non-animation creative direction for HyperFrames videos. Use for design spec (frame.md / design.md) handling, palettes, typography, narration, beat planning, audio-reactive visuals, composition patterns, and brand / style decisions. For atomic motion patterns and scene blueprints, use `hyperframes-animation`."
+    },
+    "hyperframes-keyframes": {
+      "descriptionHash": "7802c7c335ed8065c4e9b012fa38cada8f47926e0243861402989c434bd40e8a",
+      "description": "Create seek-safe camera moves, zooms, reframing, punch-ins, paths and other two- or three-dimensional keyframe treatments within a HyperFrames composition."
+    },
+    "hyperframes-registry": {
+      "descriptionHash": "f887960aec1196f184fa729ee73f040c9eeb427b3bb40368281d8965bed066fc",
+      "description": "Find, install and connect reusable HyperFrames components and visual treatments before building them from scratch; also supports authoring components for contribution."
+    },
+    "hyperframes-studio": {
+      "descriptionHash": "605e96bd575972150756dfa2e5856f30f78d32188a6e1d6802dcac413b268b50",
+      "description": "Collaborate on a HyperFrames project in Studio: clarify whether changes are requested, establish the storyboard and build order, and organize scenes, captions and timeline layout."
+    },
+    "imagegen": {
+      "descriptionHash": "f1c2ab6d5b6fd006084c5249589fcb53df92b417c701144808bca3139df97fb5",
+      "description": "Generate or edit raster images such as photographs, illustrations, textures, sprites, mockups and transparent cutouts. Use code or vector editing instead when those formats better suit the work."
+    },
+    "impeccable": {
+      "descriptionHash": "ca6b38c31a81d1c5dd146cef15f6452231904df7ed78ca52751a999b948e5e0e",
+      "description": "Design, review and improve frontend interfaces, including information architecture, interaction, visual hierarchy, typography, layout, accessibility, responsive behavior and loading or error states."
+    },
+    "implement": {
+      "descriptionHash": "a5e638a4bd5609b97a74310d8cba0043a0427768b6032e0bbd0bdd13654646bf",
+      "description": "Implement a piece of work based on a spec or set of tickets."
+    },
+    "implement-spec": {
+      "descriptionHash": "ea262a6ad8d0168ca777ecf30ca67529386491f35c1fd2fe6ffcf197efb592fb",
+      "description": "Implement the result of /to-spec and /to-tickets in code."
+    },
+    "improve-codebase-architecture": {
+      "descriptionHash": "a0867b177e56de05218815785ed8007024d5c584d6756fde8ff1c72815b04a32",
+      "description": "Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick."
+    },
+    "loop-me": {
+      "descriptionHash": "c3aedcc098dfb1172da338f0c5a8972bc071384e57b495a45c80e464a630c893",
+      "description": "Grill me about specs for the workflows I want to build, within this workspace."
+    },
+    "mcporter": {
+      "descriptionHash": "8d58db5087a414a84b858f4faf21c94ebe6e7b1ec2c856ef6217100540a437ca",
+      "description": "List, configure, authenticate, call, and inspect MCP servers/tools with mcporter over HTTP or stdio."
+    },
+    "media-use": {
+      "descriptionHash": "294b138b13c9f3b813bea3f27a1ef1048fc20ebab9c595133e566f96223d3086",
+      "description": "Find or generate media for HyperFrames projects, including music, sound effects, images, icons, voices and color treatments. Supports reusable assets and audio, transcription or background-removal workflows."
+    },
+    "meme-maker": {
+      "descriptionHash": "aabbcdb6d4f691db0c0c3924a6ff3350ee7a129923b17c7bf36cc79aa77a1f32",
+      "description": "Search meme templates, suggest formats, and generate local or hosted image memes."
+    },
+    "migrate-to-shoehorn": {
+      "descriptionHash": "95c6919bf70c0c44cb048b9c722198d35959f79110ad9c95676be6aa0b5f28ed",
+      "description": "Migrate test files from `as` type assertions to @total-typescript/shoehorn. Use when user mentions shoehorn, wants to replace `as` in tests, or needs partial test data."
+    },
+    "model-usage": {
+      "descriptionHash": "96f4f6dd744e9d8d479a30692df916377fb6c5214cc237150cf77fdcc6320b5a",
+      "description": "Summarize CodexBar local cost logs by model for Codex or Claude, including current or full breakdowns."
+    },
+    "motion-graphics": {
+      "descriptionHash": "17e1f89b221c4dbf032e60e94c492cbaca6cc6023aef29e9e95db31271e80a55",
+      "description": "Create short, design-led motion graphics such as animated typography, charts, titles, lower thirds, maps or logo treatments. Longer or narrated videos use a broader video workflow."
+    },
+    "music-to-video": {
+      "descriptionHash": "ac05f26d575863cca47449968f628ff1f2c36f1c2f7bf3b345f0eb5a6522dfa5",
+      "description": "Turn a music track (an audio file, a video to pull audio from, or a track generated from a mood brief) into a beat-synced video — lyric video, slideshow, or kinetic promo. The music drives all pacing; any user-supplied images/videos are cut onto the same beat grid, and a complete video needs zero assets. Narrated pieces → the input-matched workflow (see /hyperframes). Unclear → /hyperframes."
+    },
+    "nano-pdf": {
+      "descriptionHash": "94cea480cbedd29c2d0bed578278acddccbc8429adcfd273c03329f52a05c1f7",
+      "description": "Edit PDFs with natural-language instructions using the nano-pdf CLI."
+    },
+    "no-ai-slop": {
+      "descriptionHash": "f4ea2a73324dcdf5de47dd2d18992ddd27d4a6be677db73dce2cee286ffb34f6",
+      "description": "Edit drafts into sharper, more human writing while preserving the writer's personal voice, or detect AI-slop patterns without rewriting. Use when the user wants a draft clearer, more direct, more opinionated, or less AI-sounding, or asks whether writing reads as AI."
+    },
+    "node-connect": {
+      "descriptionHash": "bd1481d7e416af3a25dac53b39c0bf38a62cf8f0880b8df820435c4201a3c64c",
+      "description": "Diagnose OpenClaw Control UI browser and native Android, iOS, or macOS node connection failures across route, auth, pairing, QR/setup-code, and reconnect states."
+    },
+    "node-inspect-debugger": {
+      "descriptionHash": "abf87acb6b9de60e8525e7562d8b7a0b7f1f2a0f690b3932379a7d4e3317d9eb",
+      "description": "Debug Node.js with node inspect, --inspect, breakpoints, CDP, heap, and CPU profiles."
+    },
+    "notion": {
+      "descriptionHash": "2f3ae4dc9bb669aefad87e86209daadf35b3072021ff63c76825c6b5c61805d3",
+      "description": "Notion CLI/API for pages, Markdown content, data sources, files, comments, search, Workers, and raw API calls."
+    },
+    "obsidian": {
+      "descriptionHash": "555c2a507e3d1677c7178bc6c8fdde302579fe130ae1c62d79749366a19cba1f",
+      "description": "Work with Obsidian vaults using the official obsidian CLI: read/search/create/edit notes, tasks, links, properties, plugins."
+    },
+    "openai-docs": {
+      "descriptionHash": "c3b884c716e992cbc411471e6a7667064fc9aeeb3c25ce4c2704b8cf2a2a1c39",
+      "description": "Find current official documentation for OpenAI APIs, products and Codex. Supports integration questions, model selection and migration guidance grounded in official sources."
+    },
+    "openai-skill-creator": {
+      "descriptionHash": "2d8299ded967537245cb542d449e8b91844116695d65204f6d3bdbdec1140416",
+      "description": "Guide for creating effective skills. This skill should be used when users want to create a new skill (or update an existing skill) that extends Codex's capabilities with specialized knowledge, workflows, or tool integrations."
+    },
+    "openai-whisper": {
+      "descriptionHash": "23ae473bc47d019af835b02834d0f4921f2748eddfa22e6bbfb6e8ad4c5afe71",
+      "description": "Local speech-to-text with the Whisper CLI (no API key)."
+    },
+    "openai-whisper-api": {
+      "descriptionHash": "acceea02017684eddfb679226f1a01736954a42acd7c44945db8b36d82342c30",
+      "description": "OpenAI Audio Transcriptions API via curl; gpt-4o-transcribe, mini, diarize, or whisper-1."
+    },
+    "openhue": {
+      "descriptionHash": "15cd88a48583dd4f912ea39952a162479c00875a87d9fba03178fd8fbae92d00",
+      "description": "Control Philips Hue lights and scenes via the OpenHue CLI."
+    },
+    "oracle": {
+      "descriptionHash": "35e2981a260bda30436d853c5f7716e94fd1d0770ea23d5700ceaab937067a3d",
+      "description": "Oracle CLI second-model review/debug/refactor/design with selected files, dry-run token checks, API or browser engine."
+    },
+    "ordercli": {
+      "descriptionHash": "321711eb6ab1c8746a30076953d0354925bc7c4c68312017373115e4e70dec6e",
+      "description": "Foodora-only CLI for checking past orders and active order status (Deliveroo WIP)."
+    },
+    "peekaboo": {
+      "descriptionHash": "940a06280495ac7c6cfc4ba66cdce727ba27ccbd6bf4777f1d3343d8736bff7f",
+      "description": "Capture and automate macOS UI with the Peekaboo CLI."
+    },
+    "plugin-creator": {
+      "descriptionHash": "0f76487495dfc8a42aa24e77b8e5d68a151e028fec75bf5498d335bfc1b10ea0",
+      "description": "Create and scaffold plugin directories for Codex with a required `.codex-plugin/plugin.json`, optional plugin folders/files, and baseline placeholders you can edit before publishing or testing. Use when Codex needs to create a new local plugin, add optional plugin structure, or generate or update repo-root `.agents/plugins/marketplace.json` entries for plugin ordering and availability metadata."
+    },
+    "ponytail": {
+      "descriptionHash": "f1394180a3dba1a15b33d4183a79cfa3c67ea5ac23583fdfd22627dc874f5006",
+      "description": "Lazy senior dev mode for any coding task: the smallest change that fully solves it, and a reply a busy human understands in one read."
+    },
+    "ponytail-audit": {
+      "descriptionHash": "5dc0b2b83c53f73545c34472923090bae06fd1448aeb4376a473d4e15ec92a46",
+      "description": "Quality audit of the whole repo: bugs, security, real load, missing tests, speed, and what to delete. Most important first."
+    },
+    "ponytail-debt": {
+      "descriptionHash": "56a88cf6fd4829dfa2c3d9bd58f2c1304c719a0126007d5ff53d18ef183a0c85",
+      "description": "Harvest every shortcut: comment into one debt ledger, so deferrals get tracked instead of forgotten. One-shot report."
+    },
+    "ponytail-gain": {
+      "descriptionHash": "f5e78bc25e5f870bfeef84149e021a90e2a390cd6e48e200dc3fd348228bb830",
+      "description": "Show ponytail measured impact as a scoreboard: less code, less cost, more speed, from the agentic benchmark averages. One-shot display."
+    },
+    "ponytail-help": {
+      "descriptionHash": "d44bbdfbd8da447aa0411ba720e08807aff582fc2cb33d544c60920a94661244",
+      "description": "Quick reference for ponytail's modes, skills, and commands. One-shot display."
+    },
+    "ponytail-review": {
+      "descriptionHash": "9ecacbb675e4c7e289c9ba0ade16acd50c2c29dffddf99e37a69ea428f1406f2",
+      "description": "Quality review of a diff: bugs, security, real load, missing tests, speed, and what to delete. Each finding says what goes wrong and how to fix it."
+    },
+    "pr": {
+      "descriptionHash": "85b9d8ec07c5f18ee5abff1a63fb9d0358bd6855fe586b7c8570283c6bd88324",
+      "description": "Use when writing a PR body."
+    },
+    "pr-to-video": {
+      "descriptionHash": "671904765bb47f75db893ebcdbd16ec7ef31f9577edba81746488a429dc72a45",
+      "description": "Turn a GitHub pull request (a PR URL, owner/repo#N, or 'this PR' in a checked-out repo) into a code-change explainer video — changelog, feature reveal, fix, or refactor walkthrough built from the diff, commits, and files: the input is a code change, not a website. Not a product promo (/product-launch-video) or a no-PR topic explainer (/faceless-explainer). Unclear → /hyperframes."
+    },
+    "product-launch-video": {
+      "descriptionHash": "07da757e9738e07e24ed455b3460c31ee4c922d280ae283029c1efb22d5ff570",
+      "description": "Turn a product or marketing URL, pasted script, or brief into a product launch / promo video — SaaS promos, feature reveals, product demos, app and company launches. Use when the user wants to market, launch, promote, or reveal a product; the default for any commercial URL. Site tours / showcases of a website route here too — the brief carries the show-it-as-is intent. Unclear → /hyperframes."
+    },
+    "prototype": {
+      "descriptionHash": "cc3996263316c1f1c89db6ecdcd8ec1e1fa08253b2316939e838f995017c2b72",
+      "description": "Build a throwaway prototype to answer a design question. Use when the user wants to sanity-check whether a state model or logic feels right, or explore what a UI should look like."
+    },
+    "python-debugpy": {
+      "descriptionHash": "948de9a4eb4feb7feb8d6c585af2326bac678eaf857aa76e72b59e407916dec2",
+      "description": "Debug Python with pdb, breakpoint(), post-mortem inspection, and debugpy remote attach."
+    },
+    "remotion-to-hyperframes": {
+      "descriptionHash": "d0f00070450e9ee8494308afd80ffe90b1d2e5985c1f6d0c2105d2ed2559fa95",
+      "description": "Port an existing Remotion (React) composition's source to HyperFrames HTML. Use ONLY on an explicit ask to port/convert/migrate/translate a Remotion source — one-way, Remotion-only. A passing Remotion mention, reference-only code, or \"make something like my Remotion video\" is a fresh build (/general-video). Unclear → /hyperframes."
+    },
+    "research": {
+      "descriptionHash": "8062c29038abc1afb299469d92dd1167481fa84a867f32484ce4abc815d070f3",
+      "description": "Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent."
+    },
+    "responsive-design": {
+      "descriptionHash": "9dff24b4ce15ba982646dcc504bfdaf8207c44e64198b9e27ea4e16ed17ba15e",
+      "description": "Implement modern responsive layouts using container queries, fluid typography, CSS Grid, and mobile-first breakpoint strategies. Use when building adaptive interfaces, implementing fluid layouts, or creating component-level responsive behavior."
+    },
+    "reticle": {
+      "descriptionHash": "c6ef4b62d37910fba4564a2fa47650de019b335c8d562af903500a66531b83bf",
+      "description": "Install and use Reticle to verify running web apps through DOM, network, routing, console and framework state. Requires Reticle MCP tools and per-app setup."
+    },
+    "retro": {
+      "descriptionHash": "c1ee6fa9da99d5c2a51fd3786cdc59d5b85e5aa8d8aca69297df9ae73ecdd4cf",
+      "description": "Conduct a retrospective on a coding session."
+    },
+    "sag": {
+      "descriptionHash": "634877edad22c257de3b7aed8cc3edea61093e2e7b299b8d85de03a8f934bfff",
+      "description": "ElevenLabs text-to-speech with mac-style say UX."
+    },
+    "scaffold-exercises": {
+      "descriptionHash": "97449033c90a4c2d785c0330a3651f9693550cb64fa3cb38db895e5fd8771400",
+      "description": "Create exercise directory structures with sections, problems, solutions, and explainers that pass linting. Use when user wants to scaffold exercises, create exercise stubs, or set up a new course section."
+    },
+    "setup-matt-pocock-skills": {
+      "descriptionHash": "ad01e47c565b5188ac2e3cda06f0040841106c18065a11c0ebeb039db1ae249c",
+      "description": "Configure this repo for the engineering skills: set up its issue tracker, triage label vocabulary, and domain doc layout. Run once before first use of the other engineering skills."
+    },
+    "setup-pre-commit": {
+      "descriptionHash": "2abd92eee639b284e1c8c16cfae924a59cc39eba28dbc34c170722dd8821f46d",
+      "description": "Set up Husky pre-commit hooks with lint-staged (Prettier), type checking, and tests in the current repo. Use when user wants to add pre-commit hooks, set up Husky, configure lint-staged, or add commit-time formatting/typechecking/testing."
+    },
+    "setup-ts-deep-modules": {
+      "descriptionHash": "c022944046ec31a24ece0d48cf9ac4ada0bf758527941a31b6ab95a94fca0bb7",
+      "description": "Wire dependency-cruiser into a TypeScript repo so each package is a deep module, with implementation hidden in subfolders and reachable only through its entry-point files. User-invoked."
+    },
+    "sherpa-onnx-tts": {
+      "descriptionHash": "fd4aa3ea805bf82b4a7496049205c62383d883b870189fbfb6a224007459499d",
+      "description": "Local text-to-speech via sherpa-onnx (offline, no cloud)"
+    },
+    "skill-creator": {
+      "descriptionHash": "f0cb54587af2af47fe4b0eb59840b0d55a67c983f0e6f75f9019a52578019a5e",
+      "description": "Author or review AgentSkills: create, repair, validate, or restructure SKILL.md files and bundled resources."
+    },
+    "skill-installer": {
+      "descriptionHash": "70e761fea891cb94790c9b666181774eef30268a7091b3eb4950b720cdaa169e",
+      "description": "Install Codex skills into $CODEX_HOME/skills from a curated list or a GitHub repo path. Use when a user asks to list installable skills, install a curated skill, or install a skill from another repo (including private repos)."
+    },
+    "slideshow": {
+      "descriptionHash": "3020a109ef55d2818169ea0b223aeeaf1897cd16877afd46436db6b912d20c04",
+      "description": "Author a HyperFrames slideshow — a presentation, pitch deck, or interactive deck with discrete slides, fragment reveals, branching, hotspot navigation, and built-in presenter mode with speaker notes; also converts an existing page into a deck. Output is a navigable deck, not a rendered MP4. If the user didn't explicitly ask for a slideshow, confirm before authoring. Unclear → /hyperframes."
+    },
+    "songsee": {
+      "descriptionHash": "2875d21736d42fbd810ab212e144d9689885205fbe57568a43655652a718b2ec",
+      "description": "Generate spectrograms and feature-panel visualizations from audio with the songsee CLI."
+    },
+    "sonoscli": {
+      "descriptionHash": "33ceaca48663ee531b595f387d654d1e643b98c0c1cc73751c614b92eafc34de",
+      "description": "Control Sonos speakers (discover/status/play/volume/group)."
+    },
+    "spike": {
+      "descriptionHash": "d2ff3caad7bcff3fb09f25bb002a3d7e7179ea8698668efb26f12ec980dc4d84",
+      "description": "Run throwaway prototypes to validate feasibility, compare approaches, and report a verdict."
+    },
+    "spotify-player": {
+      "descriptionHash": "559a15a3f4a40f06a8b833f117582ce1732f28069beb1e9fc1e9ceac55fe3bba",
+      "description": "Terminal Spotify playback/search via spogo (preferred) or spotify_player."
+    },
+    "summarize": {
+      "descriptionHash": "aa2dd7cfb6990934047a965e17a4433456cdaa6f9b4c4e43fbf5a53212c3cb88",
+      "description": "Summarize or transcribe URLs, YouTube/videos, podcasts, articles, transcripts, PDFs, and local files."
+    },
+    "talking-head-recut": {
+      "descriptionHash": "0c09809ce11a3483129ec39c750c651c92ed25400a400579d2ff9614f4f44089",
+      "description": "Add timed graphic overlays to an existing interview, podcast or talking-head video: titles, lower thirds, quotes, data callouts and picture-in-picture, while leaving the underlying footage unchanged."
+    },
+    "tdd": {
+      "descriptionHash": "58ff584d9462495638cc6513449398700d3e3599946d39cb0643cd50b5e6ddb6",
+      "description": "Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions \"red-green-refactor\", or wants integration tests."
+    },
+    "teach": {
+      "descriptionHash": "c5209685860a014628764bef192a382c45c860737176ec2215fedbcc7024bce3",
+      "description": "Teach the user a new skill or concept, within this workspace."
+    },
+    "things-mac": {
+      "descriptionHash": "340c5a81f2cdda58f9fb4c2b273b640a3e2fe1b02c662b1e4984f24b3d34fcbd",
+      "description": "Add, update, list, search, or inspect Things 3 todos, inbox, today, projects, areas, and tags on macOS."
+    },
+    "tmux": {
+      "descriptionHash": "81946e98ce5265b58f867e93ba5ade8f921a14d6fca6861c1bcb9ebf10c3023f",
+      "description": "Control tmux sessions/panes for interactive CLIs: list, capture output, send keys, paste text, monitor prompts."
+    },
+    "to-questionnaire": {
+      "descriptionHash": "584dc6c87e0b17a74d0e3fe805e5eed3a26010f6a11e6de868f1b1a882501f79",
+      "description": "Turn a decision you can't fully answer into a questionnaire for someone else to fill in."
+    },
+    "to-spec": {
+      "descriptionHash": "ea6b127117e78fdec49752393f0c69c157a87da965940dbfc256843af1b6b277",
+      "description": "Turn the current conversation into a spec and publish it to the project issue tracker: no interview, just synthesis of what you've already discussed."
+    },
+    "to-tickets": {
+      "descriptionHash": "44b2a412bd7207dbfc87fd44c871a968ec25860cc435898a307f24cd82b5e5a7",
+      "description": "Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker (edges as text in one file per ticket locally, or native blocking links on a real tracker)."
+    },
+    "trello": {
+      "descriptionHash": "279814495957c17d4cb68de45b9616658af8c78a0760d32d6109598ceacd9603",
+      "description": "Manage Trello boards, lists, and cards via the Trello REST API."
+    },
+    "triage": {
+      "descriptionHash": "ea9153de7250269730f28b2586ae84c639b35532f16f14a8ebdea3c753207e8c",
+      "description": "Move issues and external PRs through a state machine of triage roles, categorise, verify, grill if needed, and write agent-ready briefs."
+    },
+    "unlazy": {
+      "descriptionHash": "7cf0d88b557f7f1544506b0a3c6b7528ce84313a224a40ab6eb4ee6ba9ac658f",
+      "description": "Structure substantial work around explicit acceptance gates, bounded subtasks, verification and completion evidence so that unfinished work is not reported as complete."
+    },
+    "vibe-security": {
+      "descriptionHash": "3bc0e652504f040e004052b0cdb11759c6de9d49920c2c9910ae6b021db24fa6",
+      "description": "Review applications for common security defects, including exposed credentials, broken access controls, unsafe client-side trust, payment handling and missing authorization checks."
+    },
+    "visualize": {
+      "descriptionHash": "f248e0d1eb02aff72f840fa9ea0c8c2e7ae838599fe290fed162c1c8285757ba",
+      "description": "Create inline visuals for code and explanations, or author persistent OpenClaw dashboard widgets with show_widget."
+    },
+    "wait-what": {
+      "descriptionHash": "ac3ab0a7a802d987e2d475089bcbeeba8fed9b9f019929d04b0536eb0e16ce19",
+      "description": "Stop. That last message did not land: re-pitch it."
+    },
+    "wayfinder": {
+      "descriptionHash": "78ffe11ef8add13f5de47963142b6ffc3c44a0ce430a6eee22b7be09cb1e1c65",
+      "description": "Plan a huge chunk of work (more than one agent session can hold) as a shared map of decision tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear."
+    },
+    "weather": {
+      "descriptionHash": "f1e40f1f642a44fe1393a1c4c5aae5c7640072203a6001d34ceaf82544e518fe",
+      "description": "Current weather and forecasts with web_fetch, falling back to wttr.in curl for locations, rain, temperature, travel planning."
+    },
+    "wizard": {
+      "descriptionHash": "f4db30f214c1f632131e7df0b54b7c21e345828c1d25ff96a3e926ef77e6943e",
+      "description": "Generate an interactive bash wizard that walks a human through steps only they can perform. Use when provisioning infrastructure, setting up credentials or CI secrets, walking an unfamiliar third-party dashboard, or running a one-off migration or cutover. Don't invoke this for steps the agent can perform itself."
+    },
+    "writing-beats": {
+      "descriptionHash": "19637b7122700d508f50d699cb66a06eaeb84cb3a9ade103380f323ae04b05c1",
+      "description": "Writing, exploit; assemble raw material into a journey of beats, grounding each term before a beat leans on it."
+    },
+    "writing-for-agents": {
+      "descriptionHash": "d7c3ccc8760562728f92ff39193531273395780316664ad00d1cd0479d33ce15",
+      "description": "Writing documents for agents. Use when creating or editing skills, or modifying AGENTS.md or CLAUDE.md."
+    },
+    "writing-fragments": {
+      "descriptionHash": "cd618adebc7a72975147754b01ba03b5f0e40f5a8734495d9fb96e1071f04a0b",
+      "description": "Writing, explore: mine raw fragments, no structure yet."
+    },
+    "writing-shape": {
+      "descriptionHash": "16a7ec4a96bb4a5a49ce32f7cf7519760b0042860c1c42bf5bc4eb801caaa10f",
+      "description": "Writing, exploit: shape raw material into an article, paragraph by paragraph."
+    },
+    "xurl": {
+      "descriptionHash": "53315a35949a4063360e60c50a04ee0d000674bbb8d16c39df541536151fe5d4",
+      "description": "xurl CLI for authenticated X posts, replies, reads/search, DMs, media upload, followers, auth status, or raw v2 API calls."
+    }
+  },
+  "tasks": {
+    "9a98e1c2e158d2a95c39d03c0e21c27b": {
+      "title": "AFP usage dashboard",
+      "summary": "Development and maintenance of the public AFP usage dashboard: usage reporting, access changes, interface improvements and verification."
+    },
+    "fe61ae645aaa6cb236f7b04db7015a64": {
+      "title": "Dashboard navigation and interaction",
+      "summary": "Review and improvement of the dashboard interface, including dedicated pages, clickable entities, accessible navigation and detail views."
+    },
+    "f1712ac46b62fa421656cfc91c2a1bdf": {
+      "title": "Dashboard interface evidence",
+      "summary": "Independent checks of the dashboard source and design detector, with attempted browser verification and explicit reporting of the browser launch blocker."
+    },
+    "325115fd6d710771c47caf7a6ebbd9d4": {
+      "title": "Agent, skill and task reporting",
+      "summary": "Investigation and implementation of project-scoped usage attribution, configured-agent metadata, reviewed skill descriptions and task lifecycle details."
+    },
+    "94513bc44bc306325153170850aaee19": {
+      "title": "Public dashboard release review",
+      "summary": "Independent review of anonymous publication, metadata approvals, project-scoped accounting and interaction correctness."
+    }
+  }
+}

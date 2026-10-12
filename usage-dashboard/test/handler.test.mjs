@@ -68,3 +68,14 @@ test('usage remains read-only with no ingestion or other API routes',async()=>{
   assert.equal((await handle(req('/api/ingest',{method:'POST',body:'{}'}),env)).status,404);
   for(const method of ['POST','PUT','DELETE']) assert.equal((await handle(req('/api/usage',{method}),env)).status,404);
 });
+
+
+test('dedicated dashboard pages and detail queries serve the app shell, not arbitrary paths',async()=>{
+  const assets={'/index.html':{body:'<h1>Usage dashboard</h1>',type:'text/html'}};
+  for(const path of ['', '/', '/models', '/agents/', '/skills?skill=example', '/activity?run=opaque-fixture']){
+    const r=await handle(req(path),env,assets);
+    assert.equal(r.status,200,path);assert.equal(await r.text(),'<h1>Usage dashboard</h1>');
+  }
+  for(const path of ['/unknown', '/agents/private-file', '/config.json'])
+    assert.equal((await handle(req(path),env,assets)).status,404,path);
+});

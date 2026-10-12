@@ -1,4 +1,6 @@
+import {validatePublicDetails, publicRootDetails, publicRequestDetails, publicCoverageDetails} from './public-details.mjs';
 const HOST = 'afp.mclement.ch';
+const PAGES = new Set(['/', '/models', '/agents', '/skills', '/activity']);
 const security = {
   'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
   'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY',
@@ -19,7 +21,7 @@ export function validateSnapshot(value) {
   if(!value.skills.every(s=>text(s.name,120)&&text(s.description,400)&&Number.isInteger(s.count)&&s.count>=0&&(s.lastUsedAt===null||Number.isFinite(Date.parse(s.lastUsedAt)))))return false;
   if(!value.requests.every(r=>text(r.id,100)&&Number.isFinite(Date.parse(r.at))&&text(r.model,160)&&text(r.description,400)&&metrics(r)&&text(r.status,50)))return false;
   const c=value.coverage;
-  return !!c&&Number.isInteger(c.sessions)&&c.sessions>=0&&Array.isArray(c.notes)&&c.notes.length<=50&&c.notes.every(n=>text(n,1000))&&text(c.skillMetric,1000)&&text(c.historyMetric,1000);
+  return !!c&&Number.isInteger(c.sessions)&&c.sessions>=0&&Array.isArray(c.notes)&&c.notes.length<=50&&c.notes.every(n=>text(n,1000))&&text(c.skillMetric,1000)&&text(c.historyMetric,1000)&&validatePublicDetails(value);
 }
 export function publicSnapshot(value) {
   if (!validateSnapshot(value)) throw new Error('Invalid snapshot');
@@ -29,8 +31,9 @@ export function publicSnapshot(value) {
     range: pick(value.range, ['start', 'end', 'timeZone']),
     daily: value.daily.map(row => pick(row, ['date', 'model', 'provider', 'input', 'output', 'cacheRead', 'cacheWrite', 'totalTokens', 'requests', 'costUsd'])),
     skills: value.skills.map(row => pick(row, ['name', 'description', 'count', 'lastUsedAt'])),
-    requests: value.requests.map(row => pick(row, ['id', 'at', 'model', 'description', 'input', 'output', 'cacheRead', 'cacheWrite', 'totalTokens', 'status'])),
-    coverage: pick(value.coverage, ['sessions', 'notes', 'skillMetric', 'historyMetric'])
+    requests: value.requests.map(row => ({...pick(row, ['id', 'at', 'model', 'description', 'input', 'output', 'cacheRead', 'cacheWrite', 'totalTokens', 'status']), ...publicRequestDetails(row)})),
+    coverage: {...pick(value.coverage, ['sessions', 'notes', 'skillMetric', 'historyMetric']), ...publicCoverageDetails(value.coverage)},
+    ...publicRootDetails(value)
   };
 }
 
@@ -47,7 +50,8 @@ export async function handle(request, env, assets = {}) {
     }
     if(url.pathname.startsWith('/api/'))return response({error:'Not found'},404);
     if(request.method!=='GET'&&request.method!=='HEAD')return response({error:'Method not allowed'},405,{'Allow':'GET, HEAD'});
-    const asset=assets[url.pathname==='/'?'/index.html':url.pathname];
+    const route=url.pathname.replace(/\/$/, '') || '/';
+    const asset=assets[PAGES.has(route)?'/index.html':url.pathname];
     return asset?response(request.method==='HEAD'?'':asset.body,200,{'Content-Type':asset.type}):response({error:'Not found'},404);
   } catch { return response({error:'Request could not be processed'},400); }
 }

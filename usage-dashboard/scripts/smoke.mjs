@@ -9,6 +9,12 @@ assert.equal(health.status, 200);
 const page = await fetch(base);
 assert.equal(page.status, 200);
 assert.doesNotMatch(await page.text(), /login-form|logout-button|type="password"/);
+const pages = ['/models', '/agents', '/skills', '/activity'];
+for (const path of pages) {
+  const result = await fetch(base + path);
+  assert.equal(result.status, 200, 'Page route ' + path);
+  assert.match(await result.text(), /id="app-shell"/, 'Dashboard shell for ' + path);
+}
 const script = await fetch(base + '/app.js');
 assert.equal(script.status, 200);
 assert.doesNotMatch(await script.text(), /api\/login|api\/logout|showLogin/);
@@ -26,4 +32,4 @@ for (const path of ['/auth.json', '/sign-in.txt', '/config.json']) {
 for (const path of ['/api/login', '/api/logout']) {
   assert.equal((await fetch(base + path, { method: 'POST' })).status, 404);
 }
-console.log(JSON.stringify({ origin, health: health.status, page: page.status, anonymous: response.status, authEndpoints: 'removed', privateFiles: 'not served', generatedAt: data.generatedAt, sessions: data.coverage.sessions, models: data.daily.map(row => row.model), activities: data.requests.length, skills: data.skills.map(row => ({ name: row.name, count: row.count })) }));
+console.log(JSON.stringify({ origin, health: health.status, page: page.status, pages: pages.length + 1, anonymous: response.status, authEndpoints: 'removed', privateFiles: 'not served', generatedAt: data.generatedAt, sessions: data.coverage.sessions, models: data.daily.map(row => row.model), activities: data.requests.length, skills: data.skills.map(row => ({ name: row.name, count: row.count })) }));

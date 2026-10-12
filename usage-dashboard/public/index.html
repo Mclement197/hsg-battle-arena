@@ -22,20 +22,21 @@
 
   <div id="app-shell" class="app-shell" hidden>
     <aside class="sidebar">
-      <a class="brand" href="#overview" aria-label="Usage overview"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>usage<span class="brand-period">.</span></span></a>
+      <a class="brand" href="/usage" aria-label="Usage overview"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>usage<span class="brand-period">.</span></span></a>
       <div class="workspace-label">AFP project</div>
       <nav class="primary-nav" aria-label="Dashboard sections">
-        <a class="nav-link is-active" href="#overview" aria-current="location"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="6" height="6" rx="1.5"></rect><rect x="14.5" y="3.5" width="6" height="6" rx="1.5"></rect><rect x="3.5" y="14.5" width="6" height="6" rx="1.5"></rect><rect x="14.5" y="14.5" width="6" height="6" rx="1.5"></rect></svg><span>Overview</span></a>
-        <a class="nav-link" href="#models"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5M3 16l9 5 9-5"></path></svg><span>Models</span></a>
-        <a class="nav-link" href="#skills"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13.5 3-9 11h7l-1 7 9-11h-7l1-7Z"></path></svg><span>Skills</span></a>
-        <a class="nav-link" href="#history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8a9 9 0 1 1-1 7M4 3v5h5M12 7v5l3 2"></path></svg><span>Activity</span></a>
+        <a class="nav-link is-active" href="/usage" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="6" height="6" rx="1.5"></rect><rect x="14.5" y="3.5" width="6" height="6" rx="1.5"></rect><rect x="3.5" y="14.5" width="6" height="6" rx="1.5"></rect><rect x="14.5" y="14.5" width="6" height="6" rx="1.5"></rect></svg><span>Overview</span></a>
+        <a class="nav-link" href="/usage/models"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5M3 16l9 5 9-5"></path></svg><span>Models</span></a>
+        <a class="nav-link" href="/usage/agents"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="3"></circle><path d="M5 20v-2a7 7 0 0 1 14 0v2"></path></svg><span>Agents</span></a>
+        <a class="nav-link" href="/usage/skills"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13.5 3-9 11h7l-1 7 9-11h-7l1-7Z"></path></svg><span>Skills</span></a>
+        <a class="nav-link" href="/usage/activity"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8a9 9 0 1 1-1 7M4 3v5h5M12 7v5l3 2"></path></svg><span>Activity</span></a>
       </nav>
       <div class="sidebar-bottom"><div class="sidebar-note">A little clarity.<br>A better view of your AI.</div><span class="privacy-label"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 3v6c0 4-4 7-8 9-4-2-8-5-8-9V6l8-3Z"></path><path d="m8 12 3 3 5-6"></path></svg>Sanitized data only</span></div>
     </aside>
 
     <main id="main" class="main" tabindex="-1">
       <header class="page-header">
-        <div><h1>Usage overview</h1><p id="scope-label" class="page-subtitle">Your AI activity, in perspective.</p></div>
+        <div><h1 id="page-title" tabindex="-1">Usage overview</h1><p id="scope-label" class="page-subtitle">Your AI activity, in perspective.</p></div>
         <div class="header-actions">
           <button id="refresh-button" class="button button-secondary" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"></path></svg><span>Refresh</span></button>
         </div>
@@ -44,22 +45,23 @@
       <div class="snapshot-line"><span id="freshness" class="freshness"><span class="status-dot" aria-hidden="true"></span><span id="freshness-text">Waiting for data</span></span><span class="timezone">Europe/Zurich</span></div>
       <div id="notice" class="notice" role="status" hidden><div><strong id="notice-title"></strong><p id="notice-message"></p></div><button id="retry-button" class="button button-secondary" type="button">Try again</button></div>
 
-      <div class="filter-bar" aria-label="Usage filters">
+      <div id="global-filters" class="filter-bar" aria-label="Usage filters">
         <div class="period-control"><span class="control-label" id="period-label">Time range</span><div class="segmented" role="group" aria-labelledby="period-label"><button type="button" data-period="1" aria-pressed="false">Today</button><button type="button" data-period="7" aria-pressed="true">7 days</button><button type="button" data-period="30" aria-pressed="false">30 days</button></div></div>
-        <div class="model-control"><label class="control-label" for="model-filter">Model</label><select id="model-filter"><option value="">All models</option></select></div>
-        <p id="range-label" class="range-label">Loading selected range…</p>
+        <div id="model-control" class="model-control"><label class="control-label" for="model-filter">Model</label><select id="model-filter"><option value="">All models</option></select></div>
+        <p id="range-label" class="range-label">Loading selected range…</p><button id="reset-filters" class="button button-secondary" type="button">Clear filters</button>
       </div>
 
-      <section id="overview" class="overview-section anchor-section" aria-label="Usage summary">
+      <div id="overview-page" class="page-view"><section id="overview" class="overview-section anchor-section" aria-label="Usage summary">
         <div class="metric-grid">
-          <div class="metric"><span class="metric-label">Total tokens</span><strong id="metric-tokens" class="metric-value">—</strong><span id="metric-tokens-note" class="metric-note">Across the selected period</span></div>
-          <div class="metric"><span class="metric-label">Model entries</span><strong id="metric-calls" class="metric-value">—</strong><span id="metric-calls-note" class="metric-note">Not verified provider HTTP calls</span></div>
-          <div class="metric"><span class="metric-label">Most-used model <span class="label-qualifier">by tokens</span></span><strong id="metric-model" class="metric-value metric-model">—</strong><span id="metric-model-note" class="metric-note">Across the selected period</span></div>
-          <div class="metric"><span class="metric-label">Skill uses</span><strong id="metric-skills" class="metric-value">—</strong><span id="metric-skills-note" class="metric-note">Whole snapshot window</span></div>
+          <a id="metric-tokens-link" class="metric metric-link" href="/usage/models"><span class="metric-label">Total tokens</span><strong id="metric-tokens" class="metric-value">—</strong><span id="metric-tokens-note" class="metric-note">Across the selected period</span><span class="metric-action">View models →</span></a>
+          <a id="metric-calls-link" class="metric metric-link" href="/usage/models"><span class="metric-label">Model entries</span><strong id="metric-calls" class="metric-value">—</strong><span id="metric-calls-note" class="metric-note">Not verified provider HTTP calls</span><span class="metric-action">View models →</span></a>
+          <a id="metric-model-link" class="metric metric-link" href="/usage/models"><span class="metric-label">Most-used model <span class="label-qualifier">by tokens</span></span><strong id="metric-model" class="metric-value metric-model">—</strong><span id="metric-model-note" class="metric-note">Across the selected period</span><span class="metric-action">View models →</span></a>
+          <a id="metric-skills-link" class="metric metric-link" href="/usage/skills"><span class="metric-label">Skill reads</span><strong id="metric-skills" class="metric-value">—</strong><span id="metric-skills-note" class="metric-note">Whole snapshot window</span><span class="metric-action">Explore skills →</span></a>
         </div>
       </section>
 
-      <div class="analytics-grid">
+      <nav class="overview-links" aria-label="Explore usage"><a href="/usage/models">Compare models →</a><a href="/usage/agents">Meet the configured agents →</a><a href="/usage/skills">Explore skills →</a><a href="/usage/activity">Review activity →</a></nav></div>
+      <div id="models-page" class="page-view" hidden><div id="models-overview" class="analytics-grid">
         <section class="panel timeline-panel" aria-labelledby="timeline-heading">
           <div class="panel-header"><div><h2 id="timeline-heading">Tokens over time</h2><p id="timeline-subtitle">Daily activity in your selected period</p></div><span class="unit-label">TOKENS</span></div>
           <div id="timeline-empty" class="empty-state" hidden><span class="empty-mark" aria-hidden="true">∅</span><h3>No activity in this view</h3><p>Try another time range or choose all models.</p></div>
@@ -79,26 +81,31 @@
           <div class="panel-header"><div><h2 id="models-heading">By model</h2><p id="models-subtitle">Share of selected usage</p></div></div>
           <div class="segmented model-measure" role="group" aria-label="Model comparison metric"><button type="button" data-measure="tokens" aria-pressed="true">Tokens</button><button type="button" data-measure="calls" aria-pressed="false">Model entries</button></div>
           <div id="model-chart" class="model-chart"></div>
-          <p id="models-note" class="fine-print">Select a model below to filter your view.</p>
+          <p id="models-note" class="fine-print">Select a model for usage details.</p>
           <details class="table-disclosure"><summary>View model data</summary><div class="table-scroll" tabindex="0" role="region" aria-label="Usage by model table"><table class="data-table"><caption>All models in the selected view</caption><thead><tr><th scope="col">Model</th><th scope="col">Provider</th><th scope="col">Tokens</th><th scope="col">Model entries</th><th scope="col">Reported cost (USD)</th></tr></thead><tbody id="model-table-body"></tbody></table></div></details>
         </section>
       </div>
 
+      <div id="model-detail" class="entity-detail" hidden></div></div>
+      <div id="agents-page" class="page-view" hidden><div class="section-heading"><h2>Configured agents</h2><p>All configured agents, distinct from AFP-scoped usage observations.</p></div><p id="agents-coverage" class="fine-print coverage-inline"></p><div id="agents-list" class="entity-list"></div><div id="agent-detail" class="entity-detail" hidden></div></div>
+      <div id="skills-page" class="page-view" hidden><div class="search-field page-search"><label for="skills-search">Search skills</label><input id="skills-search" type="search" placeholder="Search name or description" autocomplete="off"><button id="skills-clear-search" class="button button-secondary search-clear" type="button" hidden>Clear search</button></div>
       <section id="skills" class="panel skills-panel anchor-section" aria-labelledby="skills-heading">
         <div class="panel-header"><div><h2 id="skills-heading">Skills in your workflow</h2><p id="skills-subtitle">Observed skill usage across the whole snapshot window</p></div><span class="neutral-badge">Whole snapshot</span></div>
         <p id="skill-metric" class="section-explanation">Skill counts are independent of the date and model filters above.</p>
-        <div id="skills-list" class="skills-list"></div>
+        <p id="skills-coverage" class="fine-print coverage-inline"></p><div id="skills-list" class="skills-list"></div>
         <button id="skills-more" class="button button-secondary more-button" type="button" hidden>Show all skills</button>
       </section>
 
-      <section id="history" class="panel history-panel anchor-section" aria-labelledby="history-heading">
-        <div class="panel-header"><div><h2 id="history-heading">Recent activity</h2><p id="history-metric">Metadata-inferred agent activity, not prompt history</p></div><span id="history-count" class="neutral-badge">— entries</span></div>
-        <div class="history-tools"><div class="search-field"><label for="history-search">Search activity</label><div class="search-input"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m15.5 15.5 5 5"></path></svg><input id="history-search" type="search" autocomplete="off" placeholder="Search descriptions or models"></div></div><p id="history-filter-note" class="fine-print">Uses the time range and model selected above.</p></div>
-        <div id="history-empty" class="empty-state" hidden><span class="empty-mark" aria-hidden="true">∅</span><h3 id="history-empty-title">No activity in this view</h3><p id="history-empty-message">Try another time range, model, or search.</p><button id="clear-search" class="button button-secondary" type="button" hidden>Clear search</button></div>
-        <div id="history-table-wrap" class="history-table-wrap"><table class="data-table history-table"><caption class="sr-only">Filtered recent activity; all times are Europe/Zurich</caption><thead><tr><th scope="col">When <span class="header-hint">Zurich</span></th><th scope="col">Inferred activity</th><th scope="col">Model</th><th scope="col" class="number-cell">Tokens</th><th scope="col">Status</th></tr></thead><tbody id="history-table-body"></tbody></table></div>
+      <div id="skill-detail" class="entity-detail" hidden></div></div>
+      <div id="activity-page" class="page-view" hidden><section id="history" class="panel history-panel anchor-section" aria-labelledby="history-heading">
+        <div class="panel-header"><div><h2 id="history-heading">Recorded work</h2><p id="history-metric">Metadata-inferred agent activity, not prompt history</p></div><span id="history-count" class="neutral-badge">— entries</span></div>
+        <div class="history-tools"><div class="search-field"><label for="history-search">Search activity</label><div class="search-input"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m15.5 15.5 5 5"></path></svg><input id="history-search" type="search" autocomplete="off" placeholder="Search tasks or run descriptions"></div><button id="activity-clear-search" class="button button-secondary search-clear" type="button" hidden>Clear search</button></div><p id="history-filter-note" class="fine-print">Uses the time range above. Run models are not attributed.</p></div>
+        <div id="history-empty" class="empty-state" hidden><span class="empty-mark" aria-hidden="true">∅</span><h3 id="history-empty-title">No activity in this view</h3><p id="history-empty-message">Try another time range or search.</p><button id="clear-search" class="button button-secondary" type="button" hidden>Clear search</button></div>
+        <p id="activity-coverage" class="fine-print coverage-inline"></p><h3 class="list-subheading">Task and session summaries</h3><p id="undated-task-note" class="fine-print coverage-inline" hidden></p><div id="tasks-list" class="entity-list"></div><h3 id="runs-heading" class="list-subheading">Observed agent runs</h3><div id="history-table-wrap" class="history-table-wrap"><table class="data-table history-table"><caption class="sr-only">Filtered recent activity; all times are Europe/Zurich</caption><thead><tr><th scope="col">When <span class="header-hint">Zurich</span></th><th scope="col">Activity detail</th><th scope="col">Agent</th><th scope="col" class="number-cell">Tool steps</th><th scope="col">Status</th></tr></thead><tbody id="history-table-body"></tbody></table></div>
         <div class="history-footer"><span id="history-showing" class="fine-print"></span><button id="history-more" class="button button-secondary" type="button" hidden>Load more</button></div>
       </section>
 
+      <div id="activity-detail" class="entity-detail" hidden></div></div>
       <footer class="page-footer"><details id="coverage-details" class="coverage-details"><summary>About this data <span id="coverage-summary"></span></summary><div class="coverage-content"><dl><div><dt>Snapshot generated</dt><dd id="coverage-generated">—</dd></div><div><dt>Snapshot window</dt><dd id="coverage-range">—</dd></div><div><dt>Scope</dt><dd id="coverage-scope">—</dd></div></dl><ul id="coverage-notes"></ul><p class="fine-print">Totals reflect the records available in this snapshot. Missing cost is shown as unavailable, not zero. Skill counts cover the whole snapshot. Activity descriptions are inferred from metadata, not copied from prompts. Recorded model entries are not verified provider HTTP calls.</p></div></details><span class="footer-signature">A clearer view of the work.</span></footer>
     </main>
   </div>
