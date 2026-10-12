@@ -1,0 +1,20 @@
+import {mkdir, readFile, writeFile, chmod, access} from 'node:fs/promises';
+import {homedir} from 'node:os';
+import {resolve, join} from 'node:path';
+import {randomBytes, createHash} from 'node:crypto';
+const dir = resolve(process.env.AFP_USAGE_STATE_DIR || join(homedir(), '.config/afp-usage'));
+const root = process.argv[2];
+if (!root || !/^agent:[a-z0-9_-]+:[a-zA-Z0-9:_-]+$/.test(root)) throw new Error('Usage: npm run setup -- <root-session-key>');
+await mkdir(dir, {recursive:true,mode:0o700});
+await chmod(dir,0o700);
+const configPath=join(dir,'config.json');
+try { await access(configPath); console.log('Existing private configuration preserved: '+configPath); process.exit(0); } catch(e) { if(e.code!=='ENOENT') throw e; }
+const password=randomBytes(24).toString('base64url');
+const config={rootSessionKey:root,scopeLabel:'AFP project conversation and its delegated work',lookbackDays:30,snapshotPath:join(dir,'snapshot.json'),authPath:join(dir,'auth.json'),allowlistPath:join(dir,'sessions.json'),skillEventsPath:join(dir,'skills.jsonl')};
+const auth={passwordHash:createHash('sha256').update(password).digest('hex'),sessionKey:randomBytes(32).toString('base64url')};
+const newline=String.fromCharCode(10);
+await writeFile(config.authPath,JSON.stringify(auth)+newline,{mode:0o600,flag:'wx'});
+await writeFile(join(dir,'sign-in.txt'),['AFP Usage dashboard','https://afp.mclement.ch/usage','','Passphrase: '+password,'','Keep this file private. This is separate from OpenClaw or Cloudflare credentials.',''].join(newline),{mode:0o600,flag:'wx'});
+await writeFile(config.allowlistPath,JSON.stringify([root])+newline,{mode:0o600,flag:'wx'});
+await writeFile(configPath,JSON.stringify(config,null,2)+newline,{mode:0o600,flag:'wx'});
+console.log('Created private configuration and sign-in file in '+dir+' (no credentials printed).');

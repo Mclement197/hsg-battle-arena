@@ -1,0 +1,12 @@
+[Unit]
+Description=Collect private AFP AI usage metadata
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/hsg-battle-arena/usage-dashboard
+ExecStart=/usr/bin/node %h/hsg-battle-arena/usage-dashboard/src/collect.mjs --config %h/.config/afp-usage/config.json
+Environment=PATH=%h/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+TimeoutStartSec=240
+UMask=0077
+NoNewPrivileges=true
+MemoryMax=512M

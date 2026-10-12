@@ -1,0 +1,16 @@
+{
+  "name": "afp-usage-dashboard",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Private, project-scoped AI usage dashboard",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "start": "node src/server.mjs",
+    "collect": "node src/collect.mjs",
+    "setup": "node scripts/setup-local.mjs"
+  }
+}

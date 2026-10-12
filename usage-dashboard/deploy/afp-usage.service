@@ -1,0 +1,16 @@
+[Unit]
+Description=AFP private AI usage dashboard
+
+[Service]
+Type=simple
+WorkingDirectory=%h/hsg-battle-arena/usage-dashboard
+ExecStart=/usr/bin/node %h/hsg-battle-arena/usage-dashboard/src/server.mjs
+Environment=AFP_USAGE_CONFIG=%h/.config/afp-usage/config.json
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+MemoryMax=256M
+
+[Install]
+WantedBy=default.target
