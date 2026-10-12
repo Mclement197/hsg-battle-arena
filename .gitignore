@@ -1,0 +1,20 @@
+# Local secrets (safe examples may be committed)
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+
+# Local dependencies and generated output
+node_modules/
+dist/
+build/
+coverage/
+*.log
+
+# OS and editor-local files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
