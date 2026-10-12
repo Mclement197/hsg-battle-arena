@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "version": "0.1.0",
-  "description": "Private, project-scoped AI usage dashboard",
+  "description": "Public, project-scoped AI usage dashboard",
   "engines": {
     "node": ">=24"
   },

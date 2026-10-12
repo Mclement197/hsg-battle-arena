@@ -1,6 +1,6 @@
 # AFP Usage
 
-A private, responsive AI usage dashboard at **https://afp.mclement.ch/usage**. This is a separate utility, not the HSG battle game.
+A public, read-only, responsive AI usage dashboard at **https://afp.mclement.ch/usage**. This is a separate utility, not the HSG battle game.
 
 ## What it shows
 
@@ -10,14 +10,14 @@ A private, responsive AI usage dashboard at **https://afp.mclement.ch/usage**. T
 - Recent agent activity with privacy-safe, inferred descriptions.
 - Today / 7-day / 30-day filters, model filtering, activity search, accessible chart tables, and mobile navigation.
 
-The public page is an inert sign-in shell. Usage needs a separate private passphrase; OpenClaw and Cloudflare credentials never reach the browser.
+The dashboard opens without a password. Anyone with the URL can read the sanitized usage snapshot. OpenClaw and Cloudflare credentials, raw prompts, transcripts and private session identifiers are never published.
 
 ## Architecture
 
 Node.js 24, standard library only. No production npm dependencies, remote fonts, analytics or CDN assets.
 
 - `src/server.mjs` binds only `127.0.0.1:18891`.
-- `src/handler.mjs` serves exactly `/usage` and `/usage/*` with cookie authentication.
+- `src/handler.mjs` serves exactly `/usage` and `/usage/*` with an allowlisted public-data projection.
 - `src/collect.mjs` uses supported read-only OpenClaw reporting APIs, never raw session transcript files.
 - `src/telemetry.mjs` validates scope and constructs a sanitized snapshot.
 - `plugin/` observes successful named skill instruction reads; see its README for evidence and limits.
@@ -40,13 +40,11 @@ npm start
 Setup creates owner-private files in `~/.config/afp-usage/` (directory 0700, files 0600):
 
 - `config.json`: explicit session scope and local paths.
-- `auth.json`: passphrase hash and cookie-signing secret.
-- `sign-in.txt`: generated 192-bit random passphrase. Keep this file private.
 - `sessions.json`: verified observer allowlist, maintained by the collector.
 - `snapshot.json`: latest successful sanitized collection.
 - `skills.jsonl`: prospective observations, once the observer is enabled.
 
-Existing configuration is preserved. `AFP_USAGE_CONFIG` selects another private config; `AFP_USAGE_STATE_DIR` changes the initial setup directory. Never put state or credentials inside the repository.
+Existing configuration is preserved. Legacy `auth.json` / `sign-in.txt` files may remain private on disk but are no longer read or used; new setup does not create them. `AFP_USAGE_CONFIG` selects another private config; `AFP_USAGE_STATE_DIR` changes the initial setup directory. Never put state or credentials inside the repository.
 
 ### Persistent operation
 
@@ -85,7 +83,7 @@ Install the reviewed observer following [plugin/README.md](plugin/README.md), li
 - Skill counts mean **instruction reads**, not completed workflows. They start at observer installation, may omit unsupported/missing events, and have no invented historical backfill. Repeated successful reads count separately. Observer limits are documented in its README.
 - Local estimated costs, where recorded, are not a provider invoice.
 
-Cookies are Secure, HttpOnly, host-only and SameSite=Strict with a signed 12-hour expiry. Logout clears that browser cookie; a copied cookie remains valid until expiry or signing-key rotation. Hub, OpenClaw and usage share one trusted origin: paths are not browser security boundaries. Do not cohost untrusted applications here.
+No dashboard password, login endpoint, or session cookie is used. Public API requests omit credentials; the service only serves a validated, allowlisted snapshot and fixed static assets. Local collection state stays owner-private. OpenClaw authentication is unchanged. Hub, OpenClaw and usage share one trusted origin: paths are not browser security boundaries. Do not cohost untrusted applications here.
 
 ## Verification
 
@@ -97,6 +95,6 @@ curl --noproxy 127.0.0.1 -i http://127.0.0.1:18891/usage/healthz
 curl --noproxy 127.0.0.1 -i http://127.0.0.1:18891/usage/api/usage
 ~~~
 
-Expect health 200 and unauthenticated usage 401. Tests cover scope isolation, accounting, null-valued collector/UI contracts, privacy projection, authentication, CSRF, host/path restrictions, atomic private writes, and observer filtering. Synthetic fixtures are never served as real usage.
+Expect health 200 and anonymous usage 200 after collection. `node scripts/smoke.mjs https://afp.mclement.ch` verifies public access without reading any credential files. Tests cover scope isolation, accounting, null-valued collector/UI contracts, public boot, privacy projection, removed auth endpoints, host/path restrictions, atomic private writes, and observer filtering. Synthetic fixtures are never served as real usage.
 
-Before launch, also verify actual sign-in/data/logout, public HTTPS, phone/laptop layouts, keyboard controls, and browser errors. Source tests alone do not prove deployed browser behavior.
+Before launch, also verify anonymous data access, public HTTPS, phone/laptop layouts, keyboard controls, and browser errors. Source tests alone do not prove deployed browser behavior.

@@ -115,16 +115,16 @@
     return data;
   }
 
-  async function api(path, options = {}, parseJSON = false) {
+  async function api() {
     const controller = new AbortController();
     state.controller = controller;
     const timeout = window.setTimeout(() => controller.abort(), 20000);
     try {
-      const response = await fetch(path, {
-        ...options, credentials: 'same-origin', cache: 'no-store', redirect: 'error',
-        headers: { Accept: 'application/json', ...options.headers }, signal: controller.signal
+      const response = await fetch('/usage/api/usage', {
+        credentials: 'omit', cache: 'no-store', redirect: 'error',
+        headers: { Accept: 'application/json' }, signal: controller.signal
       });
-      const payload = parseJSON && response.ok ? await response.json() : null;
+      const payload = response.ok ? await response.json() : null;
       return { ok: response.ok, status: response.status, payload };
     } finally {
       window.clearTimeout(timeout);
@@ -136,7 +136,6 @@
     state.pending = busy;
     $('refresh-button').disabled = busy;
     $('retry-button').disabled = busy;
-    $('logout-button').disabled = busy;
     $('app-shell').setAttribute('aria-busy', String(busy));
     $('refresh-button').querySelector('span').textContent = busy ? label : 'Refresh';
   }
@@ -150,7 +149,6 @@
 
   function showShell() {
     $('initial-state').hidden = true;
-    $('auth-view').hidden = true;
     $('app-shell').hidden = false;
     document.querySelector('.skip-link').setAttribute('href', '#main');
   }
@@ -189,19 +187,6 @@
     document.querySelectorAll('details[open]').forEach((detail) => { detail.open = false; });
   }
 
-  function showLogin(message = '') {
-    clearData();
-    $('initial-state').hidden = true;
-    $('app-shell').hidden = true;
-    $('auth-view').hidden = false;
-    $('password').value = '';
-    $('password').removeAttribute('aria-invalid');
-    setText('login-error', message);
-    $('login-error').hidden = !message;
-    document.querySelector('.skip-link').setAttribute('href', '#auth-heading');
-    $('password').focus({ preventScroll: true });
-  }
-
   function renderUnavailable() {
     $('timeline-content').hidden = true;
     $('timeline-empty').hidden = false;
@@ -218,13 +203,12 @@
     tableMessage($('model-table-body'), 5, 'No snapshot loaded.');
   }
 
-  async function loadUsage(moveFocus = false) {
+  async function loadUsage() {
     if (state.pending) return;
     setBusy(true);
     announce(state.data ? 'Refreshing your usage snapshot.' : 'Loading your usage snapshot.');
     try {
-      const response = await api('/usage/api/usage', {}, true);
-      if (response.status === 401) { showLogin(); return; }
+      const response = await api();
       if (!response.ok) throw new Error('usage-unavailable');
       const data = validateSnapshot(response.payload);
       state.data = data;
@@ -235,7 +219,6 @@
       showShell();
       populateModels();
       renderSnapshot();
-      if (moveFocus) $('main').focus({ preventScroll: true });
       announce('Usage snapshot loaded. ' + count(data.daily.length) + ' daily model records available.');
     } catch (error) {
       showShell();
@@ -542,57 +525,6 @@
     $('history-more').hidden = visible.length >= rows.length;
   }
 
-  $('login-form').addEventListener('submit', async (event) => {
-    event.preventDefault();
-    if (state.pending || !$('login-form').reportValidity()) return;
-    const body = JSON.stringify({ password: $('password').value });
-    $('password').value = '';
-    $('password').removeAttribute('aria-invalid');
-    $('login-error').hidden = true;
-    setBusy(true);
-    $('login-button').disabled = true;
-    $('password').disabled = true;
-    setText('login-button', 'Signing in…');
-    let success = false;
-    try {
-      const response = await api('/usage/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          $('password').setAttribute('aria-invalid', 'true');
-          throw new Error('That password did not unlock the dashboard. Please try again.');
-        }
-        if (response.status === 429) throw new Error('Too many sign-in attempts. Wait a moment before trying again.');
-        throw new Error('Sign-in is unavailable right now. Please try again shortly.');
-      }
-      success = true;
-    } catch (error) {
-      const safeMessages = ['That password did not unlock the dashboard. Please try again.', 'Too many sign-in attempts. Wait a moment before trying again.', 'Sign-in is unavailable right now. Please try again shortly.'];
-      setText('login-error', safeMessages.includes(error.message) ? error.message : 'Could not reach the dashboard. Check your connection and try again.');
-      $('login-error').hidden = false;
-    } finally {
-      setBusy(false);
-      $('login-button').disabled = false;
-      $('password').disabled = false;
-      setText('login-button', 'Unlock dashboard');
-    }
-    if (success) await loadUsage(true);
-    else $('password').focus();
-  });
-
-  $('logout-button').addEventListener('click', async () => {
-    if (state.pending) return;
-    setBusy(true, 'Signing out…');
-    try {
-      const response = await api('/usage/api/logout', { method: 'POST' });
-      if (!response.ok && response.status !== 401) throw new Error('logout-failed');
-      showLogin();
-      announce('Signed out. Usage data has been cleared from this page.');
-    } catch {
-      showNotice('Sign-out was not confirmed', 'Your session may still be active. Check your connection and select Sign out again.', false);
-      announce('Sign-out failed. Your session may still be active.');
-    } finally { setBusy(false); }
-  });
-
   $('refresh-button').addEventListener('click', () => loadUsage());
   $('retry-button').addEventListener('click', () => loadUsage());
   document.querySelectorAll('[data-period]').forEach((button) => button.addEventListener('click', () => {
@@ -693,7 +625,7 @@
     document.querySelectorAll('.anchor-section').forEach((section) => observer.observe(section));
   }
 
-  // No credentials or usage data are persisted. A restored page always revalidates its cookie.
+  // No usage data is persisted. A restored page fetches a fresh public snapshot.
   window.addEventListener('pageshow', (event) => { if (event.persisted) { clearData(); loadUsage(); } });
   window.setInterval(() => {
     if (!state.data || document.hidden) return;

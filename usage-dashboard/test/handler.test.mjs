@@ -1,19 +1,70 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {handle,hash,authenticated,validateSnapshot,publicSnapshot} from '../src/handler.mjs';
+import {handle,validateSnapshot,publicSnapshot} from '../src/handler.mjs';
 const base='https://afp.mclement.ch/usage';
 const snapshot={schemaVersion:1,generatedAt:new Date().toISOString(),range:{start:'2026-10-12',end:'2026-10-12',timeZone:'Europe/Zurich'},scopeLabel:'Test project',daily:[{date:'2026-10-12',model:'test',provider:'test',input:10,output:5,cacheRead:20,cacheWrite:0,totalTokens:35,requests:1,costUsd:null}],skills:[],requests:[],coverage:{sessions:1,notes:[],skillMetric:'Observed reads',historyMetric:'Inferred activity'}};
-const env={DASHBOARD_PASSWORD_SHA256:await hash('test-only-random-password'),SESSION_KEY:'test-session-key-not-a-deployed-secret',USAGE:{get:async()=>JSON.stringify(snapshot)}};
+const env={USAGE:{get:async()=>JSON.stringify(snapshot)}};
 const req=(path,opts={})=>new Request(base+path,opts);
-const login=(password='test-only-random-password',origin='https://afp.mclement.ch')=>req('/api/login',{method:'POST',headers:{'Content-Type':'application/json',Origin:origin},body:JSON.stringify({password})});
-test('output projection drops unknown private fields at every level',()=>{const value=structuredClone(snapshot);value.internalSecret='omit';value.range.sessionKey='omit';value.daily[0].rawCommand='omit';value.coverage.internalPaths=['omit'];const safe=publicSnapshot(value);assert.deepEqual(safe,snapshot);assert.equal(JSON.stringify(safe).includes('omit'),false);});
-test('private metrics deny unauthenticated visitors',async()=>{const r=await handle(req('/api/usage'),env);assert.equal(r.status,401);assert.equal(r.headers.get('cache-control'),'no-store');assert.equal((await r.text()).includes('35'),false);});
-test('successful login uses a secure host-only cookie and allows data',async()=>{const r=await handle(login(),env);assert.equal(r.status,200);const cookie=r.headers.get('set-cookie');for(const flag of ['Secure','HttpOnly','SameSite=Strict','Path=/'])assert.ok(cookie.includes(flag));assert.ok(!cookie.includes('Domain='));const data=await handle(req('/api/usage',{headers:{Cookie:cookie.split(';')[0]}}),env);assert.deepEqual(await data.json(),snapshot);});
-test('wrong password and cross-origin login fail closed',async()=>{assert.equal((await handle(login('wrong'),env)).status,401);assert.equal((await handle(login(undefined,'https://other.example'),env)).status,403);});
-test('cookie tampering and expired sessions are rejected',async()=>{const r=await handle(login(),env);const cookie=r.headers.get('set-cookie').split(';')[0];assert.equal(await authenticated(req('/api/usage',{headers:{Cookie:cookie+'x'}}),env),false);assert.equal(await authenticated(req('/api/usage',{headers:{Cookie:cookie}}),env,Date.now()+13*60*60*1000),false);});
-test('foreign hosts and unrelated AFP routes cannot reach usage',async()=>{assert.equal((await handle(new Request('https://other.mclement.ch/usage'),env)).status,421);assert.equal((await handle(new Request('https://afp.mclement.ch/openclaw'),env)).status,404);assert.equal((await handle(new Request('https://afp.mclement.ch/usager'),env)).status,404);});
-test('static HTML exposes no data and has restrictive CSP',async()=>{const r=await handle(req(''),env,{'/index.html':{body:'<h1>Sign in</h1>',type:'text/html'}});assert.equal(r.status,200);assert.ok(r.headers.get('content-security-policy').includes("frame-ancestors 'none'"));assert.equal(await r.text(),'<h1>Sign in</h1>');});
-test('logout requires same-origin request and clears cookie',async()=>{assert.equal((await handle(req('/api/logout',{method:'POST'}),env)).status,403);const r=await handle(req('/api/logout',{method:'POST',headers:{Origin:'https://afp.mclement.ch'}}),env);assert.ok(r.headers.get('set-cookie').includes('Max-Age=0'));});
-test('snapshot validates dates, bounds, and unknown costs',()=>{assert.equal(validateSnapshot(snapshot),true);assert.equal(validateSnapshot({...snapshot,range:{...snapshot.range,start:'yesterday'}}),false);assert.equal(validateSnapshot({...snapshot,daily:[{...snapshot.daily[0],input:-1}]}),false);assert.equal(validateSnapshot({...snapshot,requests:Array(101).fill({})}),false);});
-test('malformed JSON and unconfigured auth are rejected',async()=>{assert.equal((await handle(req('/api/login',{method:'POST',headers:{Origin:'https://afp.mclement.ch','Content-Type':'application/json'},body:'{' }),env)).status,400);assert.equal((await handle(login(),{})).status,503);});
-test('requests to nonexistent APIs and ingestion are rejected',async()=>{assert.equal((await handle(req('/api/ingest',{method:'POST',body:'{}'}),env)).status,404);assert.equal((await handle(req('/api/usage',{method:'DELETE'}),env)).status,404);});
+
+test('output projection drops unknown private fields at every level',()=>{
+  const value=structuredClone(snapshot);
+  value.skills=[{name:'fixture-skill',description:'Confirmed instruction read',count:1,lastUsedAt:null}];
+  value.requests=[{id:'opaque-fixture',at:value.generatedAt,model:'Not attributed',description:'Inferred activity',input:null,output:null,cacheRead:null,cacheWrite:null,totalTokens:null,status:'succeeded'}];
+  const expected=structuredClone(value);
+  value.internalSecret='omit';value.range.sessionKey='omit';value.daily[0].rawCommand='omit';
+  value.skills[0].privatePath='omit';value.requests[0].rawPrompt='omit';value.coverage.internalPaths=['omit'];
+  assert.deepEqual(publicSnapshot(value),expected);
+});
+test('anonymous visitors receive usage without credentials or a session cookie',async()=>{
+  const r=await handle(req('/api/usage'),env);
+  assert.equal(r.status,200);assert.equal(r.headers.get('cache-control'),'no-store');
+  assert.equal(r.headers.get('set-cookie'),null);assert.deepEqual(await r.json(),snapshot);
+});
+test('public HTTP boundary projects snapshots instead of leaking backend fields',async()=>{
+  const value=structuredClone(snapshot);value.sessionKey='omit';value.daily[0].rawCommand='omit';value.coverage.rawPrompt='omit';
+  const r=await handle(req('/api/usage'),{USAGE:{get:async()=>JSON.stringify(value)}});
+  assert.equal(r.status,200);assert.deepEqual(await r.json(),snapshot);
+});
+test('obsolete or malformed cookies do not gate public access',async()=>{
+  const r=await handle(req('/api/usage',{headers:{Cookie:'__Host-afp_session=expired-or-invalid'}}),env);
+  assert.equal(r.status,200);assert.deepEqual(await r.json(),snapshot);
+});
+test('removed login and logout endpoints do not accept credentials or create cookies',async()=>{
+  for(const path of ['/api/login','/api/logout']){
+    const r=await handle(req(path,{method:'POST',headers:{Origin:'https://afp.mclement.ch','Content-Type':'application/json'},body:'{}'}),env);
+    assert.equal(r.status,404);assert.equal(r.headers.get('set-cookie'),null);
+  }
+});
+test('foreign hosts and unrelated AFP routes cannot reach usage',async()=>{
+  assert.equal((await handle(new Request('https://other.mclement.ch/usage'),env)).status,421);
+  assert.equal((await handle(new Request('https://afp.mclement.ch/openclaw'),env)).status,404);
+  assert.equal((await handle(new Request('https://afp.mclement.ch/usager'),env)).status,404);
+});
+test('static HTML keeps restrictive CSP and supports HEAD',async()=>{
+  const assets={'/index.html':{body:'<h1>Usage overview</h1>',type:'text/html'}};
+  const r=await handle(req(''),env,assets);
+  assert.equal(r.status,200);assert.ok(r.headers.get('content-security-policy').includes("frame-ancestors 'none'"));
+  assert.equal(await r.text(),'<h1>Usage overview</h1>');
+  assert.equal(await (await handle(req('',{method:'HEAD'}),env,assets)).text(),'');
+});
+test('private state and files are never served as assets',async()=>{
+  for(const path of ['/auth.json','/sign-in.txt','/config.json','/sessions.json','/skills.jsonl','/snapshot.json'])
+    assert.equal((await handle(req(path),env)).status,404);
+});
+test('snapshot validates dates, bounds, and unknown costs',()=>{
+  assert.equal(validateSnapshot(snapshot),true);
+  assert.equal(validateSnapshot({...snapshot,range:{...snapshot.range,start:'yesterday'}}),false);
+  assert.equal(validateSnapshot({...snapshot,daily:[{...snapshot.daily[0],input:-1}]}),false);
+  assert.equal(validateSnapshot({...snapshot,requests:Array(101).fill({})}),false);
+});
+test('missing or malformed snapshots fail without leaking their contents',async()=>{
+  assert.equal((await handle(req('/api/usage'),{USAGE:{get:async()=>null}})).status,503);
+  for(const payload of ['{secret','{"rawPrompt":"private"}']){
+    const r=await handle(req('/api/usage'),{USAGE:{get:async()=>payload}});
+    assert.equal(r.status,400);assert.deepEqual(await r.json(),{error:'Request could not be processed'});
+  }
+});
+test('usage remains read-only with no ingestion or other API routes',async()=>{
+  assert.equal((await handle(req('/api/ingest',{method:'POST',body:'{}'}),env)).status,404);
+  for(const method of ['POST','PUT','DELETE']) assert.equal((await handle(req('/api/usage',{method}),env)).status,404);
+});

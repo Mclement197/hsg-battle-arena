@@ -21,8 +21,11 @@ function collectorSnapshot() {
   return buildSnapshot({ now, range, sessions: [session], rows: dailyRows(report, range), events: audit });
 }
 
-// Execute the actual frontend functions in a minimal DOM, without booting network/auth listeners.
-function frontend() {
+// Run the actual frontend against its HTML IDs; boot tests include all listeners and the initial fetch.
+function frontend({ boot = false, status = 200, payload = collectorSnapshot() } = {}) {
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const ids = new Set([...html.matchAll(/id="([^"]+)"/g)].map(match => match[1]));
+  const requests = [];
   const nodes = new Map();
   class Node {
     constructor(tag = 'div') { this.tag = tag; this.children = []; this.textContent = ''; this.attributes = {}; this.value = ''; this.hidden = false;
@@ -36,19 +39,26 @@ function frontend() {
     addEventListener() {}
   }
   const document = {
-    getElementById: (id) => { if (!nodes.has(id)) nodes.set(id, new Node()); return nodes.get(id); },
+    getElementById: (id) => { assert.ok(ids.has(id) || nodes.has(id), 'No HTML element: ' + id); if (!nodes.has(id)) nodes.set(id, new Node()); return nodes.get(id); },
+    querySelector: (selector) => { assert.equal(selector, '.skip-link'); return new Node('a'); },
+    querySelectorAll: () => [],
     createElement: (tag) => new Node(tag), createElementNS: (_, tag) => new Node(tag),
     createTextNode: (content) => ({ textContent: content }),
     createDocumentFragment: () => new Node('fragment')
   };
   const source = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
-  const boundary = source.indexOf("  $('login-form').addEventListener(");
+  const boundary = source.indexOf("  $('refresh-button').addEventListener(");
   assert.ok(boundary > 0, 'frontend test boundary found');
-  const script = source.slice(0, boundary) + '\n  globalThis.contract = { state, validateSnapshot, addTotals, emptyTotals, renderSnapshot, renderFiltered, updateFreshness };\n})();';
+  const exported = '\n  globalThis.contract = { state, validateSnapshot, addTotals, emptyTotals, renderSnapshot, renderFiltered, updateFreshness };\n';
+  const script = source.slice(0, boundary) + exported + (boot
+    ? source.slice(boundary).replace('\n  loadUsage();\n})();', '\n  globalThis.loaded = loadUsage();\n})();')
+    : '})();');
   class Clock extends Date { static now() { return now.getTime(); } }
-  const context = { document, window: {}, Date: Clock, Intl, Map, Set, Math, Number, String, Object, Array, RegExp, Option: class {}, console };
+  const context = { document, window: { setTimeout, clearTimeout, setInterval() {}, addEventListener() {} },
+    Date: Clock, Intl, Map, Set, Math, Number, String, Object, Array, RegExp, Option: class {}, console, AbortController,
+    fetch: async (path, options) => { requests.push({ path, options }); return { ok: status === 200, status, json: async () => payload }; } };
   vm.runInNewContext(script, context, { filename: 'public/app.js' });
-  return { ...context.contract, nodes, get: document.getElementById };
+  return { ...context.contract, nodes, get: document.getElementById, loaded: context.loaded, requests, html };
 }
 const cells = (row) => row.children.map((cell) => cell.textContent);
 const descendant = (node, className) => {
@@ -110,4 +120,29 @@ test('zero is visible and stale threshold begins at fifteen minutes', () => {
   ui.updateFreshness();
   assert.equal(ui.get('freshness').classList.values.has('is-stale'), true);
   assert.match(ui.get('freshness-text').textContent, /may be stale/);
+});
+
+
+test('the full public frontend boots without login controls or cookies', async () => {
+  const ui = frontend({ boot: true });
+  await ui.loaded;
+  assert.ok(ui.state.data);
+  assert.equal(ui.get('app-shell').hidden, false);
+  assert.equal(ui.get('initial-state').hidden, true);
+  assert.equal(ui.get('notice').hidden, true);
+  assert.equal(ui.get('metric-tokens').textContent, '170');
+  assert.equal(ui.requests.length, 1);
+  assert.equal(ui.requests[0].path, '/usage/api/usage');
+  assert.equal(ui.requests[0].options.credentials, 'omit');
+  assert.doesNotMatch(ui.html, /login-form|logout-button|type="password"|Private workspace/);
+});
+
+test('a missing public snapshot shows a retry notice instead of a login prompt', async () => {
+  const ui = frontend({ boot: true, status: 503 });
+  await ui.loaded;
+  assert.equal(ui.state.data, null);
+  assert.equal(ui.get('app-shell').hidden, false);
+  assert.equal(ui.get('notice').hidden, false);
+  assert.equal(ui.get('notice-title').textContent, 'Could not load your usage');
+  assert.equal(ui.get('retry-button').disabled, false);
 });

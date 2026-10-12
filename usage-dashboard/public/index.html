@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <meta name="referrer" content="no-referrer">
-  <meta name="description" content="A private view of AI usage, models, skills, and recent activity.">
+  <meta name="description" content="Project-scoped AI usage, models, skills, and recent activity.">
   <title>AFP Usage — AI activity</title>
   <link rel="stylesheet" href="/usage/styles.css">
   <script src="/usage/app.js" defer></script>
@@ -20,33 +20,17 @@
     <span class="loading-track" aria-hidden="true"></span>
   </div>
 
-  <main id="auth-view" class="auth-view" hidden>
-    <div class="auth-brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>usage<span class="brand-period">.</span></span></div>
-    <section class="auth-card" aria-labelledby="auth-heading">
-      <h1 id="auth-heading" tabindex="-1">Your AI activity.<br>Just for you.</h1>
-      <p class="auth-intro">Sign in to see your usage, models, and the work behind the numbers.</p>
-      <form id="login-form">
-        <label for="password">Dashboard password</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="1024" aria-describedby="login-note login-error">
-        <p id="login-error" class="form-error" role="alert" hidden></p>
-        <button id="login-button" class="button button-primary" type="submit">Unlock dashboard <span aria-hidden="true">→</span></button>
-      </form>
-      <p id="login-note" class="auth-note">Your password is never saved in browser storage.</p>
-    </section>
-    <p class="auth-footer">Private workspace <span aria-hidden="true">/</span> AI usage insights</p>
-  </main>
-
   <div id="app-shell" class="app-shell" hidden>
     <aside class="sidebar">
       <a class="brand" href="#overview" aria-label="Usage overview"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>usage<span class="brand-period">.</span></span></a>
-      <div class="workspace-label">Private workspace</div>
+      <div class="workspace-label">AFP project</div>
       <nav class="primary-nav" aria-label="Dashboard sections">
         <a class="nav-link is-active" href="#overview" aria-current="location"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="6" height="6" rx="1.5"></rect><rect x="14.5" y="3.5" width="6" height="6" rx="1.5"></rect><rect x="3.5" y="14.5" width="6" height="6" rx="1.5"></rect><rect x="14.5" y="14.5" width="6" height="6" rx="1.5"></rect></svg><span>Overview</span></a>
         <a class="nav-link" href="#models"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5M3 16l9 5 9-5"></path></svg><span>Models</span></a>
         <a class="nav-link" href="#skills"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13.5 3-9 11h7l-1 7 9-11h-7l1-7Z"></path></svg><span>Skills</span></a>
         <a class="nav-link" href="#history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8a9 9 0 1 1-1 7M4 3v5h5M12 7v5l3 2"></path></svg><span>Activity</span></a>
       </nav>
-      <div class="sidebar-bottom"><div class="sidebar-note">A little clarity.<br>A better view of your AI.</div><span class="private-label"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="3"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>Private by design</span></div>
+      <div class="sidebar-bottom"><div class="sidebar-note">A little clarity.<br>A better view of your AI.</div><span class="privacy-label"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 3v6c0 4-4 7-8 9-4-2-8-5-8-9V6l8-3Z"></path><path d="m8 12 3 3 5-6"></path></svg>Sanitized data only</span></div>
     </aside>
 
     <main id="main" class="main" tabindex="-1">
@@ -54,7 +38,6 @@
         <div><h1>Usage overview</h1><p id="scope-label" class="page-subtitle">Your AI activity, in perspective.</p></div>
         <div class="header-actions">
           <button id="refresh-button" class="button button-secondary" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"></path></svg><span>Refresh</span></button>
-          <button id="logout-button" class="button button-quiet" type="button">Sign out</button>
         </div>
       </header>
 
@@ -119,6 +102,6 @@
       <footer class="page-footer"><details id="coverage-details" class="coverage-details"><summary>About this data <span id="coverage-summary"></span></summary><div class="coverage-content"><dl><div><dt>Snapshot generated</dt><dd id="coverage-generated">—</dd></div><div><dt>Snapshot window</dt><dd id="coverage-range">—</dd></div><div><dt>Scope</dt><dd id="coverage-scope">—</dd></div></dl><ul id="coverage-notes"></ul><p class="fine-print">Totals reflect the records available in this snapshot. Missing cost is shown as unavailable, not zero. Skill counts cover the whole snapshot. Activity descriptions are inferred from metadata, not copied from prompts. Recorded model entries are not verified provider HTTP calls.</p></div></details><span class="footer-signature">A clearer view of the work.</span></footer>
     </main>
   </div>
-  <noscript><div class="noscript-message"><h1>JavaScript is needed</h1><p>Enable JavaScript to sign in and load your private usage data. No usage information is embedded in this page.</p></div></noscript>
+  <noscript><div class="noscript-message"><h1>JavaScript is needed</h1><p>Enable JavaScript to load the public usage dashboard. No usage information is embedded in this page.</p></div></noscript>
 </body>
 </html>
