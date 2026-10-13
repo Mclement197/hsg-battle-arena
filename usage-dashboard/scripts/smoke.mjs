@@ -9,7 +9,7 @@ assert.equal(health.status, 200);
 const page = await fetch(base);
 assert.equal(page.status, 200);
 assert.doesNotMatch(await page.text(), /login-form|logout-button|type="password"/);
-const pages = ['/models', '/agents', '/skills', '/activity'];
+const pages = ['/models', '/agents', '/skills', '/activity', '/graft'];
 for (const path of pages) {
   const result = await fetch(base + path);
   assert.equal(result.status, 200, 'Page route ' + path);

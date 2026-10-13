@@ -3,13 +3,17 @@ import {readFile} from 'node:fs/promises';
 import {homedir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {handle} from './handler.mjs';
+import {handle, GRAFT_VIEWER_PATH} from './handler.mjs';
+import {createActiveAgentsSource} from './active-agents.mjs';
 const configPath=process.env.AFP_USAGE_CONFIG||join(homedir(),'.config/afp-usage/config.json');
 const config=JSON.parse(await readFile(configPath,'utf8'));
 const root=fileURLToPath(new URL('../public/',import.meta.url));
 const assets={};
-for(const [name,type]of [['index.html','text/html; charset=utf-8'],['styles.css','text/css; charset=utf-8'],['app.js','text/javascript; charset=utf-8']]) assets['/'+name]={body:await readFile(join(root,name),'utf8'),type};
-const env={LOCAL_DEV:true,USAGE:{async get(){
+for(const [name,type]of [['index.html','text/html; charset=utf-8'],['styles.css','text/css; charset=utf-8'],['app.js','text/javascript; charset=utf-8'],['favicon.svg','image/svg+xml']]) assets['/'+name]={body:await readFile(join(root,name),'utf8'),type};
+const graftRoot=fileURLToPath(new URL('../graft-integration/',import.meta.url));
+for(const [name,type]of [['graph.json','application/json; charset=utf-8'],['viewer.js','text/javascript; charset=utf-8'],['viewer.css','text/css; charset=utf-8']]) assets['/graft/'+name]={body:await readFile(join(graftRoot,name),'utf8'),type};
+assets[GRAFT_VIEWER_PATH]={body:await readFile(join(graftRoot,'viewer','index.html'),'utf8'),type:'text/html; charset=utf-8'};
+const env={LOCAL_DEV:true,ACTIVE_AGENTS:createActiveAgentsSource(),USAGE:{async get(){
   try {const body=await readFile(config.snapshotPath,'utf8');if(body.length>1048576)throw new Error('Local snapshot too large');return body;}catch(e){if(e.code==='ENOENT')return null;throw e;}
 }}};
 const server=createServer(async(req,res)=>{

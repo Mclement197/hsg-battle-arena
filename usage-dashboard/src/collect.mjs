@@ -12,17 +12,19 @@ import {
 } from './telemetry.mjs';
 
 import { buildDetails, DETAIL_LIMITS, readPublicMetadata, sessionDetails } from './details.mjs';
+import { collectInstallation } from './installation-usage.mjs';
 
+export const CONVERSATION_AGENTS = Object.freeze(['main', 'dev-builder', 'dev-ui', 'dev-content', 'dev-scout', 'dev-review', 'dev-qa', 'dev-security']);
 const execute = promisify(execFile);
-const READ_METHODS = new Set(['sessions.describe', 'sessions.list', 'sessions.usage', 'audit.activity.list', 'agents.list', 'skills.status']);
-export const LIMITS = Object.freeze({ sessions: 200, sessionPages: 20, auditPages: 10, auditEvents: 20000, dailyDetails: 80, ...DETAIL_LIMITS });
+const READ_METHODS = new Set(['sessions.describe', 'sessions.list', 'sessions.usage', 'audit.activity.list', 'agents.list', 'skills.status', 'users.self', 'usage.cost']);
+export const LIMITS = Object.freeze({ sessions: 200, allSessions: 2000, sessionPages: 20, auditPages: 10, auditEvents: 20000, dailyDetails: 80, ...DETAIL_LIMITS });
 const META = { includeDerivedTitles: false, includeLastMessage: false, includeActivitySummary: false };
 
-export async function gatewayRpc(method, params, runner = execute) {
+export async function gatewayRpc(method, params, runner = execute, { timeout = 60000, maxBuffer = 16 * 1024 * 1024 } = {}) {
   if (!READ_METHODS.has(method)) fail('RPC_METHOD_NOT_ALLOWED');
   try {
     const { stdout } = await runner('openclaw', ['gateway', 'call', method, '--json', '--params', JSON.stringify(params)], {
-      encoding: 'utf8', timeout: 60000, maxBuffer: 16 * 1024 * 1024, windowsHide: true
+      encoding: 'utf8', timeout, maxBuffer, windowsHide: true
     });
     return JSON.parse(stdout);
   } catch {
@@ -31,13 +33,27 @@ export async function gatewayRpc(method, params, runner = execute) {
   }
 }
 export function validateConfig(raw) {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw) || typeof raw.rootSessionKey !== 'string' ||
-      !/^agent:[^:\s]+:[^\s]+$/u.test(raw.rootSessionKey) || raw.rootSessionKey.length > 500) fail('INVALID_CONFIG');
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('INVALID_CONFIG');
+  if (!(raw.scopeMode === 'installation' && raw.rootSessionKey === undefined) &&
+      (typeof raw.rootSessionKey !== 'string' || !/^agent:[^:\s]+:[^\s]+$/u.test(raw.rootSessionKey) ||
+       raw.rootSessionKey.length > 500)) fail('INVALID_CONFIG');
   if (raw.projectId !== undefined && (typeof raw.projectId !== 'string' || !raw.projectId.trim() || raw.projectId.length > 500 || /[\u0000-\u001f]/u.test(raw.projectId))) fail('INVALID_PROJECT_ID');
   if (typeof raw.snapshotPath !== 'string' || !path.isAbsolute(raw.snapshotPath) || raw.snapshotPath.includes('\0')) fail('INVALID_SNAPSHOT_PATH');
   const lookbackDays = raw.lookbackDays ?? 30;
   makeRange(new Date(), lookbackDays);
   const optional = {};
+  if (raw.scopeMode !== undefined) {
+    if (!['scoped', 'all-conversations', 'installation'].includes(raw.scopeMode)) fail('INVALID_SCOPE_MODE');
+    optional.scopeMode = raw.scopeMode;
+  }
+  if (raw.conversationProfileId !== undefined) {
+    if (typeof raw.conversationProfileId !== 'string' || !raw.conversationProfileId.trim() || raw.conversationProfileId.length > 500 || /[\u0000-\u001f]/u.test(raw.conversationProfileId)) fail('INVALID_CONVERSATION_PROFILE');
+    // The installed protocol reserves this shared device identity; it is not a human profile.
+    if (raw.conversationProfileId === 'gateway-owner') fail('SHARED_OWNER_NOT_A_PERSON');
+    optional.conversationProfileId = raw.conversationProfileId;
+  }
+  if (optional.scopeMode === 'all-conversations' && !raw.rootSessionKey.startsWith('agent:main:')) fail('ALL_CONVERSATIONS_REQUIRES_MAIN');
+  if (optional.scopeMode === 'all-conversations' && !optional.conversationProfileId) fail('AUTHORIZED_CONVERSATION_PROFILE_REQUIRED');
   for (const name of ['allowlistPath', 'skillEventsPath']) {
     if (raw[name] === undefined) continue;
     if (typeof raw[name] !== 'string' || !path.isAbsolute(raw[name]) || /[\u0000-\u001f]/u.test(raw[name])) fail('INVALID_OBSERVER_PATH');
@@ -79,6 +95,37 @@ function metadata(row) {
     spawnedBy: row.spawnedBy, controlOwnerSessionKey: row.controlOwnerSessionKey,
     childSessions: Array.isArray(row.childSessions) ? row.childSessions.filter((key) => typeof key === 'string') : [] };
 }
+function actorIdentity(actor) {
+  const identity = actor?.identity;
+  if (!['human', 'agent'].includes(actor?.type) || !identity ||
+      identity.type !== (actor.type === 'human' ? 'profile' : 'agent') ||
+      typeof identity.id !== 'string' || !identity.id || actor.id !== identity.id) return null;
+  return { type: identity.type, id: identity.id };
+}
+function admissionFacts(row) {
+  return {
+    creator: actorIdentity(row.createdActor), owner: row.owner === undefined ? actorIdentity(row.createdActor) : actorIdentity(row.owner?.actor),
+    assigned: row.owner?.assignedAt !== undefined || row.owner?.assignedBy !== undefined,
+    assignmentValid: row.owner?.assignedAt === undefined || Number.isFinite(row.owner.assignedAt) && row.owner.assignedAt >= 0,
+    assignedAt: typeof row.owner?.assignedAt === 'number' ? row.owner.assignedAt : null, assignedBy: actorIdentity(row.owner?.assignedBy),
+    createdVia: row.createdVia, visibility: row.visibility, sharingRole: row.sharingRole,
+    incognito: row.incognito === true, background: row.isBackground === true, kind: row.kind, classification: row.classification,
+    parentSessionKey: row.parentSessionKey, parentSessionId: row.parentSessionId,
+    spawnedBy: row.spawnedBy, controlOwnerSessionKey: row.controlOwnerSessionKey
+  };
+}
+function publishableConversation(row) {
+  return row.assignmentValid && !row.incognito && !row.background && !['cron', 'system', 'heartbeat', 'probe'].includes(row.classification) && ['direct', 'group'].includes(row.kind) &&
+    ['shared', 'read-only', 'suggest'].includes(row.visibility) && ['owner', 'member', 'viewer', 'admin'].includes(row.sharingRole);
+}
+export async function verifyReportingIdentity(config, rpc) {
+  if (!config.conversationProfileId) fail('AUTHORIZED_CONVERSATION_PROFILE_REQUIRED');
+  if (config.conversationProfileId === 'gateway-owner') fail('SHARED_OWNER_NOT_A_PERSON');
+  let result;
+  try { result = await rpc('users.self', {}); } catch { fail('REPORTING_IDENTITY_UNAVAILABLE'); }
+  if (!result?.profile?.id || result.profile.mergedInto) fail('REPORTING_IDENTITY_UNAVAILABLE');
+  if (result.profile.id !== config.conversationProfileId) fail('REPORTING_IDENTITY_MISMATCH');
+}
 async function listPages(rpc, filter, limits) {
   const rows = [];
   let offset = 0;
@@ -92,7 +139,61 @@ async function listPages(rpc, filter, limits) {
   }
   fail('SESSION_DISCOVERY_LIMIT');
 }
+function deduplicateInstances(rows) {
+  const unique = new Map();
+  for (const row of rows) {
+    const identity = instanceKey(row);
+    if (!unique.has(identity)) unique.set(identity, { ...row, aliases: [] });
+    unique.get(identity).aliases.push(row.key);
+  }
+  return [...unique.values()];
+}
+export async function discoverConversations(config, rpc, limits = LIMITS) {
+  await verifyReportingIdentity(config, rpc);
+  const profileId = config.conversationProfileId;
+  const filters = { excludeCron: true, excludeSystem: true, includeGlobal: false, includeUnknown: false };
+  const roots = await listPages(rpc, { ...filters, agentId: 'main', excludeSubagents: true,
+    ownerId: profileId, creatorId: profileId, profileRelation: { profileId, relationship: 'owned' } }, limits);
+  const known = new Map();
+  const queue = [];
+  const human = (actor) => actor?.type === 'profile' && actor.id === profileId;
+  const add = (raw, facts) => {
+    const row = { ...metadata(raw), admission: facts };
+    if (!CONVERSATION_AGENTS.includes(row.agentId)) return;
+    const key = sessionKey(row);
+    const previous = known.get(key);
+    if (previous && (previous.sessionId !== row.sessionId || JSON.stringify(previous.admission) !== JSON.stringify(facts))) fail('SESSION_CHANGED_DURING_COLLECTION');
+    if (previous) return;
+    if (known.size >= limits.allSessions) fail('SESSION_DISCOVERY_LIMIT');
+    known.set(key, row); queue.push(row);
+  };
+  for (const raw of roots) {
+    if (raw?.agentId !== undefined && raw.agentId !== 'main' || !raw?.key?.startsWith('agent:main:')) continue;
+    const facts = admissionFacts(raw);
+    if (!publishableConversation(facts) || !['operator', 'channel', 'talk'].includes(facts.createdVia) ||
+        !human(facts.creator) || !human(facts.owner) || facts.spawnedBy) continue;
+    add(raw, facts);
+  }
+  if (!known.size) fail('NO_OWNER_ATTRIBUTED_CONVERSATIONS');
+  // Never scan other agents' independent sessions: each descendant read is anchored to an admitted parent.
+  for (let index = 0; index < queue.length; index += 1) {
+    const parent = queue[index];
+    for (const raw of await listPages(rpc, { ...filters, spawnedBy: parent.key }, limits)) {
+      const facts = admissionFacts(raw);
+      const parentAgent = (actor) => actor?.type === 'agent' && actor.id === parent.agentId;
+      if (!publishableConversation(facts) || facts.createdVia !== 'spawn' || facts.parentSessionKey !== parent.key ||
+          facts.parentSessionId !== parent.sessionId || facts.spawnedBy !== parent.key ||
+          facts.controlOwnerSessionKey && facts.controlOwnerSessionKey !== parent.key ||
+          !(human(facts.creator) || parentAgent(facts.creator)) ||
+          !(human(facts.owner) || !facts.assigned && parentAgent(facts.owner))) continue;
+      add(raw, facts);
+    }
+  }
+  await verifyReportingIdentity(config, rpc);
+  return deduplicateInstances(known.values());
+}
 export async function discoverSessions(config, rpc, limits = LIMITS) {
+  if (config.scopeMode === 'all-conversations') return discoverConversations(config, rpc, limits);
   const result = await rpc('sessions.describe', { key: config.rootSessionKey, includeDerivedTitles: false, includeLastMessage: false });
   const root = metadata(result?.session);
   if (root.key !== config.rootSessionKey) fail('ROOT_IDENTITY_MISMATCH');
@@ -120,13 +221,7 @@ export async function discoverSessions(config, rpc, limits = LIMITS) {
     }
   }
   // A physical instance can appear through multiple aliases; charge it only once.
-  const unique = new Map();
-  for (const row of known.values()) {
-    const identity = instanceKey(row);
-    if (!unique.has(identity)) unique.set(identity, { ...row, aliases: [] });
-    unique.get(identity).aliases.push(row.key);
-  }
-  return [...unique.values()];
+  return deduplicateInstances(known.values());
 }
 export async function freshUsage(rpc, session, range, { retryDelays = [5000, 10000, 20000], wait = sleep } = {}) {
   for (let attempt = 0; ; attempt += 1) {
@@ -229,12 +324,16 @@ export async function readSkillEventFile(filename, io = fs) {
   } finally { await handle?.close(); }
 }
 export async function collectSnapshot(rawConfig, {
-  rpc = gatewayRpc, now = new Date(), limits = LIMITS, retryDelays, wait,
+  rpc = gatewayRpc, now, limits = LIMITS, retryDelays, wait,
   writeAllowlist = writeSnapshotAtomic, readSkillEvents = readSkillEventFile, readMetadata = readPublicMetadata
 } = {}) {
+  const observationClock = now === undefined ? () => new Date() : () => now;
+  now ??= observationClock();
   const config = validateConfig(rawConfig);
+  const allConversations = config.scopeMode === 'all-conversations';
   limits = { ...LIMITS, ...limits };
   const range = makeRange(now, config.lookbackDays);
+  if (config.scopeMode === 'installation') return collectInstallation(config, { rpc, clock: observationClock, range, writeAllowlist });
   const discover = async () => {
     let discovered;
     try { discovered = await discoverSessions(config, rpc, limits); }
@@ -243,7 +342,7 @@ export async function collectSnapshot(rawConfig, {
       if (config.allowlistPath) await writeAllowlist(config.allowlistPath, []);
       throw error;
     }
-    if (config.allowlistPath) await writeAllowlist(config.allowlistPath, verifiedSessionKeys(discovered));
+    if (config.allowlistPath) await writeAllowlist(config.allowlistPath, allConversations ? [] : verifiedSessionKeys(discovered));
     return discovered;
   };
   const sessions = await discover();
@@ -274,26 +373,26 @@ export async function collectSnapshot(rawConfig, {
     const dayRange = { ...range, start: date, end: date };
     return dailyRows(await usage(session, dayRange), dayRange, date).map((row) => ({ ...row, agentId: session.agentId }));
   })) rows.push(...detailRows);
-  const audit = await collectAudit(rpc, sessions, range, now, limits);
+  const audit = allConversations ? { events: [], notes: [] } : await collectAudit(rpc, sessions, range, now, limits);
   // Optional read sources never replace a usable core report with an error or fabricated zero.
   const optional = async (read) => { try { return await read(); } catch { return null; } };
   const root = sessions.find((session) => [session.key, ...session.aliases].includes(config.rootSessionKey));
   const [directory, catalog, metadata] = await Promise.all([
     optional(() => rpc('agents.list', {})),
-    optional(() => rpc('skills.status', { agentId: root.agentId })),
+    optional(() => rpc('skills.status', { agentId: allConversations ? 'main' : root.agentId })),
     optional(() => readMetadata())
   ]);
   // Revalidate membership and instance IDs before committing a potentially long collection.
   const current = await discover();
-  const identities = (items) => items.map((item) => JSON.stringify([sessionKey(item), item.sessionId, [...item.aliases].sort()])).sort().join('\n');
+  const identities = (items) => items.map((item) => JSON.stringify([sessionKey(item), item.sessionId, [...item.aliases].sort(), ...(allConversations ? [item.admission] : [])])).sort().join('\n');
   if (identities(current) !== identities(sessions)) fail('SESSION_CHANGED_DURING_COLLECTION');
   if (cachedRefreshes.length) notes.push('Active usage is refreshing. Counts include the latest available verified rollups; oldest source refresh: ' + new Date(Math.min(...cachedRefreshes)).toISOString() + '. Very recent model entries may not be included yet.');
-  const observedSkills = await readSkillEvents(config.skillEventsPath);
+  const observedSkills = allConversations ? { events: [], notes: [], available: false } : await readSkillEvents(config.skillEventsPath);
   const detailSnapshot = buildDetails({ now, range, sessions: current, rows, events: audit.events, rootSessionKey: config.rootSessionKey,
-    directory, catalog, metadata, limits, auditPartial: audit.notes.length > 0,
+    directory: allConversations && Array.isArray(directory?.agents) ? { agents: directory.agents.filter((agent) => CONVERSATION_AGENTS.includes(agent.id)) } : directory, catalog, metadata, limits, scopeMode: config.scopeMode, auditPartial: audit.notes.length > 0,
     skillEvents: observedSkills.events, skillEventsAvailable: observedSkills.available });
   const snapshot = buildSnapshot({ now, range, sessions: current, rows: rows.map(({ agentId, ...row }) => row), events: audit.events,
-    skillEvents: observedSkills.events, skillEventsAvailable: observedSkills.available, scopeLabel: config.scopeLabel,
+    skillEvents: observedSkills.events, skillEventsAvailable: observedSkills.available, skillPartial: observedSkills.notes.length > 0, auditPartial: audit.notes.length > 0, scopeMode: config.scopeMode, scopeLabel: allConversations ? 'All conversations with main · delegated specialists · retained partial history' : config.scopeLabel,
     notes: [...notes, ...audit.notes, ...observedSkills.notes, ...detailSnapshot.notes] });
   return { ...snapshot, agents: detailSnapshot.agents, agentDaily: detailSnapshot.agentDaily, skillCatalog: detailSnapshot.skillCatalog, tasks: detailSnapshot.tasks,
     coverage: { ...snapshot.coverage, details: detailSnapshot.coverage } };

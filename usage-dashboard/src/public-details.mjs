@@ -27,6 +27,10 @@ const agentFields = {
   scopedSessions: count, usageState: choice('observed', 'no_scoped_sessions', 'unavailable')
 };
 const agentDailyFields = { agentId, date: day, provider: text(80), model: text(160), ...metricFields, requests: count, costUsd: nullable(number) };
+const skillName = value => agentId(value) && !/^(sk-|ghp_|github_pat_|eyJ)/u.test(value);
+const chartDay = value => day(value) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value;
+const skillDailyFields = { name: skillName, date: chartDay, count };
+const agentRunDailyFields = { agentId: skillName, date: chartDay, count };
 const skillFields = {
   id: opaqueId, agentId, name: text(120), description: nullable(text(400)),
   descriptionSource: choice('frontmatter', 'approved_public', 'unavailable'),
@@ -48,7 +52,7 @@ const coverageFields = { agents: availability, skills: availability, tasks: avai
 
 export function publicRootDetails(value) {
   const output = {};
-  for (const [key, max, fields] of [['agents', 100, agentFields], ['agentDaily', 6000, agentDailyFields], ['skillCatalog', 1000, skillFields], ['tasks', 200, taskFields]]) {
+  for (const [key, max, fields] of [['agents', 100, agentFields], ['agentDaily', 6000, agentDailyFields], ['skillCatalog', 1000, skillFields], ['tasks', 200, taskFields], ['skillDaily', 6000, skillDailyFields], ['agentRunDaily', 6000, agentRunDailyFields]]) {
     if (!own(value, key)) continue;
     if (value[key] === null) { output[key] = null; continue; }
     require(Array.isArray(value[key]) && value[key].length <= max);
@@ -66,7 +70,8 @@ export function publicRequestDetails(value) {
   return output;
 }
 export function publicCoverageDetails(value) {
-  return own(value, 'details') ? { details: project(value.details, coverageFields) } : {};
+  return { ...(own(value, 'details') ? { details: project(value.details, coverageFields) } : {}),
+    ...(own(value, 'usageCharts') ? { usageCharts: project(value.usageCharts, { skills: availability, agents: availability }) } : {}) };
 }
 export function validatePublicDetails(value) {
   try {

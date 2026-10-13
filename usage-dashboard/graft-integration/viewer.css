@@ -1,0 +1,19 @@
+.graft-view { color: var(--text, #192939); font: inherit; }
+.graft-caption,.graft-status { color: var(--muted, #586879); font-size: .85rem; line-height: 1.5; }
+.graft-controls { margin: 1rem 0; }
+.graft-controls label { display: grid; gap: .4rem; font-weight: 600; max-width: 22rem; }
+.graft-controls input { font: inherit; padding: .65rem .8rem; border: 1px solid #9daab5; border-radius: .5rem; background: #fff; color: #192939; }
+.graft-controls input:focus-visible,.graft-file:focus-visible { outline: 3px solid #176caa; outline-offset: 2px; }
+.graft-board { display: grid; grid-template-columns: minmax(0,2fr) minmax(12rem,1fr); gap: 1rem; align-items: start; }
+.graft-board svg { width: 100%; height: auto; background: #f6f9fb; border: 1px solid #d2dce5; border-radius: .75rem; }
+.graft-edge { stroke: #9badbc; stroke-width: 1.2; opacity: .55; }
+.graft-edge.is-muted { opacity: .1; }
+.graft-node { fill: #2674a0; stroke: #fff; stroke-width: 2; }
+.graft-node.is-selected { fill: #b45922; }
+.graft-files { display: grid; gap: .15rem; max-height: 31rem; overflow: auto; }
+.graft-file { text-align: left; background: transparent; color: inherit; border: 0; border-left: 3px solid transparent; border-radius: .2rem; padding: .45rem .5rem; font: inherit; font-size: .8rem; overflow-wrap: anywhere; cursor: pointer; }
+.graft-file:hover,.graft-file.is-selected { background: #e8f1f6; border-left-color: #2674a0; }
+.graft-detail { margin-top: 1rem; border-top: 1px solid #d2dce5; padding-top: 1rem; }
+.graft-detail h3 { font-size: 1rem; margin: 0; overflow-wrap: anywhere; }
+.graft-symbols { max-height: 16rem; overflow: auto; padding-left: 1.4rem; font: .8rem/1.7 ui-monospace, SFMono-Regular, monospace; }
+@media (max-width: 760px) { .graft-board { grid-template-columns: 1fr; } .graft-files { max-height: 13rem; } }

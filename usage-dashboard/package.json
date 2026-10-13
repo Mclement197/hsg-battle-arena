@@ -8,7 +8,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node --test test/*.test.mjs",
+    "test": "node --test test/*.test.mjs graft-integration/graph.test.mjs",
     "start": "node src/server.mjs",
     "collect": "node src/collect.mjs",
     "setup": "node scripts/setup-local.mjs"

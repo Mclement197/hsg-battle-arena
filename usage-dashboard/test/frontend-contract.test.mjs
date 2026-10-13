@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { buildSnapshot, dailyRows, makeRange } from '../src/telemetry.mjs';
+import { installationSnapshot } from '../src/installation-usage.mjs';
 
 const now = new Date('2026-10-12T11:00:00Z');
 const range = makeRange(now, 30);
@@ -18,7 +19,10 @@ function collectorSnapshot() {
   const audit = [{ eventId: 'fixture-event', kind: 'agent_run', action: 'agent.run.finished', status: 'succeeded',
     occurredAt: now.getTime() - 1000, agentId: session.agentId, sessionKey: session.key,
     sessionId: session.sessionId, runId: 'fixture-run' }];
-  return buildSnapshot({ now, range, sessions: [session], rows: dailyRows(report, range), events: audit });
+  const value = buildSnapshot({ now, range, sessions: [session], rows: dailyRows(report, range), events: audit });
+  // Exercise genuine older v1 snapshots without any chart extension.
+  delete value.skillDaily; delete value.agentRunDaily; delete value.coverage.usageCharts;
+  return value;
 }
 
 // Run the actual frontend against its HTML IDs; boot tests include all listeners and the initial fetch.
@@ -26,7 +30,14 @@ function frontend({ boot = false, status = 200, payload = collectorSnapshot(), p
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   const ids = new Set([...html.matchAll(/id="([^"]+)"/g)].map(match => match[1]));
   const requests = [];
+  const intervals = [];
+  let responsePayload = payload;
+  let fetchWait;
   let responseStatus = status;
+  let activePayload = { observedAt: now.toISOString(), status: 'ok', agents: [] };
+  let activeStatus = 200;
+  let activeWait;
+  const activeRequests = [];
   const nodes = new Map();
   const listeners = new Map();
   const location = { pathname: path, search };
@@ -47,6 +58,7 @@ function frontend({ boot = false, status = 200, payload = collectorSnapshot(), p
     dispatch(name, event = {}) { this.events?.[name]?.(event); }
   }
   const document = {
+    hidden: false,
     addEventListener(name, fn) { listeners.set('document:' + name, fn); },
     getElementById: (id) => { assert.ok(ids.has(id) || nodes.has(id), 'No HTML element: ' + id); if (!nodes.has(id)) nodes.set(id, new Node()); return nodes.get(id); },
     querySelector: (selector) => { assert.equal(selector, '.skip-link'); return new Node('a'); },
@@ -58,16 +70,17 @@ function frontend({ boot = false, status = 200, payload = collectorSnapshot(), p
   const source = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
   const boundary = source.indexOf("  $('refresh-button').addEventListener(");
   assert.ok(boundary > 0, 'frontend test boundary found');
-  const exported = '\n  globalThis.contract = { state, validateSnapshot, addTotals, emptyTotals, renderSnapshot, renderFiltered, updateFreshness, renderRoute, navigate, renderSkills, renderHistory, loadUsage };\n';
-  const script = source.slice(0, boundary) + exported + (boot
-    ? source.slice(boundary).replace('\n  loadUsage();\n})();', '\n  globalThis.loaded = loadUsage();\n})();')
+  const exported = '\n  globalThis.contract = { state, validateSnapshot, addTotals, emptyTotals, renderSnapshot, renderFiltered, updateFreshness, renderRoute, navigate, renderSkills, renderHistory, loadUsage, loadActiveAgents };\n';
+  let script = source.slice(0, boundary) + exported + (boot
+    ? source.slice(boundary).replace('\n  loadUsage();\n  loadActiveAgents();\n})();', '\n  globalThis.loaded = loadUsage();\n  globalThis.activeLoaded = loadActiveAgents();\n})();')
     : '})();');
   class Clock extends Date { static now() { return now.getTime(); } }
-  const context = { document, window: { location, history: { pushState(_state, _title, href) { setLocation(href); }, replaceState(_state, _title, href) { setLocation(href); } }, scrollTo() {}, setTimeout, clearTimeout, setInterval() {}, addEventListener(name, fn) { listeners.set('window:' + name, fn); } },
+  let graphMounts = 0;
+  const context = { mountGraphMock: (host) => { graphMounts++; host.textContent = 'Mounted graph fixture'; }, document, window: { location, history: { pushState(_state, _title, href) { setLocation(href); }, replaceState(_state, _title, href) { setLocation(href); } }, scrollTo() {}, setTimeout, clearTimeout, setInterval(fn, delay) { intervals.push({ fn, delay }); }, addEventListener(name, fn) { listeners.set('window:' + name, fn); } },
     Date: Clock, Intl, Map, Set, Math, Number, String, Object, Array, RegExp, Option: class {}, console, AbortController,
-    fetch: async (path, options) => { requests.push({ path, options }); return { ok: responseStatus === 200, status: responseStatus, json: async () => payload }; } };
+    fetch: async (path, options) => { if (path === '/usage/api/active-agents') { activeRequests.push({ path, options }); await activeWait; return { ok: activeStatus === 200, status: activeStatus, json: async () => activePayload }; } requests.push({ path, options }); await fetchWait; return { ok: responseStatus === 200, status: responseStatus, json: async () => responsePayload }; } };
   vm.runInNewContext(script, context, { filename: 'public/app.js' });
-  return { ...context.contract, nodes, get: document.getElementById, loaded: context.loaded, requests, html, location, listeners, setStatus(value) { responseStatus = value; } };
+  return { ...context.contract, graphMounts: () => graphMounts, nodes, get: document.getElementById, loaded: context.loaded, activeLoaded: context.activeLoaded, requests, activeRequests, intervals, document, html, location, listeners, setActive(value) { activePayload = value; }, setActiveStatus(value) { activeStatus = value; }, setActiveWait(value) { activeWait = value; }, setPayload(value) { responsePayload = value; }, setFetchWait(value) { fetchWait = value; }, setStatus(value) { responseStatus = value; } };
 }
 const cells = (row) => row.children.map((cell) => cell.textContent);
 const descendant = (node, className) => {
@@ -141,6 +154,72 @@ test('zero is visible and stale threshold begins at fifteen minutes', () => {
 });
 
 
+test('visible dashboard polls and displays newer token snapshots without manual refresh', async () => {
+  const ui = frontend({ boot: true }); await ui.loaded;
+  const newer = collectorSnapshot();
+  newer.generatedAt = new Date(now.getTime() + 60000).toISOString();
+  newer.daily[0].totalTokens = 340;
+  ui.setPayload(newer);
+  const poll = ui.intervals.find(({ delay }) => delay === 60000);
+  assert.ok(poll, 'one-minute polling timer is installed');
+  await poll.fn();
+  assert.equal(ui.requests.length, 2, 'timer requests the latest snapshot');
+  assert.equal(ui.get('metric-tokens').textContent, '340');
+  assert.equal(ui.state.data.generatedAt, newer.generatedAt);
+});
+
+test('polling pauses while hidden and refreshes immediately on becoming visible', async () => {
+  const ui = frontend({ boot: true, path: '/usage/agents', search: '?agent=main&period=7', payload: richSnapshot() }); await ui.loaded;
+  const poll = ui.intervals.find(({ delay }) => delay === 60000);
+  ui.document.hidden = true;
+  await poll.fn();
+  await ui.listeners.get('document:visibilitychange')();
+  assert.equal(ui.requests.length, 1);
+  ui.document.hidden = false;
+  await ui.listeners.get('document:visibilitychange')();
+  assert.equal(ui.requests.length, 2);
+  assert.equal(ui.location.pathname, '/usage/agents');
+  assert.equal(ui.location.search, '?agent=main&period=7');
+  assert.equal(ui.state.page, 'agents');
+  assert.equal(ui.state.period, 7);
+});
+
+test('timer, resume and manual refresh cannot overlap pending snapshot requests', async () => {
+  const ui = frontend({ boot: true }); await ui.loaded;
+  let release; ui.setFetchWait(new Promise(resolve => { release = resolve; }));
+  const poll = ui.intervals.find(({ delay }) => delay === 60000);
+  const active = poll.fn();
+  assert.equal(ui.state.pending, true);
+  await poll.fn();
+  await ui.listeners.get('document:visibilitychange')();
+  await ui.loadUsage();
+  assert.equal(ui.requests.length, 2, 'only one refresh in flight');
+  release(); await active;
+  assert.equal(ui.state.pending, false);
+});
+
+test('failed automatic refresh retains good usage and a later poll recovers', async () => {
+  const ui = frontend({ boot: true }); await ui.loaded;
+  const before = ui.state.data;
+  const poll = ui.intervals.find(({ delay }) => delay === 60000);
+  ui.setStatus(503); await poll.fn();
+  assert.equal(ui.state.data, before);
+  assert.equal(ui.state.stale, true);
+  assert.match(ui.get('freshness-text').textContent, /refresh failed/);
+  ui.setStatus(200); await poll.fn();
+  assert.equal(ui.state.stale, false);
+  assert.equal(ui.get('notice').hidden, true);
+});
+
+test('automatic polling retries when initial snapshot is unavailable', async () => {
+  const ui = frontend({ boot: true, status: 503 }); await ui.loaded;
+  assert.equal(ui.state.data, null);
+  ui.setStatus(200);
+  await ui.intervals.find(({ delay }) => delay === 60000).fn();
+  assert.ok(ui.state.data);
+  assert.equal(ui.requests.length, 2);
+});
+
 test('the full public frontend boots without login controls or cookies', async () => {
   const ui = frontend({ boot: true });
   await ui.loaded;
@@ -172,11 +251,11 @@ const navigateMock = (ui, href) => {
 const allText = (node) => [node.textContent, ...(node.children ?? []).flatMap(allText)].join(' ');
 
 test('all five direct routes boot with one selected workspace', async () => {
-  for (const [path, page] of [['/usage', 'overview'], ['/usage/models', 'models'], ['/usage/agents', 'agents'], ['/usage/skills', 'skills'], ['/usage/activity', 'activity']]) {
+  for (const [path, page] of [['/usage', 'overview'], ['/usage/models', 'models'], ['/usage/agents', 'agents'], ['/usage/skills', 'skills'], ['/usage/activity', 'activity'], ['/usage/graft', 'graft']]) {
     const ui = frontend({ boot: true, path, payload: richSnapshot() }); await ui.loaded;
     assert.equal(ui.state.page, page);
     assert.equal(ui.get(page + '-page').hidden, false);
-    for (const other of ['overview', 'models', 'agents', 'skills', 'activity'].filter((value) => value !== page)) assert.equal(ui.get(other + '-page').hidden, true);
+    for (const other of ['overview', 'models', 'agents', 'skills', 'activity', 'graft'].filter((value) => value !== page)) assert.equal(ui.get(other + '-page').hidden, true);
     assert.equal(ui.get('app-shell').hidden, false);
   }
 });
@@ -329,7 +408,7 @@ test('agent usage is snapshot-wide, latest-first, bounded and null-safe', async 
   assert.match(detail, /whole snapshot window/);
   assert.match(detail, /Latest 10 of 12/);
   assert.match(detail, /2026-10-12 · model-11 · Unavailable tokens/);
-  assert.equal(ui.get('agent-detail').children.find((node) => node.tag === 'ul').children.length, 10);
+  assert.equal(ui.get('agent-detail').children.filter((node) => node.tag === 'ul').at(-1).children.length, 10);
 });
 
 
@@ -348,4 +427,164 @@ test('sampling time never invents a work date for undated task records', async (
   assert.equal(ui.state.taskCount, 1);
   assert.match(allText(ui.get('tasks-list')), /Latest recorded run 20 Sep/);
   assert.doesNotMatch(allText(ui.get('tasks-list')), /Undated work/);
+});
+
+function chartSnapshot() {
+  const value = richSnapshot();
+  value.skills = [{ name: 'Research', description: 'Confirmed skill instruction read', count: 9, lastUsedAt: now.toISOString() }];
+  value.skillDaily = [{ name: 'Research', date: '2026-10-12', count: 2 }, { name: 'Research', date: '2026-09-20', count: 7 }];
+  value.agentRunDaily = [{ agentId: 'main', date: '2026-10-12', count: 3 }, { agentId: 'main', date: '2026-09-20', count: 8 }];
+  value.coverage.usageCharts = { skills: 'partial', agents: 'partial' };
+  return value;
+}
+
+test('dated charts and drill-down counts share range, ignore model filters and preserve context', async () => {
+  const ui = frontend({ boot: true, path: '/usage', search: '?period=1&filter=fixture-model', payload: chartSnapshot() }); await ui.loaded;
+  assert.equal(ui.get('metric-skills').textContent, '2');
+  assert.equal(ui.get('overview-skills-usage-table').children[0].children[1].textContent, '2');
+  assert.equal(ui.get('overview-agents-usage-table').children[0].children[1].textContent, '3');
+  assert.match(ui.get('overview-agents-usage-note').textContent, /known lower bounds/);
+  assert.match(ui.get('overview-skills-usage-note').textContent, /Model filters do not apply/);
+  const skillLink = ui.get('overview-skills-usage-chart').children[0];
+  assert.equal(skillLink.href, '/usage/skills?skill=research&period=1');
+  navigateMock(ui, skillLink.href);
+  assert.equal(ui.get('global-filters').hidden, false);
+  assert.equal(ui.get('model-control').hidden, true);
+  assert.match(allText(ui.get('skill-detail')), /2026-10-12 · 2 instruction reads/);
+  assert.doesNotMatch(allText(ui.get('skill-detail')), /2026-09-20/);
+  navigateMock(ui, '/usage/agents?agent=main&period=1');
+  assert.match(allText(ui.get('agent-detail')), /2026-10-12 · 3 observed runs/);
+  assert.doesNotMatch(allText(ui.get('agent-detail')), /2026-09-20 · 8 observed runs/);
+  ui.get('reset-filters').dispatch('click');
+  assert.match(ui.location.search, /agent=main/);
+  ui.location.search = '?agent=main&period=30'; ui.listeners.get('window:popstate')();
+  assert.equal(ui.state.period, 30);
+  assert.match(allText(ui.get('agent-detail')), /2026-09-20 · 8 observed runs/);
+  assert.match(allText(ui.get('agent-detail')), /Observed runs 11/);
+  await ui.loadUsage();
+  assert.equal(ui.state.period, 30);
+  ui.setStatus(503); await ui.loadUsage();
+  assert.equal(ui.state.stale, true);
+  assert.match(allText(ui.get('agent-detail')), /Observed runs 11/);
+});
+
+test('older snapshots label skill counts snapshot-wide and agent counts unavailable, never date guesses', async () => {
+  const value = richSnapshot();
+  value.skills = [{ name: 'Research', description: 'Confirmed skill instruction read', count: 9, lastUsedAt: now.toISOString() }];
+  const ui = frontend({ boot: true, path: '/usage/skills', search: '?period=1', payload: value }); await ui.loaded;
+  assert.match(ui.get('skills-usage-note').textContent, /Whole snapshot · date attribution unavailable/);
+  assert.equal(ui.get('skills-usage-table').children[0].children[1].textContent, '9');
+  assert.match(allText(ui.get('agents-usage-chart')), /Usage evidence unavailable/);
+  navigateMock(ui, '/usage/skills?skill=research&period=1');
+  assert.match(allText(ui.get('skill-detail')), /Observed instruction reads 9/);
+  assert.match(allText(ui.get('skill-detail')), /Whole snapshot/);
+});
+
+test('empty and unavailable chart evidence never creates zero-use agents or skills', async () => {
+  const value = chartSnapshot(); value.skillDaily = null; value.skills = []; value.agentRunDaily = [];
+  const ui = frontend({ boot: true, payload: value }); await ui.loaded;
+  assert.equal(ui.get('metric-skills').textContent, '—');
+  assert.match(allText(ui.get('overview-skills-usage-chart')), /Usage evidence unavailable/);
+  assert.match(allText(ui.get('overview-agents-usage-chart')), /No observations in this view/);
+  assert.match(allText(ui.get('overview-agents-usage-table')), /no zero-use claim/);
+});
+
+test('chart tables include all positive entities, bars cap at eight and absent-directory links remain useful', async () => {
+  const value = chartSnapshot(); value.agents = null;
+  value.agentRunDaily = Array.from({ length: 10 }, (_, i) => ({ agentId: 'agent-' + i, date: range.end, count: i + 1 }));
+  const ui = frontend({ boot: true, payload: value }); await ui.loaded;
+  assert.equal(ui.get('overview-agents-usage-chart').children.length, 8);
+  assert.equal(ui.get('overview-agents-usage-table').children.length, 10);
+  navigateMock(ui, ui.get('overview-agents-usage-chart').children[0].href);
+  assert.match(allText(ui.get('agent-detail')), /agent-9/);
+  assert.match(allText(ui.get('agent-detail')), /10 observed runs/);
+});
+
+test('explicit unavailable daily evidence never falls back to legacy skill totals', async () => {
+  const value = chartSnapshot(); value.skillDaily = null; value.coverage.usageCharts.skills = 'unavailable';
+  const ui = frontend({ boot: true, payload: value }); await ui.loaded;
+  assert.equal(ui.get('metric-skills').textContent, '—');
+  assert.match(allText(ui.get('overview-skills-usage-chart')), /Usage evidence unavailable/);
+});
+
+test('directory links are regenerated with changed date filters and skill rows match charts', async () => {
+  const ui = frontend({ boot: true, path: '/usage/skills', search: '?period=30', payload: chartSnapshot() }); await ui.loaded;
+  assert.match(allText(ui.get('skills-list')), /9 reads/);
+  assert.match(ui.get('skills-list').children[0].href, /period=30/);
+  ui.get('reset-filters').dispatch('click');
+  assert.match(allText(ui.get('skills-list')), /2 reads/);
+  assert.equal(ui.get('agents-list').children[0].href, '/usage/agents?agent=main');
+});
+
+test('Graft sidebar embeds the official exported viewer without mounting custom JS', async () => {
+  const ui = frontend({ boot: true }); await ui.loaded;
+  assert.match(ui.html, /class="nav-link" href="\/usage\/graft"/);
+  navigateMock(ui, '/usage/graft');
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(ui.get('graft-page').hidden, false);
+  assert.equal(ui.get('global-filters').hidden, true);
+  assert.match(ui.html, /<iframe[^>]+src="\/usage\/graft\/viewer\/index.html"/);
+  assert.equal(ui.graphMounts(), 0);
+  navigateMock(ui, '/usage'); navigateMock(ui, '/usage/graft');
+  await Promise.resolve();
+  assert.equal(ui.graphMounts(), 0);
+});
+
+
+
+test('installation aggregates show tokens without inventing model entries or sessions', async () => {
+  const totals = { input: 100, output: 25, cacheRead: 40, cacheWrite: 5, totalTokens: 170, totalCost: 0.02, missingCostEntries: 0 };
+  const data = installationSnapshot({ daily: [{ date: range.end, ...totals }], totals, updatedAt: now.getTime(), cacheStatus: { status: 'fresh' } }, range, now);
+  const ui = frontend({ boot: true, payload: data }); await ui.loaded;
+  assert.equal(ui.get('metric-tokens').textContent, '170');
+  assert.equal(ui.get('metric-calls').textContent, '—');
+  assert.equal(ui.get('metric-model').textContent, 'Unavailable');
+  assert.equal(ui.get('coverage-summary').textContent, 'Session count unavailable');
+  assert.match(ui.get('scope-label').textContent, /Entire OpenClaw installation/);
+  assert.equal(cells(ui.get('daily-table-body').children.at(-1)).at(-1), 'Unavailable');
+  assert.match(ui.get('chart-calls').textContent, /unavailable/);
+  const scoped = collectorSnapshot(); scoped.coverage.sessions = null;
+  assert.throws(() => ui.validateSnapshot(scoped), /invalid-snapshot/);
+});
+
+test('active agents distinguish idle, stale and unavailable, polling visible tabs without overlap', async () => {
+  const ui = frontend({ boot: true }); await ui.loaded; await ui.activeLoaded;
+  assert.equal(ui.get('active-agents-status').textContent, 'Idle · no agents running');
+  const tick = ui.intervals.find(row => row.delay === 15000).fn;
+  ui.setActive({ observedAt: now.toISOString(), status: 'ok', agents: [{ id: 'dev-ui', name: 'UI Engineer' }] });
+  await ui.loadActiveAgents();
+  assert.equal(ui.get('active-agents-list').children[0].textContent, 'UI Engineer');
+  ui.document.hidden = true; tick();
+  assert.equal(ui.activeRequests.length, 2);
+  ui.document.hidden = false;
+  let release;
+  ui.setActiveWait(new Promise(resolve => { release = resolve; }));
+  const pending = ui.loadActiveAgents(); tick();
+  assert.equal(ui.activeRequests.length, 3);
+  release(); await pending;
+  ui.setActiveWait(null);
+  ui.setActive({ observedAt: new Date(now.getTime() - 31000).toISOString(), status: 'ok', agents: [{ id: 'main', name: 'Main' }] });
+  await ui.loadActiveAgents();
+  assert.match(ui.get('active-agents-status').textContent, /stale/);
+  assert.equal(ui.get('active-agents-list').children.length, 0);
+  ui.setActiveStatus(404); await ui.loadActiveAgents();
+  assert.match(ui.get('active-agents-status').textContent, /stale.*unavailable/);
+  const old = frontend({ boot: true }); old.setActiveStatus(404); await old.loaded; await old.activeLoaded;
+  old.intervals.find(row => row.delay === 15000).fn(); await Promise.resolve(); await Promise.resolve();
+  assert.match(old.get('active-agents-status').textContent, /unknown.*unavailable/);
+});
+test('all-conversations mode labels partial retention and withholds activity while preserving token totals', async () => {
+  const data = collectorSnapshot();
+  data.scopeMode = 'all-conversations'; data.scopeLabel = 'Legacy selected root';
+  data.requests = []; data.tasks = null; data.skills = []; data.skillDaily = null; data.agentRunDaily = null;
+  data.coverage.usageCharts = { skills: 'unavailable', agents: 'unavailable' };
+  const ui = frontend({ boot: true, path: '/usage/activity', payload: data }); await ui.loaded;
+  assert.match(ui.get('scope-label').textContent, /All conversations with main.*retained partial history/);
+  assert.doesNotMatch(ui.get('scope-label').textContent, /Legacy selected root|Project-only/);
+  assert.match(allText(ui.get('tasks-list')), /aggregates only.*withheld/);
+  assert.equal(ui.get('metric-tokens').textContent, '170');
+  assert.equal(ui.get('metric-skills').textContent, '—');
+  const legacy = collectorSnapshot(); delete legacy.scopeMode;
+  const scoped = frontend({ boot: true, payload: legacy }); await scoped.loaded;
+  assert.match(scoped.get('scope-label').textContent, /Project-only/);
 });

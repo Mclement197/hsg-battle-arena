@@ -7,6 +7,7 @@
   <meta name="referrer" content="no-referrer">
   <meta name="description" content="Project-scoped AI usage, models, skills, and recent activity.">
   <title>AFP Usage — AI activity</title>
+  <link rel="icon" type="image/svg+xml" href="/usage/favicon.svg">
   <link rel="stylesheet" href="/usage/styles.css">
   <script src="/usage/app.js" defer></script>
 </head>
@@ -30,6 +31,7 @@
         <a class="nav-link" href="/usage/agents"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="3"></circle><path d="M5 20v-2a7 7 0 0 1 14 0v2"></path></svg><span>Agents</span></a>
         <a class="nav-link" href="/usage/skills"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13.5 3-9 11h7l-1 7 9-11h-7l1-7Z"></path></svg><span>Skills</span></a>
         <a class="nav-link" href="/usage/activity"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8a9 9 0 1 1-1 7M4 3v5h5M12 7v5l3 2"></path></svg><span>Activity</span></a>
+        <a class="nav-link" href="/usage/graft"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="5" r="2"></circle><circle cx="19" cy="7" r="2"></circle><circle cx="12" cy="19" r="2"></circle><path d="m7 5 10 2M6 7l5 10m7-8-5 8"></path></svg><span>Graft</span></a>
       </nav>
       <div class="sidebar-bottom"><div class="sidebar-note">A little clarity.<br>A better view of your AI.</div><span class="privacy-label"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 3v6c0 4-4 7-8 9-4-2-8-5-8-9V6l8-3Z"></path><path d="m8 12 3 3 5-6"></path></svg>Sanitized data only</span></div>
     </aside>
@@ -38,6 +40,7 @@
       <header class="page-header">
         <div><h1 id="page-title" tabindex="-1">Usage overview</h1><p id="scope-label" class="page-subtitle">Your AI activity, in perspective.</p></div>
         <div class="header-actions">
+          <section class="active-agents" aria-label="Currently running agents"><strong>Running now</strong><p id="active-agents-status" role="status">Checking…</p><ul id="active-agents-list" aria-label="Running agent names"></ul></section>
           <button id="refresh-button" class="button button-secondary" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"></path></svg><span>Refresh</span></button>
         </div>
       </header>
@@ -60,7 +63,9 @@
         </div>
       </section>
 
+      <div class="analytics-grid usage-charts"><section id="overview-skills-usage-panel" class="panel usage-panel" aria-labelledby="overview-skills-usage-heading"><div class="panel-header"><div><h2 id="overview-skills-usage-heading">Skill instruction reads</h2><p>Counts from observed scoped activity</p></div></div><div id="overview-skills-usage-chart" class="model-chart"></div><p id="overview-skills-usage-note" class="fine-print"></p><details class="table-disclosure"><summary>View all skills counts</summary><div class="table-scroll" tabindex="0" role="region" aria-label="skills usage counts"><table class="data-table"><caption>All observed skills; bars show the top 8</caption><thead><tr><th scope="col">Skill</th><th scope="col">Instruction reads</th></tr></thead><tbody id="overview-skills-usage-table"></tbody></table></div></details></section><section id="overview-agents-usage-panel" class="panel usage-panel" aria-labelledby="overview-agents-usage-heading"><div class="panel-header"><div><h2 id="overview-agents-usage-heading">Agent runs</h2><p>Counts from observed scoped activity</p></div></div><div id="overview-agents-usage-chart" class="model-chart"></div><p id="overview-agents-usage-note" class="fine-print"></p><details class="table-disclosure"><summary>View all agents counts</summary><div class="table-scroll" tabindex="0" role="region" aria-label="agents usage counts"><table class="data-table"><caption>All observed agents; bars show the top 8</caption><thead><tr><th scope="col">Agent</th><th scope="col">Observed runs</th></tr></thead><tbody id="overview-agents-usage-table"></tbody></table></div></details></section></div>
       <nav class="overview-links" aria-label="Explore usage"><a href="/usage/models">Compare models →</a><a href="/usage/agents">Meet the configured agents →</a><a href="/usage/skills">Explore skills →</a><a href="/usage/activity">Review activity →</a></nav></div>
+      <section id="graft-page" class="page-view" hidden><div class="section-heading"><h2>HSG code graph</h2><p>Structural snapshot of all currently implemented JavaScript source/test files in HSG Battle Arena. Currently only the usage-dashboard utility has code; the battle game is still a proposal. Documentation, assets and configuration are not graphed. This is not live agent activity.</p></div><iframe id="graft-frame" class="graft-frame" title="Official Graft interactive code graph" loading="lazy" referrerpolicy="no-referrer" src="/usage/graft/viewer/index.html"></iframe><p class="fine-print">Static, sanitized structural snapshot; not live agent activity. <a href="/usage/graft/viewer/index.html" target="_blank" rel="noopener noreferrer">Open full-size graph</a>.</p></section>
       <div id="models-page" class="page-view" hidden><div id="models-overview" class="analytics-grid">
         <section class="panel timeline-panel" aria-labelledby="timeline-heading">
           <div class="panel-header"><div><h2 id="timeline-heading">Tokens over time</h2><p id="timeline-subtitle">Daily activity in your selected period</p></div><span class="unit-label">TOKENS</span></div>
@@ -87,10 +92,11 @@
       </div>
 
       <div id="model-detail" class="entity-detail" hidden></div></div>
-      <div id="agents-page" class="page-view" hidden><div class="section-heading"><h2>Configured agents</h2><p>All configured agents, distinct from AFP-scoped usage observations.</p></div><p id="agents-coverage" class="fine-print coverage-inline"></p><div id="agents-list" class="entity-list"></div><div id="agent-detail" class="entity-detail" hidden></div></div>
+      <div id="agents-page" class="page-view" hidden><div class="section-heading"><h2>Configured agents</h2><p>All configured agents, distinct from AFP-scoped usage observations.</p></div><p id="agents-coverage" class="fine-print coverage-inline"></p><section id="agents-usage-panel" class="panel usage-panel" aria-labelledby="agents-usage-heading"><div class="panel-header"><div><h2 id="agents-usage-heading">Agent runs</h2><p>Counts from observed scoped activity</p></div></div><div id="agents-usage-chart" class="model-chart"></div><p id="agents-usage-note" class="fine-print"></p><details class="table-disclosure"><summary>View all agents counts</summary><div class="table-scroll" tabindex="0" role="region" aria-label="agents usage counts"><table class="data-table"><caption>All observed agents; bars show the top 8</caption><thead><tr><th scope="col">Agent</th><th scope="col">Observed runs</th></tr></thead><tbody id="agents-usage-table"></tbody></table></div></details></section><div id="agents-list" class="entity-list"></div><div id="agent-detail" class="entity-detail" hidden></div></div>
       <div id="skills-page" class="page-view" hidden><div class="search-field page-search"><label for="skills-search">Search skills</label><input id="skills-search" type="search" placeholder="Search name or description" autocomplete="off"><button id="skills-clear-search" class="button button-secondary search-clear" type="button" hidden>Clear search</button></div>
+      <section id="skills-usage-panel" class="panel usage-panel" aria-labelledby="skills-usage-heading"><div class="panel-header"><div><h2 id="skills-usage-heading">Skill instruction reads</h2><p>Counts from observed scoped activity</p></div></div><div id="skills-usage-chart" class="model-chart"></div><p id="skills-usage-note" class="fine-print"></p><details class="table-disclosure"><summary>View all skills counts</summary><div class="table-scroll" tabindex="0" role="region" aria-label="skills usage counts"><table class="data-table"><caption>All observed skills; bars show the top 8</caption><thead><tr><th scope="col">Skill</th><th scope="col">Instruction reads</th></tr></thead><tbody id="skills-usage-table"></tbody></table></div></details></section>
       <section id="skills" class="panel skills-panel anchor-section" aria-labelledby="skills-heading">
-        <div class="panel-header"><div><h2 id="skills-heading">Skills in your workflow</h2><p id="skills-subtitle">Observed skill usage across the whole snapshot window</p></div><span class="neutral-badge">Whole snapshot</span></div>
+        <div class="panel-header"><div><h2 id="skills-heading">Skills in your workflow</h2><p id="skills-subtitle">Observed skill usage across the whole snapshot window</p></div><span class="neutral-badge">Instruction reads</span></div>
         <p id="skill-metric" class="section-explanation">Skill counts are independent of the date and model filters above.</p>
         <p id="skills-coverage" class="fine-print coverage-inline"></p><div id="skills-list" class="skills-list"></div>
         <button id="skills-more" class="button button-secondary more-button" type="button" hidden>Show all skills</button>

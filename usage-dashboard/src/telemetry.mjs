@@ -187,7 +187,17 @@ export function auditProjection(events, sessions, range) {
     description: safeSummary(run.names), input: null, output: null, cacheRead: null,
     cacheWrite: null, totalTokens: null, status: run.status, ...lifecycle(run)
   }));
-  return { requests, skillReads, missingIdentity, runCount: runs.size, taskActivity };
+  // Count only lifecycle-evidenced runs, before the recent-row display cap.
+  const daily = new Map();
+  for (const run of runs.values()) {
+    if (!run.hasRun) continue;
+    const date = dateInZurich(new Date(run.at));
+    const key = JSON.stringify([run.agentId, date]);
+    const row = daily.get(key) ?? { agentId: run.agentId, date, count: 0 };
+    row.count += 1; daily.set(key, row);
+  }
+  return { requests, skillReads, missingIdentity, runCount: runs.size, taskActivity,
+    agentRunDaily: [...daily.values()].sort((a, b) => a.date.localeCompare(b.date) || a.agentId.localeCompare(b.agentId)) };
 }
 
 export function verifiedSessionKeys(sessions) {
@@ -214,40 +224,55 @@ export function skillEventProjection(events, sessions, range, now) {
     }
   }
   const bySkill = new Map();
+  const daily = new Map();
   for (const event of dedup.values()) {
     if (!event) continue;
     const entry = bySkill.get(event.skill) ?? { name: event.skill, description: 'Confirmed skill instruction read', count: 0, lastUsedAt: event.at };
     entry.count += 1;
     if (event.at > entry.lastUsedAt) entry.lastUsedAt = event.at;
     bySkill.set(event.skill, entry);
+    const date = dateInZurich(new Date(event.at));
+    const key = JSON.stringify([event.skill, date]);
+    const day = daily.get(key) ?? { name: event.skill, date, count: 0 };
+    day.count += 1; daily.set(key, day);
   }
-  return { skills: [...bySkill.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)), invalid };
+  return { skills: [...bySkill.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)), invalid,
+    skillDaily: [...daily.values()].sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name)) };
 }
 
-export function buildSnapshot({ now, range, sessions, rows, events, notes = [], skillEvents = [], skillEventsAvailable = false, scopeLabel = 'AFP project · selected conversation and tasks' }) {
-  const audit = auditProjection(events, sessions, range);
+export function buildSnapshot({ now, range, sessions, rows, events, notes = [], skillEvents = [], skillEventsAvailable = false, skillPartial = false, auditPartial = false, scopeMode = 'scoped', scopeLabel = 'Selected conversation and tasks' }) {
+  const allConversations = scopeMode === 'all-conversations';
+  const audit = auditProjection(allConversations ? [] : events, sessions, range);
   const daily = mergeDaily(rows);
-  const namedSkills = skillEventProjection(skillEvents, sessions, range, now);
+  if (allConversations) skillEventsAvailable = false;
+  const namedSkills = skillEventProjection(allConversations ? [] : skillEvents, sessions, range, now);
+  const skillDaily = skillEventsAvailable && namedSkills.skillDaily.length <= 6000 ? namedSkills.skillDaily : null;
+  const agentRunDaily = !allConversations && audit.agentRunDaily.length <= 6000 ? audit.agentRunDaily : null;
   const coverageNotes = [
-    'Only the configured AFP root, verified descendants, and exact project-linked sessions are included.',
+    allConversations ? 'Only visible main conversations with verified creator and current ownership attributed to the explicitly authorized human profile, plus exact-parent-instance delegations to approved specialists, are included. Agent IDs alone are not human authority.' : 'Project-only: the configured AFP root, verified descendants, and exact project-linked sessions are included.',
+    ...(allConversations ? ['Accounting coverage is partial retained history, not all-time completeness: current instances only; invisible, private, unattributed, deleted, rotated or lineage-unverifiable sessions cannot be reconstructed.', 'Only token, cost, model and per-agent accounting aggregates are published. Activity, task summaries and named-skill observations are unavailable in this mode.'] : []),
     'Daily requests count recorded model usage entries, not provider HTTP calls or user tasks.',
-    'Recent activity groups audit observations by agent run; model and per-run tokens are not attributed.',
-    'Audit is metadata-only, best-effort, bounded to 30 days and the Gateway retention cap.',
+    ...(!allConversations ? ['Recent activity groups audit observations by agent run; model and per-run tokens are not attributed.', 'Audit is metadata-only, best-effort, bounded to 30 days and the Gateway retention cap.'] : []),
     'Current session instances only; retained rotated history is not included.',
     'Local recorded token usage and estimated cost are not a provider invoice; absent provider counters cannot be reconstructed.',
-    'Successful skill instruction reads observed in the retained scoped audit window: ' + audit.skillReads + '. This separate audit count is not added to observer counts.',
+    ...(!allConversations ? ['Successful skill instruction reads observed in the retained scoped audit window: ' + audit.skillReads + '. This separate audit count is not added to observer counts.'] : []),
     skillEventsAvailable ? 'Named skills count confirmed instruction-read events since observer installation only; no historical backfill or completed-workflow claim. Events have session keys, not instance IDs.' : 'Named skill observations are unavailable; an empty list does not establish zero skill use.',
     ...notes
   ];
+  if (skillEventsAvailable && skillDaily === null) coverageNotes.push('Daily skill chart detail exceeded its bound and is unavailable; core named observations are unchanged.');
+  if (!allConversations && agentRunDaily === null) coverageNotes.push('Daily agent run chart detail exceeded its bound and is unavailable; core activity is unchanged.');
   if (audit.missingIdentity) coverageNotes.push('Audit rows without an exact allowed session instance were excluded.');
   if (namedSkills.invalid) coverageNotes.push('Malformed or conflicting skill observations were excluded; named counts may be incomplete.');
   if (daily.some((row) => row.costUsd === null)) coverageNotes.push('Some model costs are unknown or incompletely priced; null is not free usage.');
   if (daily.some((row) => BUCKETS.some((name) => row[name] === null))) coverageNotes.push('Some token buckets are unavailable; null values are not zeros.');
   return {
     schemaVersion: 1, generatedAt: now.toISOString(), range,
-    scopeLabel, daily, skills: namedSkills.skills, requests: audit.requests,
+    scopeMode, scopeLabel: allConversations ? 'All conversations with main · delegated specialists · retained partial history' : scopeLabel, daily, skills: namedSkills.skills, requests: audit.requests,
+    skillDaily, agentRunDaily,
     coverage: { sessions: sessions.length, notes: [...new Set(coverageNotes)],
-      skillMetric: skillEventsAvailable ? 'Confirmed named instruction reads since observer installation; not skill executions' : 'Successful instruction-read observations; named skill attribution unavailable',
-      historyMetric: 'Metadata-only agent-run activity; not user tasks or provider requests' }
+      usageCharts: { skills: skillDaily === null ? 'unavailable' : namedSkills.invalid || skillPartial ? 'partial' : 'available',
+        agents: agentRunDaily === null ? 'unavailable' : auditPartial || audit.missingIdentity ? 'partial' : 'available' },
+      skillMetric: allConversations ? 'Unavailable: skill observations are not collected in all-conversations accounting mode' : skillEventsAvailable ? 'Confirmed named instruction reads since observer installation; not skill executions' : 'Successful instruction-read observations; named skill attribution unavailable',
+      historyMetric: allConversations ? 'Unavailable: all-conversations mode publishes accounting aggregates only' : 'Metadata-only agent-run activity; not user tasks or provider requests' }
   };
 }

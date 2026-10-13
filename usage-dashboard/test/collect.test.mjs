@@ -493,3 +493,232 @@ test('the additive CLI method allowlist never admits content or capability endpo
   for (const method of ['tools.effective', 'config.get', 'agents.files.get', 'skills.skillCard', 'tasks.list', 'chat.history'])
     await rejectsCode(gatewayRpc(method, {}, runner), 'RPC_METHOD_NOT_ALLOWED');
 });
+
+// Explicit all-conversations accounting regressions.
+{
+const { collectSnapshot, discoverSessions, validateConfig, LIMITS, CONVERSATION_AGENTS } = await import('../src/collect.mjs'); const { makeRange, mergeDaily, buildSnapshot } = await import('../src/telemetry.mjs'); const { publicSnapshot, validateSnapshot } = await import('../src/handler.mjs');
+const now = new Date('2026-10-13T11:00:00Z');
+const profileId = 'profile-owner-A';
+const actor = (id, type = 'human') => ({ type, id, identity: { type: type === 'human' ? 'profile' : 'agent', id } });
+const main = { agentId: 'main', key: 'agent:main:discord:first', sessionId: 'main-private-instance', createdVia: 'operator', createdActor: actor(profileId), owner: { actor: actor(profileId) }, visibility: 'shared', sharingRole: 'owner', kind: 'direct' };
+const second = { ...main, key: 'agent:main:chat:second', sessionId: 'second-private-instance' };
+const alias = { ...second, key: 'agent:main:chat:alias' };
+const children = CONVERSATION_AGENTS.slice(1).map(agentId => ({ agentId, key: 'agent:' + agentId + ':subagent:private', sessionId: 'shared-id-across-agents', spawnedBy: second.key, parentSessionKey: second.key, parentSessionId: second.sessionId, createdVia: 'spawn', createdActor: actor('main', 'agent'), owner: { actor: actor('main', 'agent') }, visibility: 'shared', sharingRole: 'member', kind: 'direct' }));
+const nested = { ...children[0], key: 'agent:dev-builder:subagent:nested', sessionId: 'nested-instance', spawnedBy: children[1].key, parentSessionKey: children[1].key, parentSessionId: children[1].sessionId, createdActor: actor(children[1].agentId, 'agent'), owner: { actor: actor(children[1].agentId, 'agent') } };
+const independent = { ...children[0], key: 'agent:dev-builder:chat:unrelated', sessionId: 'independent-private-instance', spawnedBy: undefined };
+const denied = { agentId: 'system', key: 'agent:system:chat:private', sessionId: 'system-private', spawnedBy: main.key };
+const config = { rootSessionKey: main.key, snapshotPath: '/private/snapshot.json', scopeMode: 'all-conversations', conversationProfileId: profileId, lookbackDays: 1 };
+const all = [main, second, alias, ...children, nested, independent, denied];
+function fixture({ rows = all, pageSize = 2, change = false } = {}) {
+  const calls = [];
+  let rootReads = 0;
+  const rpc = async (method, params) => {
+    calls.push({ method, params });
+    if (method === 'users.self') return { profile: { id: profileId } };
+    if (method === 'sessions.describe') return { session: main };
+    if (method === 'sessions.list') {
+      let matches;
+      if (params.spawnedBy) matches = rows.filter(r => r.spawnedBy === params.spawnedBy || r.parentSessionKey === params.spawnedBy);
+      else if (params.excludeSubagents) {
+        if (params.offset === 0) rootReads++;
+        matches = rows.filter(r => r.agentId === 'main' && !r.spawnedBy && !r.parentSessionKey);
+        if (change && rootReads > 1) matches = matches.map(r => ({ ...r, sessionId: 'replaced' }));
+      } else matches = rows.filter(r => r.agentId === params.agentId);
+      const offset = params.offset;
+      return { sessions: matches.slice(offset, offset + pageSize).map(r => ({ ...r, label: 'SECRET TITLE', task: 'SECRET TASK', lastMessage: 'SECRET TEXT', command: 'SECRET COMMAND' })),
+        hasMore: offset + pageSize < matches.length, nextOffset: offset + pageSize < matches.length ? offset + pageSize : null };
+    }
+    if (method === 'sessions.usage') {
+      assert.equal(params.groupBy, 'instance');
+      const row = rows.find(r => r.key === params.key);
+      assert.ok(row && row !== independent && row !== denied);
+      const unknown = row.agentId === 'dev-qa';
+      const totals = { input: unknown ? undefined : 10, output: 5, cacheRead: 20, cacheWrite: 2, totalTokens: 37, totalCost: 0.01, missingCostEntries: unknown ? 1 : 0 };
+      return { startDate: params.startDate, endDate: params.endDate, sessions: [{ ...row, scope: 'instance', usage: { ...totals, sessionId: row.sessionId } }],
+        totals, aggregates: { byModel: [{ provider: 'openai', model: 'gpt-test', count: 1, totals }], modelDaily: [{ date: params.endDate, provider: 'openai', model: 'gpt-test', count: 1, tokens: 37, cost: 0.01 }] }, cacheStatus: { status: 'fresh' } };
+    }
+    if (method === 'agents.list') return { agents: CONVERSATION_AGENTS.map(id => ({ id })).concat({ id: 'system' }) };
+    if (method === 'skills.status') return { agentId: 'main', skills: [] };
+    if (method === 'audit.activity.list') return { events: [] };
+    throw new Error('Unexpected read');
+  };
+  return { rpc, calls };
+}
+
+test('all mode is explicit and scoped mode remains the default', async () => {
+  assert.throws(() => validateConfig({ ...config, scopeMode: 'all' }), { code: 'INVALID_SCOPE_MODE' });
+  assert.throws(() => validateConfig({ ...config, rootSessionKey: children[0].key }), { code: 'ALL_CONVERSATIONS_REQUIRES_MAIN' });
+  assert.throws(() => validateConfig({ ...config, conversationProfileId: 'bad\u0000id' }));
+  const f = fixture({ rows: [main, second] });
+  const scoped = await discoverSessions({ ...config, scopeMode: 'scoped' }, f.rpc);
+  assert.deepEqual(scoped.map(r => r.key), [main.key]);
+  const legacy = { ...config }; delete legacy.scopeMode;
+  assert.deepEqual(await discoverSessions(legacy, f.rpc), scoped);
+});
+
+test('all mode pages owner-attributed roots and closes lineage across eight agents, deduplicating exact instances only', async () => {
+  const f = fixture();
+  const rows = await discoverSessions(config, f.rpc);
+  assert.equal(rows.length, 10); // two main instances, seven specialists, one nested instance
+  assert.equal(rows.find(r => r.key === second.key).aliases.length, 2);
+  assert.equal(rows.filter(r => r.sessionId === children[0].sessionId).length, 7);
+  assert.ok(!rows.some(r => r.key === independent.key || r.key === denied.key));
+  assert.ok(!JSON.stringify(rows).includes('SECRET'));
+  const lists = f.calls.filter(c => c.method === 'sessions.list');
+  assert.ok(lists.some(c => c.params.offset > 0));
+  assert.deepEqual(new Set(rows.map(r => r.agentId)), new Set(CONVERSATION_AGENTS));
+  assert.ok(lists.every(c => c.params.spawnedBy || c.params.agentId === 'main' && c.params.ownerId === profileId && c.params.creatorId === profileId));
+  assert.ok(lists.every(c => c.params.archived === 'all' && c.params.includeDerivedTitles === false && c.params.includeLastMessage === false && c.params.includeActivitySummary === false && c.params.excludeSystem && c.params.excludeCron));
+});
+
+test('required human identity restricts roots using typed ownership, never appearing in snapshots', async () => {
+  const f = fixture({ rows: [main] });
+  const snapshot = await collectSnapshot(config, { rpc: f.rpc, now, retryDelays: [] });
+  assert.equal(snapshot.coverage.sessions, 1);
+  assert.ok(!JSON.stringify(snapshot).includes(profileId));
+  const lists = f.calls.filter(c => c.method === 'sessions.list');
+  assert.ok(lists.filter(c => c.params.excludeSubagents).every(c => c.params.ownerId === profileId && c.params.creatorId === profileId && c.params.profileRelation.profileId === profileId && c.params.profileRelation.relationship === 'owned'));
+  assert.ok(lists.filter(c => c.params.spawnedBy).every(c => c.params.ownerId === undefined));
+});
+
+test('bounded paging, invalid cursors and conflicting reused keys fail closed', async () => {
+  const f = fixture();
+  await assert.rejects(discoverSessions(config, f.rpc, { ...LIMITS, sessionPages: 1 }), { code: 'SESSION_DISCOVERY_LIMIT' });
+  await assert.rejects(discoverSessions(config, async (method) => method === 'users.self' ? { profile: { id: profileId } } : { sessions: [], hasMore: true, nextOffset: 0 }), { code: 'INVALID_SESSION_CURSOR' });
+  const conflict = fixture({ rows: [main, { ...main, sessionId: 'old-private-instance' }] });
+  await assert.rejects(discoverSessions(config, conflict.rpc), { code: 'SESSION_CHANGED_DURING_COLLECTION' });
+});
+
+test('all mode totals recombine by agent, preserve nulls and publish no conversation detail', async () => {
+  const f = fixture(); const allowlists = [];
+  const snapshot = await collectSnapshot({ ...config, allowlistPath: '/private/sessions.json', skillEventsPath: '/private/events.jsonl', scopeLabel: 'PRIVATE LABEL' }, {
+    rpc: f.rpc, now, retryDelays: [], writeAllowlist: async (_p, keys) => allowlists.push(keys),
+    readSkillEvents: async () => { throw new Error('Observer must not be read'); },
+    readMetadata: async () => ({ schemaVersion: 1, agents: {}, skills: {}, tasks: {} })
+  });
+  assert.equal(snapshot.scopeMode, 'all-conversations');
+  assert.equal(snapshot.coverage.sessions, 10);
+  assert.equal(snapshot.daily[0].totalTokens, 370);
+  assert.equal(snapshot.daily[0].requests, 10);
+  assert.equal(snapshot.daily[0].input, null);
+  assert.equal(snapshot.daily[0].costUsd, null);
+  assert.deepEqual(mergeDaily(snapshot.agentDaily.map(({ agentId, ...r }) => r)), snapshot.daily);
+  assert.deepEqual(snapshot.requests, []); assert.equal(snapshot.tasks, null);
+  assert.equal(snapshot.agentRunDaily, null); assert.equal(snapshot.skillDaily, null);
+  assert.equal(snapshot.coverage.details.tasks, 'unavailable');
+  assert.ok(snapshot.coverage.notes.some(n => /partial retained history/.test(n)));
+  assert.deepEqual(allowlists, [[], []]);
+  assert.ok(!f.calls.some(c => c.method.startsWith('audit.') || c.method === 'sessions.describe'));
+  assert.equal(f.calls.filter(c => c.method === 'sessions.usage').length, 10);
+  assert.equal(snapshot.agents.length, 8);
+  assert.equal(validateSnapshot(snapshot), true);
+  const published = JSON.stringify(publicSnapshot({ ...snapshot, secret: 'SECRET', agentDaily: snapshot.agentDaily.map(r => ({ ...r, sessionKey: main.key, title: 'SECRET' })) }));
+  for (const forbidden of ['SECRET', 'PRIVATE', ...all.map(r => r.key), ...all.map(r => r.sessionId)]) assert.ok(!published.includes(forbidden), forbidden);
+});
+
+test('two users sharing main and specialist IDs cannot expand human accounting scope', async () => {
+  const other = { ...main, key: 'agent:main:chat:other-human', sessionId: 'other-human-instance', createdActor: actor('profile-owner-B'), owner: { actor: actor('profile-owner-B') } };
+  const otherChild = { ...children[0], key: 'agent:dev-builder:subagent:other-human', sessionId: 'other-child-instance', spawnedBy: other.key, parentSessionKey: other.key, parentSessionId: other.sessionId };
+  const f = fixture({ rows: [main, other, otherChild] });
+  const snapshot = await collectSnapshot(config, { rpc: f.rpc, now, retryDelays: [] });
+  assert.equal(snapshot.coverage.sessions, 1);
+  assert.ok(f.calls.filter(c => c.method === 'sessions.usage').every(c => c.params.key === main.key));
+  assert.ok(f.calls.filter(c => c.method === 'sessions.list' && c.params.spawnedBy).every(c => c.params.spawnedBy === main.key));
+});
+
+test('ambiguous channel identities, reassigned roots and private/system/denied metadata are excluded', async () => {
+  const unsafe = [
+    { createdActor: actor('profile-owner-B'), owner: { actor: actor(profileId) } },
+    { owner: { actor: actor('profile-owner-B'), assignedAt: 10 } },
+    { createdActor: { type: 'human', id: profileId, identity: { type: 'observation', id: profileId, pluginId: 'discord', accountId: 'default', senderKind: 'human' } } },
+    { createdActor: { type: 'human', id: profileId } },
+    { owner: { actor: actor(profileId, 'agent') } },
+    { incognito: true }, { visibility: 'draft' }, { visibility: 'private' }, { visibility: undefined },
+    { sharingRole: 'denied' }, { sharingRole: undefined }, { isBackground: true }, { createdVia: 'cron' },
+    { createdVia: 'internal' }, { classification: 'heartbeat' }, { createdActor: { type: 'system', id: profileId } }
+  ].map((extra, index) => ({ ...main, key: 'agent:main:chat:unsafe-' + index, sessionId: 'unsafe-instance-' + index, ...extra }));
+  const f = fixture({ rows: [main, ...unsafe] });
+  assert.deepEqual((await discoverSessions(config, f.rpc)).map(r => r.key), [main.key]);
+});
+
+test('reassigned, private or old-parent child instances cannot inherit admitted roots', async () => {
+  const extras = [
+    { owner: { actor: actor('profile-owner-B'), assignedAt: 20 } },
+    { owner: { actor: actor('main', 'agent'), assignedAt: 20 } },
+    { createdActor: actor('profile-owner-B') }, { parentSessionId: 'old-root-instance' },
+    { parentSessionId: undefined }, { visibility: 'draft' }, { incognito: true }, { sharingRole: 'denied' }
+  ].map((extra, index) => ({ ...children[0], key: 'agent:dev-builder:subagent:unsafe-' + index, sessionId: 'unsafe-child-' + index, ...extra }));
+  const f = fixture({ rows: [second, ...extras] });
+  assert.deepEqual((await discoverSessions(config, f.rpc)).map(r => r.key), [second.key]);
+});
+
+test('reporting context must identify the explicitly authorized person before any session read', async () => {
+  const missing = { ...config }; delete missing.conversationProfileId;
+  assert.throws(() => validateConfig(missing), { code: 'AUTHORIZED_CONVERSATION_PROFILE_REQUIRED' });
+  assert.throws(() => validateConfig({ ...config, conversationProfileId: 'gateway-owner' }), { code: 'SHARED_OWNER_NOT_A_PERSON' });
+  for (const result of [{}, { profile: { id: 'profile-owner-B' } }, { profile: { id: profileId, mergedInto: 'profile-owner-B' } }]) {
+    const calls = [];
+    await assert.rejects(collectSnapshot(config, { rpc: async method => { calls.push(method); return result; }, now }), error => ['REPORTING_IDENTITY_UNAVAILABLE', 'REPORTING_IDENTITY_MISMATCH'].includes(error.code));
+    assert.deepEqual(calls, ['users.self']);
+  }
+});
+
+test('final revalidation catches child ownership changes, visibility changes and reporting identity drift', async () => {
+  for (const mutation of [row => ({ ...row, owner: { actor: actor('profile-owner-B'), assignedAt: 20 } }), row => ({ ...row, visibility: 'draft' }), row => ({ ...row, sharingRole: 'viewer' })]) {
+    const f = fixture({ rows: [second, children[0]] }); let afterUsage = false; let writes = 0;
+    const rpc = async (method, params) => {
+      if (method === 'sessions.usage') afterUsage = true;
+      const result = await f.rpc(method, params);
+      if (afterUsage && method === 'sessions.list') result.sessions = result.sessions.map(row => row.key === children[0].key ? mutation(row) : row);
+      return result;
+    };
+    await assert.rejects(run(config, { rpc, now, retryDelays: [], writeSnapshot: async () => { writes++; } }), { code: 'SESSION_CHANGED_DURING_COLLECTION' });
+    assert.equal(writes, 0);
+  }
+  const assignedChild = { ...children[0], owner: { actor: actor(profileId), assignedAt: 10 } };
+  const epochFixture = fixture({ rows: [second, assignedChild] }); let afterUsage = false;
+  await assert.rejects(collectSnapshot(config, { now, retryDelays: [], rpc: async (method, params) => {
+    if (method === 'sessions.usage') afterUsage = true;
+    const result = await epochFixture.rpc(method, params);
+    if (afterUsage && method === 'sessions.list') result.sessions = result.sessions.map(row => row.key === assignedChild.key ? { ...row, owner: { ...row.owner, assignedAt: 20 } } : row);
+    return result;
+  } }), { code: 'SESSION_CHANGED_DURING_COLLECTION' });
+  const f = fixture({ rows: [main] }); let read = 0;
+  await assert.rejects(collectSnapshot(config, { now, retryDelays: [], rpc: async (method, params) => method === 'users.self' && ++read >= 3 ? { profile: { id: 'profile-owner-B' } } : f.rpc(method, params) }), { code: 'REPORTING_IDENTITY_MISMATCH' });
+});
+
+test('all mode ignores project admission and keeps long-range totals when daily splits hit their bound', async () => {
+  const f = fixture();
+  const snapshot = await collectSnapshot({ ...config, lookbackDays: 30, projectId: 'different-private-project' }, {
+    rpc: f.rpc, now, limits: { dailyDetails: 0 }, retryDelays: []
+  });
+  assert.equal(snapshot.coverage.sessions, 10);
+  assert.equal(snapshot.daily[0].totalTokens, 370);
+  assert.equal(snapshot.daily[0].input, null);
+  assert.equal(snapshot.daily[0].costUsd, null);
+  assert.deepEqual(mergeDaily(snapshot.agentDaily.map(({ agentId, ...r }) => r)), snapshot.daily);
+  assert.ok(snapshot.coverage.notes.some(n => /Daily detail query bound/.test(n)));
+  assert.ok(f.calls.filter(c => c.method === 'sessions.list').every(c => c.params.projectId === undefined));
+  assert.ok(!JSON.stringify(snapshot).includes('different-private-project'));
+});
+
+test('membership changes or API visibility failure preserve the previous accounting snapshot', async () => {
+  const f = fixture({ change: true });
+  await assert.rejects(collectSnapshot(config, { rpc: f.rpc, now, retryDelays: [] }), { code: 'SESSION_CHANGED_DURING_COLLECTION' });
+  await assert.rejects(collectSnapshot(config, { rpc: async method => method === 'users.self' ? { profile: { id: profileId } } : { sessions: [], hasMore: false }, now, retryDelays: [] }), { code: 'NO_OWNER_ATTRIBUTED_CONVERSATIONS' });
+  const deniedRpc = async () => { throw new Error('FORBIDDEN'); };
+  await assert.rejects(collectSnapshot(config, { rpc: deniedRpc, now, retryDelays: [] }));
+});
+
+test('public all-mode projection also suppresses details from an otherwise valid older scoped snapshot', () => {
+  const snapshot = buildSnapshot({ now, range: makeRange(now, 1), sessions: [main], rows: [], events: [{ eventId: 'evt', kind: 'agent_run', action: 'agent.run.finished', status: 'succeeded', occurredAt: now.getTime() - 1, agentId: 'main', sessionKey: main.key, sessionId: main.sessionId, runId: 'private-run' }] });
+  assert.equal(snapshot.requests.length, 1);
+  const legacy = { ...snapshot }; delete legacy.scopeMode;
+  assert.equal(publicSnapshot(legacy).requests.length, 1);
+  const published = publicSnapshot({ ...snapshot, scopeMode: 'all-conversations', scopeLabel: 'SECRET SUMMARY', requests: snapshot.requests.map(r => ({ ...r, description: 'SECRET SUMMARY' })) });
+  assert.deepEqual(published.requests, []);
+  assert.ok(!JSON.stringify(published).includes('SECRET SUMMARY'));
+  assert.equal(validateSnapshot({ ...snapshot, scopeMode: 'unknown' }), false);
+});
+
+}

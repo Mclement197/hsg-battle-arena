@@ -133,7 +133,7 @@ function taskLineage(sessions, rootSessionKey) {
 const sources = new Map([['openclaw-bundled', 'bundled'], ['openclaw-managed', 'managed'], ['openclaw-extra', 'extra'],
   ['openclaw-custodian', 'custodian'], ['openclaw-workspace', 'workspace']]);
 export function buildDetails({ now, range, sessions, rows, events, rootSessionKey, directory, catalog, metadata: rawMetadata,
-  skillEvents = [], skillEventsAvailable = false, auditPartial = false, limits = DETAIL_LIMITS }) {
+  skillEvents = [], skillEventsAvailable = false, auditPartial = false, scopeMode = 'scoped', limits = DETAIL_LIMITS }) {
   limits = { ...DETAIL_LIMITS, ...limits };
   const metadata = validatePublicMetadata(rawMetadata);
   const notes = [];
@@ -165,11 +165,17 @@ export function buildDetails({ now, range, sessions, rows, events, rootSessionKe
     agentDaily = null; notes.push('Per-agent daily detail is unavailable; core project usage is unchanged.');
   }
   const audit = auditProjection(events, sessions, range);
-  const taskSessions = taskLineage(sessions, rootSessionKey);
-  const tasks = taskSessions.slice(0, limits.tasks).map((session) => taskProjection(session, rootSessionKey, metadata, audit.taskActivity, now));
+  const allConversations = scopeMode === 'all-conversations';
+  const taskSessions = allConversations ? [] : taskLineage(sessions, rootSessionKey);
+  const tasks = allConversations ? null : taskSessions.slice(0, limits.tasks).map((session) => taskProjection(session, rootSessionKey, metadata, audit.taskActivity, now));
   if (taskSessions.length > limits.tasks || auditPartial || audit.missingIdentity) coverage.tasks = 'partial';
+  if (allConversations) {
+    coverage.tasks = 'unavailable';
+    coverage.taskMetric = 'All-conversations mode publishes accounting aggregates only; conversation and task details are withheld.';
+    coverage.toolStepMetric = 'Audit activity and skill observations are not collected in all-conversations mode.';
+  }
   let skillCatalog = null;
-  const root = sessions.find((session) => [session.key, ...(session.aliases ?? [])].includes(rootSessionKey));
+  const root = allConversations ? { agentId: 'main' } : sessions.find((session) => [session.key, ...(session.aliases ?? [])].includes(rootSessionKey));
   if (root && Array.isArray(catalog?.skills) && (!catalog.agentId || catalog.agentId === root.agentId)) {
     const rootSessions = sessions.filter((session) => session.agentId === root.agentId);
     const reads = skillEventProjection(skillEvents, rootSessions, range, now);
@@ -198,6 +204,6 @@ export function buildDetails({ now, range, sessions, rows, events, rootSessionKe
   if (coverage.skills !== 'available') notes.push('The root-agent skill catalog is ' + coverage.skills + '; missing read observations are unknown, not zero.');
   if (coverage.tasks === 'partial') notes.push('Task detail or audit observations are partial; observed tool steps are not complete totals.');
   notes.push('Skill catalog describes only the root agent; named reads retain key-scoped observer limitations.');
-  if (taskSessions.length !== sessions.length) notes.push('Task metadata excludes independently project-linked sessions; existing project usage scope is unchanged.');
+  if (!allConversations && taskSessions.length !== sessions.length) notes.push('Task metadata excludes independently project-linked sessions; existing project usage scope is unchanged.');
   return { agents, agentDaily, skillCatalog, tasks, coverage, notes };
 }

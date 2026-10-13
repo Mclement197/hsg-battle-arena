@@ -62,7 +62,7 @@
   function emptyTotals() { return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, requests: 0 }; }
   function addTotals(target, row) {
     for (const key of numericKeys) target[key] = target[key] === null || row[key] === null ? null : target[key] + row[key];
-    target.requests += row.requests;
+    target.requests = target.requests === null || row.requests === null ? null : target.requests + row.requests;
     return target;
   }
   function tokenLabel(value) { return value === null ? 'Unavailable' : count(value); }
@@ -97,17 +97,20 @@
     assert(isString(data.scopeLabel) && isObject(data.range));
     assert(isDay(data.range.start) && isDay(data.range.end) && data.range.start <= data.range.end && data.range.timeZone === TZ);
     assert(Array.isArray(data.daily) && Array.isArray(data.skills) && Array.isArray(data.requests));
-    assert(isObject(data.coverage) && isNumber(data.coverage.sessions) && Array.isArray(data.coverage.notes));
-    for (const key of ['agents', 'agentDaily', 'skillCatalog', 'tasks']) assert(data[key] == null || Array.isArray(data[key]));
+    assert(isObject(data.coverage) && (isNumber(data.coverage.sessions) || data.scopeMode === 'installation' && data.coverage.sessions === null) && Array.isArray(data.coverage.notes));
+    for (const key of ['agents', 'agentDaily', 'skillCatalog', 'tasks', 'skillDaily', 'agentRunDaily']) assert(data[key] == null || Array.isArray(data[key]));
     for (const row of data.agents ?? []) assert(isObject(row) && isString(row.id) && isString(row.name) && isNumber(row.scopedSessions));
     for (const row of data.skillCatalog ?? []) assert(isObject(row) && isString(row.id) && isString(row.name) && (row.description == null || isString(row.description)));
     for (const row of data.tasks ?? []) assert(isObject(row) && isString(row.id) && isString(row.title) && isInstant(row.observedAt));
     assert(data.coverage.notes.every(isString) && isString(data.coverage.skillMetric) && isString(data.coverage.historyMetric));
     data.daily.forEach((row) => {
       assert(isObject(row) && isDay(row.date) && isString(row.model) && isString(row.provider));
-      assert(categories.every(([key]) => row[key] === null || isNumber(row[key])) && isNumber(row.totalTokens) && isNumber(row.requests));
+      assert(categories.every(([key]) => row[key] === null || isNumber(row[key])) && isNumber(row.totalTokens) && (isNumber(row.requests) || data.scopeMode === 'installation' && row.requests === null));
       assert(row.costUsd === null || isNumber(row.costUsd));
     });
+    for (const key of ['skillDaily', 'agentRunDaily']) for (const row of data[key] ?? []) {
+      assert(isObject(row) && isDay(row.date) && Number.isSafeInteger(row.count) && row.count >= 0 && isString(row[key === 'skillDaily' ? 'name' : 'agentId']));
+    }
     data.skills.forEach((row) => {
       assert(isObject(row) && isString(row.name) && isString(row.description) && isNumber(row.count));
       assert(row.lastUsedAt == null || isInstant(row.lastUsedAt));
@@ -133,6 +136,45 @@
     } finally {
       window.clearTimeout(timeout);
       if (state.controller === controller) state.controller = null;
+    }
+  }
+
+  let activePending = false;
+  let activeObservedAt = null;
+  async function loadActiveAgents() {
+    if (document.hidden || activePending) return;
+    if (activeObservedAt && Date.now() - activeObservedAt >= 30000) {
+      $('active-agents-list').replaceChildren();
+      setText('active-agents-status', 'Status stale · checking…');
+    }
+    activePending = true;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10000);
+    try {
+      const response = await fetch('/usage/api/active-agents', {
+        credentials: 'omit', cache: 'no-store', redirect: 'error',
+        headers: { Accept: 'application/json' }, signal: controller.signal
+      });
+      if (!response.ok) throw new Error('unavailable');
+      const data = await response.json();
+      const observed = Date.parse(data?.observedAt);
+      if (data?.status !== 'ok' || !Number.isFinite(observed) || observed > Date.now() + 60000 ||
+          !Array.isArray(data.agents) || !data.agents.every((agent) => typeof agent?.id === 'string' && typeof agent.name === 'string')) throw new Error('unavailable');
+      if (Date.now() - observed >= 30000) {
+        activeObservedAt = observed;
+        $('active-agents-list').replaceChildren();
+        setText('active-agents-status', 'Status stale · checking…');
+        return;
+      }
+      activeObservedAt = observed;
+      $('active-agents-list').replaceChildren(...data.agents.map((agent) => element('li', '', agent.name)));
+      setText('active-agents-status', data.agents.length ? count(data.agents.length) + ' active' : 'Idle · no agents running');
+    } catch {
+      $('active-agents-list').replaceChildren();
+      setText('active-agents-status', activeObservedAt ? 'Status stale · unavailable' : 'Status unknown · unavailable');
+    } finally {
+      window.clearTimeout(timeout);
+      activePending = false;
     }
   }
 
@@ -169,7 +211,7 @@
     state.historyLimit = 20;
     state.skillsExpanded = false;
     $('history-search').value = '';
-    for (const id of ['model-chart', 'skills-list', 'history-table-body', 'daily-table-body', 'model-table-body', 'coverage-notes', 'token-breakdown', 'timeline-chart']) $(id).replaceChildren();
+    for (const id of ['overview-skills-usage-chart', 'overview-agents-usage-chart', 'skills-usage-chart', 'agents-usage-chart', 'overview-skills-usage-table', 'overview-agents-usage-table', 'skills-usage-table', 'agents-usage-table', 'model-chart', 'skills-list', 'history-table-body', 'daily-table-body', 'model-table-body', 'coverage-notes', 'token-breakdown', 'timeline-chart']) $(id).replaceChildren();
     for (const id of ['metric-tokens', 'metric-calls', 'metric-model', 'metric-skills', 'metric-tokens-note', 'metric-calls-note', 'metric-model-note', 'metric-skills-note', 'coverage-summary', 'coverage-generated', 'coverage-range', 'coverage-scope', 'chart-date', 'chart-value', 'chart-calls']) {
       setText(id, '—');
       $(id).removeAttribute('title');
@@ -198,6 +240,11 @@
     $('timeline-empty').querySelector('p').textContent = 'Refresh to try loading your snapshot again.';
     $('model-chart').replaceChildren(emptyState('No snapshot loaded', 'Model usage will appear when data is available.'));
     $('skills-list').replaceChildren(emptyState('No snapshot loaded', 'Skill attribution will appear when data is available.'));
+    for (const prefix of ['overview-', '']) for (const kind of ['skills', 'agents']) {
+      $(prefix + kind + '-usage-chart').replaceChildren(emptyState('No snapshot loaded', 'Usage evidence will appear after a successful refresh.'));
+      tableMessage($(prefix + kind + '-usage-table'), 2, 'No snapshot loaded.');
+      setText(prefix + kind + '-usage-note', 'Usage evidence unavailable.');
+    }
     $('agents-list').replaceChildren(emptyState('No snapshot loaded', 'The agent directory will appear when data is available.'));
     $('tasks-list').replaceChildren(emptyState('No snapshot loaded', 'Recorded work will appear when data is available.'));
     $('history-table-wrap').hidden = true;
@@ -268,26 +315,25 @@
     else if (minutes >= 15) label += ' · may be stale';
     setText('freshness-text', label);
     $('freshness').classList.toggle('is-stale', state.stale || minutes >= 15 || age < -60000);
-    $('freshness').title = 'Generated ' + fullDateFormat.format(generated) + ' (Europe/Zurich). This is a snapshot, not a live stream.';
+    $('freshness').title = 'Generated ' + fullDateFormat.format(generated) + ' (Europe/Zurich). Checks every minute while visible; collection runs every five minutes after the previous collection finishes. Recorded usage may lag completed model responses; this is not a live token stream.';
   }
 
   function renderSnapshot() {
     const data = state.data;
-    setText('scope-label', data.scopeLabel || 'Scope not provided');
-    setText('coverage-scope', data.scopeLabel || 'Scope not provided');
+    const scope = data.scopeMode === 'installation' ? data.scopeLabel : data.scopeMode === 'all-conversations' ? 'All conversations with main · delegated specialists · retained partial history' : 'Project-only · ' + (data.scopeLabel || 'selected conversation and tasks');
+    setText('scope-label', scope);
+    setText('coverage-scope', scope);
     setText('coverage-generated', fullDateFormat.format(new Date(data.generatedAt)) + ' (Europe/Zurich)');
     setText('coverage-range', data.range.start + ' to ' + data.range.end + ' (Europe/Zurich)');
-    setText('coverage-summary', count(data.coverage.sessions) + ' sessions in snapshot');
+    setText('coverage-summary', data.coverage.sessions === null ? 'Session count unavailable' : count(data.coverage.sessions) + ' sessions in snapshot');
     $('coverage-notes').replaceChildren(...data.coverage.notes.map((note) => element('li', '', note)));
     setText('skill-metric', (data.coverage.skillMetric || 'No skill attribution details were supplied.') + ' Counts cover the whole snapshot and do not change with date or model filters.');
     setText('history-metric', data.coverage.historyMetric || 'Metadata-inferred agent activity, not user prompts or individual provider calls.');
     setText('skills-subtitle', 'Whole snapshot: ' + data.range.start + ' to ' + data.range.end);
     const detailCoverage = data.coverage.details;
-    setText('agents-coverage', detailCoverage ? 'Directory coverage: ' + detailCoverage.agents + '. Configured agents may be outside AFP accounting scope.' : 'Configured agent coverage unavailable in this snapshot.');
+    setText('agents-coverage', detailCoverage ? 'Directory coverage: ' + detailCoverage.agents + '. Accounting uses only admitted conversations; no evidence is not zero use.' : 'Configured agent coverage unavailable in this snapshot.');
     setText('skills-coverage', detailCoverage ? 'Skill directory coverage: ' + detailCoverage.skills + '. Counts are observed instruction reads only.' : 'Skill catalog coverage unavailable in this snapshot.');
     setText('activity-coverage', detailCoverage ? 'Task coverage: ' + detailCoverage.tasks + '. ' + detailCoverage.taskMetric + ' ' + detailCoverage.toolStepMetric : 'Task detail coverage unavailable; run history is inferred from metadata.');
-    renderSkills();
-    renderAgents();
     renderFiltered();
     updateFreshness();
   }
@@ -320,15 +366,17 @@
     setText('metric-tokens', covered ? compact(totals.totalTokens) : '—');
     $('metric-tokens').title = covered ? count(totals.totalTokens) + ' total tokens' : 'Selected dates are outside snapshot coverage';
     setText('metric-tokens-note', covered ? count(totals.totalTokens) + ' recorded tokens' : 'Outside snapshot coverage');
-    setText('metric-calls', covered ? compact(totals.requests) : '—');
-    $('metric-calls').title = covered ? count(totals.requests) + ' recorded model entries' : 'Selected dates are outside snapshot coverage';
-    setText('metric-calls-note', covered ? 'Not verified provider HTTP calls' : 'Outside snapshot coverage');
-    setText('metric-model', leader && leader.totalTokens > 0 ? leader.model || 'Unspecified model' : covered ? 'No usage' : 'Unavailable');
-    setText('metric-model-note', leader && totals.totalTokens > 0 ? percentFormat.format(leader.totalTokens / totals.totalTokens) + ' of selected tokens' : covered ? 'No recorded tokens in this view' : 'Outside snapshot coverage');
-    const skillCount = data.skills.reduce((sum, skill) => sum + skill.count, 0);
-    setText('metric-skills', data.skills.length ? compact(skillCount) : '—');
-    $('metric-skills').title = data.skills.length ? count(skillCount) + ' observed instruction reads across the whole snapshot' : 'No named skill attribution in this snapshot';
-    setText('metric-skills-note', data.skills.length ? count(data.skills.length) + ' named skills · whole snapshot' : 'No named reads available');
+    setText('metric-calls', covered && totals.requests !== null ? compact(totals.requests) : '—');
+    $('metric-calls').title = !covered ? 'Selected dates are outside snapshot coverage' : totals.requests === null ? 'Model entries unavailable from installation aggregates' : count(totals.requests) + ' recorded model entries';
+    setText('metric-calls-note', !covered ? 'Outside snapshot coverage' : totals.requests === null ? 'Unavailable from aggregate-only source' : 'Not verified provider HTTP calls');
+    setText('metric-model', data.scopeMode === 'installation' ? 'Unavailable' : leader && leader.totalTokens > 0 ? leader.model || 'Unspecified model' : covered ? 'No usage' : 'Unavailable');
+    setText('metric-model-note', data.scopeMode === 'installation' ? 'Model attribution unavailable' : leader && totals.totalTokens > 0 ? percentFormat.format(leader.totalTokens / totals.totalTokens) + ' of selected tokens' : covered ? 'No recorded tokens in this view' : 'Outside snapshot coverage');
+    const skillView = observationView('skills');
+    const skillCount = skillView.entries.reduce((sum, skill) => sum + skill.count, 0);
+    $('metric-skills-link').href = pageUrl('skills');
+    setText('metric-skills', skillCount ? compact(skillCount) : '—');
+    $('metric-skills').title = skillCount ? count(skillCount) + ' observed instruction reads · ' + skillView.label : 'No named reads observed; not proof of zero use';
+    setText('metric-skills-note', skillCount ? count(skillView.entries.length) + ' named skills · ' + (skillView.legacy ? 'whole snapshot' : 'selected dates') : 'No named reads available');
     let rangeLabel = formatRange(range.start, range.end) + ', ' + range.end.slice(0, 4);
     if (!covered) rangeLabel += ' · outside snapshot';
     else if (start !== range.start || end !== range.end) rangeLabel += ' · partial coverage';
@@ -356,6 +404,9 @@
     renderTimeline();
     renderModels();
     renderHistory();
+    renderUsageCharts();
+    renderSkills();
+    renderAgents();
     renderDetails();
   }
 
@@ -406,7 +457,7 @@
       selectDay(state.selectedDay, false);
     }
     if (!days.length) tableMessage($('daily-table-body'), 7, 'Selected dates are outside snapshot coverage.');
-    else $('daily-table-body').replaceChildren(...days.map((day) => tableRow([day.date, ...numericKeys.map((key) => tokenLabel(day[key])), count(day.requests)])));
+    else $('daily-table-body').replaceChildren(...days.map((day) => tableRow([day.date, ...numericKeys.map((key) => tokenLabel(day[key])), day.requests === null ? 'Unavailable' : count(day.requests)])));
   }
 
   function selectDay(index, shouldAnnounce = false) {
@@ -414,7 +465,7 @@
     state.selectedDay = Math.min(state.days.length - 1, Math.max(0, index));
     const day = state.days[state.selectedDay];
     const coordinates = state.chartCoordinates[state.selectedDay];
-    const phrase = formatDay(day.date, true) + ': ' + count(day.totalTokens) + ' tokens, ' + count(day.requests) + ' recorded model entries';
+    const phrase = formatDay(day.date, true) + ': ' + count(day.totalTokens) + ' tokens, ' + (day.requests === null ? 'model entries unavailable' : count(day.requests) + ' recorded model entries');
     $('timeline-chart').setAttribute('aria-valuenow', String(state.selectedDay));
     $('timeline-chart').setAttribute('aria-valuetext', phrase);
     for (const id of ['chart-halo', 'chart-selection']) {
@@ -425,7 +476,7 @@
     $('chart-guide').setAttribute('x2', coordinates.x);
     setText('chart-date', formatDay(day.date, true));
     setText('chart-value', count(day.totalTokens) + ' tokens');
-    setText('chart-calls', count(day.requests) + ' model entries');
+    setText('chart-calls', day.requests === null ? 'Model entries unavailable' : count(day.requests) + ' model entries');
     $('chart-previous').disabled = state.selectedDay === 0;
     $('chart-next').disabled = state.selectedDay === state.days.length - 1;
     if (shouldAnnounce) announce(phrase);
@@ -459,7 +510,7 @@
     setText('models-note', models.length > 6 ? 'Top 6 shown; the table includes all ' + count(models.length) + ' models. Select a model for details.' : state.model ? 'Showing one model. Choose All models above to compare again.' : 'Select a model for details. Bars scale to the leading model.');
     if (!models.length) tableMessage($('model-table-body'), 5, 'No recorded model usage in this view.');
     else $('model-table-body').replaceChildren(...models.map((model) => {
-      const row = tableRow([model.model || 'Unspecified model', [...model.providers].join(', ') || 'Unspecified', count(model.totalTokens), count(model.requests),
+      const row = tableRow([model.model || 'Unspecified model', [...model.providers].join(', ') || 'Unspecified', count(model.totalTokens), model.requests === null ? 'Unavailable' : count(model.requests),
         model.missingCost ? (model.cost > 0 ? currencyFormat.format(model.cost) + ' known (incomplete)' : 'Unavailable') : currencyFormat.format(model.cost)]);
       const link = element('a', 'text-link', model.model || 'Unspecified model');
       link.href = pageUrl('models', { model: model.model });
@@ -468,10 +519,74 @@
     }));
   }
 
+  function observationView(kind) {
+    const skills = kind === 'skills';
+    const daily = skills ? state.data.skillDaily : state.data.agentRunDaily;
+    const legacy = skills && !Object.hasOwn(state.data, 'skillDaily') && state.data.skills.length > 0;
+    const range = currentRange();
+    const rows = daily == null ? (legacy ? state.data.skills : []) : daily.filter((row) =>
+      within(row.date, range.start, range.end) && within(row.date, state.data.range.start, state.data.range.end));
+    const grouped = new Map();
+    rows.forEach((row) => { const id = skills ? row.name : row.agentId; grouped.set(id, (grouped.get(id) ?? 0) + row.count); });
+    const entries = [...grouped].map(([id, value]) => ({ id, count: value })).filter((row) => row.count > 0)
+      .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id));
+    const coverage = state.data.coverage.usageCharts?.[kind] ?? 'unavailable';
+    return { entries, rows, legacy, available: daily != null || legacy, coverage,
+      label: legacy ? 'Whole snapshot · date attribution unavailable' : 'Selected dates · ' + formatRange(range.start, range.end) };
+  }
+  function observationHref(kind, id) {
+    return pageUrl(kind, { [kind === 'skills' ? 'skill' : 'agent']: kind === 'skills'
+      ? state.data.skillCatalog?.find((row) => row.name === id)?.id || id : id });
+  }
+  function observationName(kind, id) { return kind === 'agents' ? state.data.agents?.find((row) => row.id === id)?.name || id : id; }
+  function renderUsageCharts() {
+    for (const kind of ['skills', 'agents']) {
+      const view = observationView(kind);
+      const unit = kind === 'skills' ? 'instruction reads' : 'observed runs';
+      const explanation = kind === 'skills'
+        ? 'Successful named instruction-read observations across selected scoped sessions, not completed workflows. Since observer installation only; key-scoped and best-effort, with no historical backfill.'
+        : 'Distinct exact-instance runs with agent lifecycle evidence, dated by their latest retained audit observation (Zurich). Tool-only groups are excluded. Retained evidence, not all-time totals; aggregates precede the recent 100-row cap.';
+      const note = view.label + '. ' + explanation + ' Model filters do not apply.' +
+        (view.coverage === 'partial' ? ' Partial evidence: counts are known lower bounds.' : ' Observation coverage is not a completeness guarantee.');
+      for (const prefix of ['overview-', '']) {
+        const target = $(prefix + kind + '-usage-chart');
+        target.replaceChildren();
+        setText(prefix + kind + '-usage-note', note);
+        const body = $(prefix + kind + '-usage-table');
+        if (!view.entries.length) {
+          const title = !view.available ? 'Usage evidence unavailable' : 'No observations in this view';
+          target.append(emptyState(title, 'Missing observations do not establish zero use. Choose another date range or refresh.'));
+          tableMessage(body, 2, title + '; no zero-use claim.');
+          continue;
+        }
+        const top = view.entries[0].count;
+        view.entries.slice(0, 8).forEach((row, index) => {
+          const link = element('a', 'model-row'); link.href = observationHref(kind, row.id);
+          link.setAttribute('aria-label', observationName(kind, row.id) + ': ' + count(row.count) + ' ' + unit + '. View details.');
+          const heading = element('span', 'model-row-top');
+          heading.append(element('span', 'model-name', observationName(kind, row.id)), element('span', 'model-amount', count(row.count)));
+          const bar = svgElement('svg', { class: 'model-bar', viewBox: '0 0 300 6', preserveAspectRatio: 'none', 'aria-hidden': 'true' });
+          bar.append(svgElement('rect', { x: 0, y: 0, width: 300, height: 6, rx: 3, class: 'bar-track' }),
+            svgElement('rect', { x: 0, y: 0, width: 300 * row.count / top, height: 6, rx: 3, class: 'series-' + index % 6 }));
+          link.append(heading, bar); target.append(link);
+        });
+        body.replaceChildren(...view.entries.map((row) => {
+          const line = tableRow(['', count(row.count)]);
+          const link = element('a', 'text-link', observationName(kind, row.id)); link.href = observationHref(kind, row.id);
+          line.children[0].append(link); return line;
+        }));
+      }
+    }
+  }
+
   function renderSkills() {
     if (!state.data) return;
     const catalog = state.data.skillCatalog;
-    const rows = catalog ?? state.data.skills.map((skill) => ({ ...skill, id: skill.name, observedReads: skill.count, lastObservedAt: skill.lastUsedAt, description: null }));
+    const view = observationView('skills');
+    const observed = new Map(view.entries.map((row) => [row.id, row.count]));
+    const rows = [...(catalog ?? []), ...state.data.skills.filter((skill) => !catalog?.some((row) => row.name === skill.name))
+      .map((skill) => ({ ...skill, id: skill.name, lastObservedAt: skill.lastUsedAt, description: null }))]
+      .map((row) => ({ ...row, observedReads: observed.get(row.name) ?? (state.data.skillDaily == null ? row.observedReads ?? null : null) }));
     const query = $('skills-search').value.trim().toLocaleLowerCase();
     $('skills-clear-search').hidden = !query;
     const skills = rows.filter((row) => !query || (row.name + ' ' + (row.description ?? '')).toLocaleLowerCase().includes(query))
@@ -491,7 +606,7 @@
     $('skills-more').textContent = state.skillsExpanded ? 'Show fewer skills' : 'Show all ' + count(skills.length) + ' skills';
     $('skills-more').setAttribute('aria-expanded', String(state.skillsExpanded));
     setText('skills-subtitle', catalog == null ? 'Named instruction reads only · directory unavailable' : 'Main agent skill directory · public descriptions');
-    setText('skill-metric', 'Observed instruction reads are not completed skill executions. Counts cover the whole snapshot, not the selected date or model.');
+    setText('skill-metric', view.label + '. Counts across selected scoped sessions, not completed workflows. Model filters do not apply. Missing observations are unknown, not zero.');
   }
 
   function renderAgents() {
@@ -520,7 +635,7 @@
   function renderTasks(query) {
     const tasks = state.data.tasks;
     $('undated-task-note').hidden = true;
-    if (tasks == null) { state.taskCount = 0; $('tasks-list').replaceChildren(emptyState('Task details unavailable', 'This snapshot contains inferred run activity only.')); return; }
+    if (tasks == null) { state.taskCount = 0; $('tasks-list').replaceChildren(emptyState('Task details unavailable', state.data.scopeMode === 'all-conversations' ? 'All-conversations mode publishes token, cost, model and agent aggregates only. Conversation and activity details are withheld.' : 'This snapshot contains inferred run activity only.')); return; }
     const range = currentRange();
     const undated = tasks.filter((task) => !taskMoment(task).at).length;
     if (undated) {
@@ -590,8 +705,8 @@
     $('history-more').hidden = visible.length >= rows.length;
   }
 
-  const pages = ['overview', 'models', 'agents', 'skills', 'activity'];
-  const titles = { overview: 'Usage overview', models: 'Models', agents: 'Configured agents', skills: 'Skills', activity: 'Activity' };
+  const pages = ['overview', 'models', 'agents', 'skills', 'activity', 'graft'];
+  const titles = { overview: 'Usage overview', models: 'Models', agents: 'Configured agents', skills: 'Skills', activity: 'Activity', graft: 'HSG code graph' };
   function currentPage() {
     const path = (window.location?.pathname || '/usage').replace(/\/$/, '');
     return pages.find((page) => page !== 'overview' && path === '/usage/' + page) || 'overview';
@@ -602,8 +717,8 @@
     try { return decodeURIComponent(pair.slice(name.length + 1).replace(/\+/g, ' ')); } catch { return ''; }
   }
   function pageUrl(page, params = {}) {
+    if (state.data && state.period !== 7 && params.period === undefined) params = { ...params, period: state.period };
     if (state.data && currentPage() === page) {
-      if (['overview', 'models', 'activity'].includes(page) && state.period !== 7 && params.period === undefined) params = { ...params, period: state.period };
       if (['overview', 'models'].includes(page) && state.model && params.filter === undefined) params = { ...params, filter: state.model };
       const q = page === 'skills' ? $('skills-search').value.trim() : page === 'activity' ? $('history-search').value.trim() : '';
       if (q && params.q === undefined) params = { ...params, q };
@@ -618,10 +733,8 @@
     const key = { models: 'model', agents: 'agent', skills: 'skill', activity: queryValue('task') ? 'task' : 'run' }[page];
     const params = {};
     if (key && queryValue(key)) params[key] = queryValue(key);
-    if (['overview', 'models', 'activity'].includes(page)) {
-      if (state.period !== 7) params.period = state.period;
-      if (state.model && page !== 'activity') params.filter = state.model;
-    }
+    if (state.period !== 7) params.period = state.period;
+    if (state.model && ['overview', 'models'].includes(page)) params.filter = state.model;
     const q = page === 'skills' ? $('skills-search').value.trim() : page === 'activity' ? $('history-search').value.trim() : '';
     if (q) params.q = q;
     window.history.replaceState(null, '', pageUrl(page, params));
@@ -656,7 +769,7 @@
     if (currentPage() === 'models' && queryValue('model')) {
       const name = queryValue('model'), model = state.models.find((row) => row.model === name);
       const box = details('model-detail', model ? name : 'Model unavailable', 'models', model ? [
-        ['Recorded tokens', count(model.totalTokens)], ['Model entries', count(model.requests)],
+        ['Recorded tokens', count(model.totalTokens)], ['Model entries', model.requests === null ? 'Unavailable' : count(model.requests)],
         ['Provider', [...model.providers].join(', ')], ['Reported cost', model.missingCost ? 'Incomplete or unavailable' : currencyFormat.format(model.cost)]
       ] : []);
       if (model) {
@@ -669,20 +782,32 @@
         const list = element('ul', 'detail-records');
         state.data.daily.filter((row) => row.model === name && within(row.date, range.start, range.end) && within(row.date, state.data.range.start, state.data.range.end))
           .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30).forEach((row) =>
-            list.append(element('li', '', row.date + ' · ' + count(row.totalTokens) + ' tokens · ' + count(row.requests) + ' entries · ' +
+            list.append(element('li', '', row.date + ' · ' + count(row.totalTokens) + ' tokens · ' + (row.requests === null ? 'entries unavailable' : count(row.requests) + ' entries') + ' · ' +
               categories.map(([key, label]) => label + ': ' + tokenLabel(row[key])).join(' · '))));
         box.append(list);
       } else box.append(element('p', '', 'No matching model in the selected range. Clear filters or return to all models.'));
     }
     if (currentPage() === 'agents' && queryValue('agent')) {
-      const agent = state.data.agents?.find((row) => row.id === queryValue('agent'));
+      const selected = queryValue('agent');
+      const agent = state.data.agents?.find((row) => row.id === selected) ??
+        (state.data.agentRunDaily?.some((row) => row.agentId === selected) ? { id: selected, name: selected, scopedSessions: null, usageState: 'observed' } : null);
       const box = details('agent-detail', agent?.name || 'Agent unavailable', 'agents', agent ? [
         ['Role', agent.role], ['Configured model', agent.configuredModel], ['Runtime', agent.runtime],
-        ['AFP-scoped sessions', count(agent.scopedSessions)],
+        ['AFP-scoped sessions (whole snapshot)', agent.scopedSessions == null ? null : count(agent.scopedSessions)],
         ['Usage evidence', agent.usageState === 'observed' ? 'Observed in scope' : agent.usageState === 'no_scoped_sessions' ? 'No scoped sessions' : 'Unavailable']
       ] : []);
       if (agent) {
         box.append(element('p', 'fine-print', 'Configured does not mean currently running. The directory may be wider than AFP usage scope.'));
+        const view = observationView('agents');
+        const observed = view.entries.find((row) => row.id === agent.id);
+        box.append(element('h3', '', 'Observed runs · selected dates'), detailField('Observed runs', observed ? count(observed.count) : 'No observations available; not zero'));
+        box.append(element('p', 'fine-print', view.label + '. Lifecycle-evidenced runs only; latest retained audit date. Model filters do not apply. Counts are retained observations, not complete historical totals.' + (view.coverage === 'partial' ? ' Partial evidence: known lower bound.' : '')));
+        if (view.rows.length) {
+          const runs = element('ul', 'detail-records');
+          view.rows.filter((row) => row.agentId === agent.id).sort((a, b) => b.date.localeCompare(a.date))
+            .forEach((row) => runs.append(element('li', '', row.date + ' · ' + count(row.count) + ' observed runs')));
+          box.append(runs);
+        }
         const daily = (state.data.agentDaily?.filter((row) => row.agentId === agent.id) ?? [])
           .sort((a, b) => b.date.localeCompare(a.date) || a.model.localeCompare(b.model));
         if (daily.length) { box.append(element('h3', '', 'Attributed usage · whole snapshot window'));
@@ -690,23 +815,33 @@
             (daily.length > 10 ? 'Latest 10 of ' + count(daily.length) + ' daily model records shown.' : count(daily.length) + ' daily model records shown.') + ' Not the selected date/model filter.'));
           const list = element('ul', 'detail-records'); daily.slice(0, 10).forEach((row) => list.append(element('li', '', row.date + ' · ' + row.model + ' · ' + tokenLabel(row.totalTokens) + ' tokens'))); box.append(list); }
         const tasks = state.data.tasks?.filter((row) => row.agentId === agent.id) ?? [];
-        if (tasks.length) { box.append(element('h3', '', 'Recorded work'));
+        if (tasks.length) { box.append(element('h3', '', 'Recorded work · whole snapshot'));
           tasks.slice(0, 10).forEach((task) => detailLink(box, task.title, pageUrl('activity', { task: task.id }))); }
       } else box.append(element('p', '', 'This agent is not in the public directory.'));
     }
     if (currentPage() === 'skills' && queryValue('skill')) {
       const skill = state.data.skillCatalog?.find((row) => row.id === queryValue('skill')) ??
         state.data.skills.find((row) => row.name === queryValue('skill'));
+      const skillView = observationView('skills');
+      const selectedReads = skillView.entries.find((row) => row.id === skill?.name)?.count;
+      const datedReads = state.data.skillDaily != null;
       const box = details('skill-detail', skill?.name || 'Skill unavailable', 'skills', skill ? [
         ['Source', skill.source], ['Eligible', skill.eligible == null ? null : skill.eligible ? 'Yes' : 'No'],
         ['Disabled', skill.disabled == null ? null : skill.disabled ? 'Yes' : 'No'],
         ['Visible to selected model', skill.modelVisible == null ? null : skill.modelVisible ? 'Yes' : 'No'],
         ['User-invocable', skill.userInvocable == null ? null : skill.userInvocable ? 'Yes' : 'No'],
-        ['Observed instruction reads', skill.observedReads == null ? skill.count == null ? null : count(skill.count) : count(skill.observedReads)],
+        ['Observed instruction reads', datedReads ? selectedReads == null ? 'No observations available; not zero' : count(selectedReads) : selectedReads != null ? count(selectedReads) : skill.observedReads == null ? skill.count == null ? null : count(skill.count) : count(skill.observedReads)],
         ['Last observed', skill.lastObservedAt || skill.lastUsedAt ? fullDateFormat.format(new Date(skill.lastObservedAt || skill.lastUsedAt)) + ' Zurich' : null]
       ] : []);
       if (skill) { box.insertBefore(element('p', 'detail-summary', skill.descriptionSource !== 'unavailable' && skill.description ? skill.description : 'Public skill description unavailable.'), box.children[2]);
-        box.append(element('p', 'fine-print', 'Main agent skill directory. Observed instruction reads do not prove execution or completed work.'));
+        box.append(element('p', 'fine-print', skillView.label + '. Observed instruction reads do not prove execution or completed work. Counts across selected scoped sessions; main-agent catalog metadata and last-observed timestamp are snapshot-wide. Model filters do not apply.' + (skillView.coverage === 'partial' ? ' Partial evidence: known lower bound.' : '')));
+        if (datedReads) {
+          box.append(element('h3', '', 'Instruction reads · selected dates'));
+          const days = element('ul', 'detail-records');
+          skillView.rows.filter((row) => row.name === skill.name).sort((a, b) => b.date.localeCompare(a.date))
+            .forEach((row) => days.append(element('li', '', row.date + ' · ' + count(row.count) + ' instruction reads')));
+          box.append(days);
+        }
       } else box.append(element('p', '', 'No matching public skill detail is available.'));
     }
     if (currentPage() === 'activity' && (queryValue('task') || queryValue('run'))) {
@@ -753,15 +888,16 @@
   function renderRoute(focus = true) {
     const page = currentPage(); state.page = page;
     restoreFilters();
-    if (state.data) { renderSkills(); renderFiltered(); }
+    if (state.data) renderFiltered();
     pages.forEach((name) => { $(name + '-page').hidden = name !== page; });
     document.querySelectorAll('.nav-link').forEach((link) => {
       const active = link.getAttribute('href') === '/usage' + (page === 'overview' ? '' : '/' + page);
       link.classList.toggle('is-active', active);
       if (active) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
     });
-    $('global-filters').hidden = page === 'agents' || page === 'skills';
-    $('model-control').hidden = page === 'activity';
+    $('global-filters').hidden = page === 'graft';
+    $('model-control').hidden = !['overview', 'models'].includes(page);
+    for (const kind of ['agents', 'skills']) $(kind + '-usage-panel').hidden = page === kind && !!queryValue(kind === 'agents' ? 'agent' : 'skill');
     $('models-overview').hidden = page === 'models' && !!queryValue('model');
     $('agents-list').hidden = page === 'agents' && !!queryValue('agent');
     $('skills').hidden = page === 'skills' && !!queryValue('skill');
@@ -780,7 +916,7 @@
     const link = event.target.closest?.('a[href]');
     if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target || link.hasAttribute('download')) return;
     const href = link.getAttribute('href');
-    if (!href?.startsWith('/usage') || !/^\/usage(?:\/(?:models|agents|skills|activity))?(?:\?|$)/.test(href)) return;
+    if (!href?.startsWith('/usage') || !/^\/usage(?:\/(?:models|agents|skills|activity|graft))?(?:\?|$)/.test(href)) return;
     event.preventDefault(); navigate(href);
   });
   window.addEventListener('popstate', () => renderRoute());
@@ -802,13 +938,13 @@
     state.historyLimit = 20;
     document.querySelectorAll('[data-period]').forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
     renderFiltered(); syncFilters();
-    announce('Showing ' + (state.period === 1 ? 'today' : 'the last ' + state.period + ' days') + ' in Europe/Zurich. Skill counts remain snapshot-wide.');
+    announce('Showing ' + (state.period === 1 ? 'today' : 'the last ' + state.period + ' days') + ' in Europe/Zurich. Skill counts use dated observations where available; older snapshots remain snapshot-wide.');
   }));
   $('model-filter').addEventListener('change', (event) => {
     state.model = event.target.value;
     state.historyLimit = 20;
     renderFiltered(); syncFilters();
-    announce('Showing ' + (state.model || 'all models') + '. Skill reads remain snapshot-wide; run models are not attributed.');
+    announce('Showing ' + (state.model || 'all models') + '. Skill and agent charts ignore model filters; run models are not attributed.');
   });
   document.querySelectorAll('[data-measure]').forEach((button) => button.addEventListener('click', () => {
     state.measure = button.dataset.measure;
@@ -880,12 +1016,19 @@
 
   // No usage data is persisted. A restored page fetches a fresh public snapshot.
   window.addEventListener('pageshow', (event) => { if (event.persisted) { clearData(); loadUsage(); } });
-  window.setInterval(() => {
-    if (!state.data || document.hidden) return;
+  // Poll the existing read-only snapshot, not the Gateway or a new model call.
+  // loadUsage guards overlapping requests and retains the last good data on failure.
+  function refreshVisibleUsage() {
+    if (document.hidden) return;
     updateFreshness();
     const today = dateKey(Date.now());
-    if (today !== state.today) { state.today = today; renderFiltered(); }
-  }, 60000);
+    if (state.data && today !== state.today) { state.today = today; renderFiltered(); }
+    return loadUsage();
+  }
+  window.setInterval(refreshVisibleUsage, 60000);
+  window.setInterval(() => { if (!document.hidden) loadActiveAgents(); }, 15000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshVisibleUsage(); loadActiveAgents(); } });
   renderRoute(false);
   loadUsage();
+  loadActiveAgents();
 })();
