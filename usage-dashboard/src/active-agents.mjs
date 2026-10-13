@@ -26,7 +26,7 @@ export function projectActiveSessions(report, now = Date.now()) {
 }
 
 export function createActiveAgentsSource({
-  rpc = (method, params) => gatewayRpc(method, params, undefined, { timeout: TIMEOUT_MS, maxBuffer: 1024 * 1024 }),
+  rpc = (method, params, { signal }) => gatewayRpc(method, params, undefined, { timeout: TIMEOUT_MS, maxBuffer: 1024 * 1024, signal }),
   clock = Date.now, ttlMs = CACHE_MS, timeoutMs = TIMEOUT_MS
 } = {}) {
   if (!Number.isFinite(ttlMs) || ttlMs < 0 || ttlMs > CACHE_MS ||
@@ -36,13 +36,14 @@ export function createActiveAgentsSource({
     if (cached && clock() < expires) return publicActiveAgents(cached, clock());
     if (!pending) pending = (async () => {
       let timer;
+      const controller = new AbortController();
       try {
         // activeOnly is live registry state before pagination, not activeMinutes or durable status.
         const report = await Promise.race([
           rpc('sessions.list', { rowMode: 'compact', activeOnly: true, archived: 'all',
             includeGlobal: true, includeUnknown: true, limit: 100,
-            includeDerivedTitles: false, includeLastMessage: false, includeActivitySummary: false }),
-          new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Source timeout')), timeoutMs); })
+            includeDerivedTitles: false, includeLastMessage: false, includeActivitySummary: false }, { signal: controller.signal }),
+          new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error('Source timeout')); }, timeoutMs); })
         ]);
         cached = projectActiveSessions(report, clock());
       } catch { cached = unavailableAgents(clock()); }

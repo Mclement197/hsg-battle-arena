@@ -1,5 +1,4 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { executeUntilClosed } from './process-reader.mjs';
 import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
@@ -15,16 +14,16 @@ import { buildDetails, DETAIL_LIMITS, readPublicMetadata, sessionDetails } from 
 import { collectInstallation } from './installation-usage.mjs';
 
 export const CONVERSATION_AGENTS = Object.freeze(['main', 'dev-builder', 'dev-ui', 'dev-content', 'dev-scout', 'dev-review', 'dev-qa', 'dev-security']);
-const execute = promisify(execFile);
+const execute = executeUntilClosed;
 const READ_METHODS = new Set(['sessions.describe', 'sessions.list', 'sessions.usage', 'audit.activity.list', 'agents.list', 'skills.status', 'users.self', 'usage.cost']);
 export const LIMITS = Object.freeze({ sessions: 200, allSessions: 2000, sessionPages: 20, auditPages: 10, auditEvents: 20000, dailyDetails: 80, ...DETAIL_LIMITS });
 const META = { includeDerivedTitles: false, includeLastMessage: false, includeActivitySummary: false };
 
-export async function gatewayRpc(method, params, runner = execute, { timeout = 60000, maxBuffer = 16 * 1024 * 1024 } = {}) {
+export async function gatewayRpc(method, params, runner = execute, { timeout = 60000, maxBuffer = 16 * 1024 * 1024, signal } = {}) {
   if (!READ_METHODS.has(method)) fail('RPC_METHOD_NOT_ALLOWED');
   try {
     const { stdout } = await runner('openclaw', ['gateway', 'call', method, '--json', '--params', JSON.stringify(params)], {
-      encoding: 'utf8', timeout, maxBuffer, windowsHide: true
+      encoding: 'utf8', timeout, maxBuffer, windowsHide: true, ...(signal ? { signal } : {})
     });
     return JSON.parse(stdout);
   } catch {

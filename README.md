@@ -6,10 +6,11 @@ A browser-based, turn-based classroom battle game inspired by Pokémon and theme
 
 - [Project proposal](docs/project-proposal.md) — the group’s proposed experience, features, and gameplay.
 - [Repository rules](AGENTS.md) — working agreements for contributors and coding assistants.
+- [Development workflow](docs/development-workflow.md) — project organization, scoped assignments, review, and integration.
 
 ## Current status
 
-Proposal and repository setup only. No game implementation, technology stack, build commands, or deployment has been selected yet.
+Proposal and repository setup only. No game implementation, technology stack, build commands, or deployment has been selected yet. The existing untracked `usage-dashboard/` is separate dashboard work, not the game implementation.
 
 ## Group
 

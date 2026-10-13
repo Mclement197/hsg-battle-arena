@@ -31,6 +31,7 @@ function frontend({ boot = false, status = 200, payload = collectorSnapshot(), p
   const ids = new Set([...html.matchAll(/id="([^"]+)"/g)].map(match => match[1]));
   const requests = [];
   const intervals = [];
+  const usageTimers = [];
   let responsePayload = payload;
   let fetchWait;
   let responseStatus = status;
@@ -58,7 +59,7 @@ function frontend({ boot = false, status = 200, payload = collectorSnapshot(), p
     dispatch(name, event = {}) { this.events?.[name]?.(event); }
   }
   const document = {
-    hidden: false,
+    body: new Node(), hidden: false,
     addEventListener(name, fn) { listeners.set('document:' + name, fn); },
     getElementById: (id) => { assert.ok(ids.has(id) || nodes.has(id), 'No HTML element: ' + id); if (!nodes.has(id)) nodes.set(id, new Node()); return nodes.get(id); },
     querySelector: (selector) => { assert.equal(selector, '.skip-link'); return new Node('a'); },
@@ -76,11 +77,11 @@ function frontend({ boot = false, status = 200, payload = collectorSnapshot(), p
     : '})();');
   class Clock extends Date { static now() { return now.getTime(); } }
   let graphMounts = 0;
-  const context = { mountGraphMock: (host) => { graphMounts++; host.textContent = 'Mounted graph fixture'; }, document, window: { location, history: { pushState(_state, _title, href) { setLocation(href); }, replaceState(_state, _title, href) { setLocation(href); } }, scrollTo() {}, setTimeout, clearTimeout, setInterval(fn, delay) { intervals.push({ fn, delay }); }, addEventListener(name, fn) { listeners.set('window:' + name, fn); } },
+  const context = { mountGraphMock: (host) => { graphMounts++; host.textContent = 'Mounted graph fixture'; }, document, window: { location, history: { pushState(_state, _title, href) { setLocation(href); }, replaceState(_state, _title, href) { setLocation(href); } }, scrollTo() {}, setTimeout(fn, delay) { if (delay === 5000) { const timer = { fn, delay, active: true }; usageTimers.push(timer); return -usageTimers.length; } return setTimeout(fn, delay); }, clearTimeout(id) { if (id < 0) usageTimers[-id - 1].active = false; else clearTimeout(id); }, setInterval(fn, delay) { intervals.push({ fn, delay }); }, addEventListener(name, fn) { listeners.set('window:' + name, fn); } },
     Date: Clock, Intl, Map, Set, Math, Number, String, Object, Array, RegExp, Option: class {}, console, AbortController,
     fetch: async (path, options) => { if (path === '/usage/api/active-agents') { activeRequests.push({ path, options }); await activeWait; return { ok: activeStatus === 200, status: activeStatus, json: async () => activePayload }; } requests.push({ path, options }); await fetchWait; return { ok: responseStatus === 200, status: responseStatus, json: async () => responsePayload }; } };
   vm.runInNewContext(script, context, { filename: 'public/app.js' });
-  return { ...context.contract, graphMounts: () => graphMounts, nodes, get: document.getElementById, loaded: context.loaded, activeLoaded: context.activeLoaded, requests, activeRequests, intervals, document, html, location, listeners, setActive(value) { activePayload = value; }, setActiveStatus(value) { activeStatus = value; }, setActiveWait(value) { activeWait = value; }, setPayload(value) { responsePayload = value; }, setFetchWait(value) { fetchWait = value; }, setStatus(value) { responseStatus = value; } };
+  return { ...context.contract, graphMounts: () => graphMounts, nodes, get: document.getElementById, loaded: context.loaded, activeLoaded: context.activeLoaded, requests, activeRequests, intervals, usageTimers, document, html, location, listeners, setActive(value) { activePayload = value; }, setActiveStatus(value) { activeStatus = value; }, setActiveWait(value) { activeWait = value; }, setPayload(value) { responsePayload = value; }, setFetchWait(value) { fetchWait = value; }, setStatus(value) { responseStatus = value; } };
 }
 const cells = (row) => row.children.map((cell) => cell.textContent);
 const descendant = (node, className) => {
@@ -160,8 +161,8 @@ test('visible dashboard polls and displays newer token snapshots without manual 
   newer.generatedAt = new Date(now.getTime() + 60000).toISOString();
   newer.daily[0].totalTokens = 340;
   ui.setPayload(newer);
-  const poll = ui.intervals.find(({ delay }) => delay === 60000);
-  assert.ok(poll, 'one-minute polling timer is installed');
+  const poll = ui.usageTimers.find(({ delay }) => delay === 5000);
+  assert.ok(poll, 'response-paced five-second polling timer is installed');
   await poll.fn();
   assert.equal(ui.requests.length, 2, 'timer requests the latest snapshot');
   assert.equal(ui.get('metric-tokens').textContent, '340');
@@ -170,7 +171,7 @@ test('visible dashboard polls and displays newer token snapshots without manual 
 
 test('polling pauses while hidden and refreshes immediately on becoming visible', async () => {
   const ui = frontend({ boot: true, path: '/usage/agents', search: '?agent=main&period=7', payload: richSnapshot() }); await ui.loaded;
-  const poll = ui.intervals.find(({ delay }) => delay === 60000);
+  const poll = ui.usageTimers.find(({ delay }) => delay === 5000);
   ui.document.hidden = true;
   await poll.fn();
   await ui.listeners.get('document:visibilitychange')();
@@ -187,7 +188,7 @@ test('polling pauses while hidden and refreshes immediately on becoming visible'
 test('timer, resume and manual refresh cannot overlap pending snapshot requests', async () => {
   const ui = frontend({ boot: true }); await ui.loaded;
   let release; ui.setFetchWait(new Promise(resolve => { release = resolve; }));
-  const poll = ui.intervals.find(({ delay }) => delay === 60000);
+  const poll = ui.usageTimers.find(({ delay }) => delay === 5000);
   const active = poll.fn();
   assert.equal(ui.state.pending, true);
   await poll.fn();
@@ -201,7 +202,7 @@ test('timer, resume and manual refresh cannot overlap pending snapshot requests'
 test('failed automatic refresh retains good usage and a later poll recovers', async () => {
   const ui = frontend({ boot: true }); await ui.loaded;
   const before = ui.state.data;
-  const poll = ui.intervals.find(({ delay }) => delay === 60000);
+  const poll = ui.usageTimers.find(({ delay }) => delay === 5000);
   ui.setStatus(503); await poll.fn();
   assert.equal(ui.state.data, before);
   assert.equal(ui.state.stale, true);
@@ -215,7 +216,7 @@ test('automatic polling retries when initial snapshot is unavailable', async () 
   const ui = frontend({ boot: true, status: 503 }); await ui.loaded;
   assert.equal(ui.state.data, null);
   ui.setStatus(200);
-  await ui.intervals.find(({ delay }) => delay === 60000).fn();
+  await ui.usageTimers.find(({ delay }) => delay === 5000).fn();
   assert.ok(ui.state.data);
   assert.equal(ui.requests.length, 2);
 });
@@ -537,6 +538,8 @@ test('installation aggregates show tokens without inventing model entries or ses
   const data = installationSnapshot({ daily: [{ date: range.end, ...totals }], totals, updatedAt: now.getTime(), cacheStatus: { status: 'fresh' } }, range, now);
   const ui = frontend({ boot: true, payload: data }); await ui.loaded;
   assert.equal(ui.get('metric-tokens').textContent, '170');
+  assert.equal(ui.get('metric-installation-cost').hidden, false);
+  assert.equal(ui.get('metric-cost').textContent, '$0.02');
   assert.equal(ui.get('metric-calls').textContent, '—');
   assert.equal(ui.get('metric-model').textContent, 'Unavailable');
   assert.equal(ui.get('coverage-summary').textContent, 'Session count unavailable');
@@ -550,7 +553,7 @@ test('installation aggregates show tokens without inventing model entries or ses
 test('active agents distinguish idle, stale and unavailable, polling visible tabs without overlap', async () => {
   const ui = frontend({ boot: true }); await ui.loaded; await ui.activeLoaded;
   assert.equal(ui.get('active-agents-status').textContent, 'Idle · no agents running');
-  const tick = ui.intervals.find(row => row.delay === 15000).fn;
+  const tick = ui.intervals.find(row => row.delay === 5000).fn;
   ui.setActive({ observedAt: now.toISOString(), status: 'ok', agents: [{ id: 'dev-ui', name: 'UI Engineer' }] });
   await ui.loadActiveAgents();
   assert.equal(ui.get('active-agents-list').children[0].textContent, 'UI Engineer');
@@ -566,11 +569,11 @@ test('active agents distinguish idle, stale and unavailable, polling visible tab
   ui.setActive({ observedAt: new Date(now.getTime() - 31000).toISOString(), status: 'ok', agents: [{ id: 'main', name: 'Main' }] });
   await ui.loadActiveAgents();
   assert.match(ui.get('active-agents-status').textContent, /stale/);
-  assert.equal(ui.get('active-agents-list').children.length, 0);
+  assert.equal(ui.get('active-agents-list').children[0].textContent, 'UI Engineer');
   ui.setActiveStatus(404); await ui.loadActiveAgents();
   assert.match(ui.get('active-agents-status').textContent, /stale.*unavailable/);
   const old = frontend({ boot: true }); old.setActiveStatus(404); await old.loaded; await old.activeLoaded;
-  old.intervals.find(row => row.delay === 15000).fn(); await Promise.resolve(); await Promise.resolve();
+  old.intervals.find(row => row.delay === 5000).fn(); await Promise.resolve(); await Promise.resolve();
   assert.match(old.get('active-agents-status').textContent, /unknown.*unavailable/);
 });
 test('all-conversations mode labels partial retention and withholds activity while preserving token totals', async () => {
@@ -587,4 +590,118 @@ test('all-conversations mode labels partial retention and withholds activity whi
   const legacy = collectorSnapshot(); delete legacy.scopeMode;
   const scoped = frontend({ boot: true, payload: legacy }); await scoped.loaded;
   assert.match(scoped.get('scope-label').textContent, /Project-only/);
+});
+
+test('installation view is compact and excludes unsupported attribution on every route', async () => {
+  const totals = { input: 100, output: 25, cacheRead: 40, cacheWrite: 5, totalTokens: 170, totalCost: 0.02, missingCostEntries: 0 };
+  const data = installationSnapshot({ daily: [{ date: range.end, ...totals }], totals, updatedAt: now.getTime(), cacheStatus: { status: 'fresh' } }, range, now);
+  for (const path of ['/usage', '/usage/models', '/usage/agents', '/usage/skills', '/usage/activity']) {
+    const ui = frontend({ boot: true, path, payload: data }); await ui.loaded;
+    assert.ok(ui.document.body.classList.values.has('installation-mode'), path);
+    assert.equal(ui.get('metric-tokens').textContent, '170');
+    assert.equal(ui.get('metric-cost').textContent, '$0.02');
+    assert.equal(ui.get('model-control').hidden, true);
+    assert.equal(ui.get('global-filters').hidden, !['/usage', '/usage/models'].includes(path));
+    assert.match(ui.html, /Installation totals only.*aggregate-note|aggregate-note.*Installation totals only/s);
+    assert.equal(ui.get('coverage-source').textContent, 'Not supplied by source');
+  }
+  const css = readFileSync(new URL('../public/styles.css', import.meta.url), 'utf8');
+  for (const selector of ['.usage-charts', '.models-panel', '#agents-page > :not(.aggregate-note)',
+    '#skills-page > :not(.aggregate-note)', '#activity-page > :not(.aggregate-note)', '#metric-skills-link']) {
+    assert.ok(css.includes(selector), selector + ' hidden in aggregate mode');
+  }
+  const scoped = frontend({ boot: true, payload: richSnapshot() }); await scoped.loaded;
+  assert.equal(scoped.document.body.classList.values.has('installation-mode'), false);
+  assert.equal(scoped.get('global-filters').hidden, false);
+  assert.equal(scoped.get('metric-installation-cost').hidden, true);
+});
+
+test('unchanged snapshots avoid repaint, preserve search and show source versus collection time', async () => {
+  const data = richSnapshot(); data.sourceUpdatedAt = new Date(now.getTime() - 8 * 60_000).toISOString();
+  const ui = frontend({ boot: true, path: '/usage/skills', search: '?q=research', payload: data }); await ui.loaded;
+  const chart = ui.get('timeline-chart');
+  const list = ui.get('skills-list');
+  const originalChart = chart.children[0], originalList = list.children[0];
+  const updated = structuredClone(data); updated.generatedAt = new Date(now.getTime() + 1000).toISOString();
+  ui.setPayload(updated);
+  await ui.usageTimers.find(row => row.delay === 5000).fn();
+  assert.equal(chart.children[0], originalChart);
+  assert.equal(list.children[0], originalList);
+  assert.equal(ui.get('skills-search').value, 'research');
+  assert.equal(ui.location.search, '?q=research');
+  assert.match(ui.get('freshness-text').textContent, /latest rollup refresh/);
+  assert.match(ui.get('freshness').title, /Last successful sample.*Latest reported rollup refresh.*not a completeness watermark/);
+  assert.match(ui.get('coverage-source').textContent, /Oct 2026/);
+  ui.setStatus(503); await ui.loadUsage();
+  assert.equal(list.children[0], originalList);
+  assert.match(ui.get('freshness-text').textContent, /refresh failed/);
+});
+
+test('installation missing reported cost is unavailable rather than free', async () => {
+  const totals = { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, totalCost: 0.01, missingCostEntries: 1 };
+  const data = installationSnapshot({ daily: [{ date: range.end, ...totals }], totals, updatedAt: now.getTime(), cacheStatus: { status: 'fresh' } }, range, now);
+  const ui = frontend({ boot: true, payload: data }); await ui.loaded;
+  assert.equal(ui.get('metric-cost').textContent, 'Unavailable');
+  assert.match(ui.get('metric-cost-note').textContent, /incomplete/);
+});
+
+function liveInstallationSnapshot() {
+  const totals = { input: 100, output: 25, cacheRead: 40, cacheWrite: 5, totalTokens: 170, totalCost: 0.02, missingCostEntries: 0 };
+  const value = installationSnapshot({ daily: [{ date: range.end, ...totals }], totals,
+    updatedAt: now.getTime(), cacheStatus: { status: 'fresh', refreshedAt: now.getTime() - 1000 } }, range, now);
+  value.sourceUpdatedAt = value.source.refreshedAt;
+  value.live = { transport: 'poll', pollIntervalMs: 5000, sampledAt: now.toISOString(), lastAttemptAt: now.toISOString(),
+    status: 'ok', retryAfterMs: 5000, revision: 'a'.repeat(64) };
+  return value;
+}
+
+test('live receipts and degraded/loading states update without repainting aggregate evidence', async () => {
+  const original = liveInstallationSnapshot();
+  const ui = frontend({ boot: true, payload: original }); await ui.loaded;
+  const row = ui.get('daily-table-body').children[0];
+  const degraded = structuredClone(original);
+  degraded.live.status = 'degraded'; degraded.live.retryAfterMs = 20000;
+  degraded.live.lastAttemptAt = new Date(now.getTime() + 5000).toISOString();
+  ui.setPayload(degraded); await ui.loadUsage();
+  assert.equal(ui.get('daily-table-body').children[0], row);
+  assert.match(ui.get('notice-title').textContent, /source unavailable/);
+  assert.match(ui.get('freshness-text').textContent, /source unavailable, last good totals/);
+  assert.equal(ui.get('freshness').classList.values.has('is-stale'), true);
+  assert.match(ui.get('coverage-source').textContent, /not a completeness watermark/);
+  const loading = structuredClone(degraded); loading.live.status = 'loading';
+  ui.setPayload(loading); await ui.loadUsage();
+  assert.match(ui.get('notice-title').textContent, /source is loading/);
+  assert.equal(ui.get('daily-table-body').children[0], row);
+  const fresh = structuredClone(original);
+  fresh.generatedAt = new Date(now.getTime() + 5000).toISOString();
+  fresh.source.refreshedAt = fresh.sourceUpdatedAt = new Date(now.getTime() + 4000).toISOString();
+  fresh.live.sampledAt = fresh.generatedAt; fresh.live.lastAttemptAt = fresh.generatedAt;
+  ui.setPayload(fresh); await ui.loadUsage();
+  assert.equal(ui.get('notice').hidden, true);
+  assert.equal(ui.get('daily-table-body').children[0], row);
+  assert.equal(ui.get('freshness').classList.values.has('is-stale'), false);
+  const changed = structuredClone(fresh); changed.daily[0].totalTokens = 200; changed.live.revision = 'b'.repeat(64);
+  ui.setPayload(changed); await ui.loadUsage();
+  assert.notEqual(ui.get('daily-table-body').children[0], row);
+  assert.equal(ui.get('metric-tokens').textContent, '200');
+});
+
+test('usage timer schedules five seconds after completion, pauses hidden and never overlaps', async () => {
+  const ui = frontend({ boot: true, payload: liveInstallationSnapshot() }); await ui.loaded;
+  assert.equal(ui.usageTimers.filter(timer => timer.active).length, 1);
+  const first = ui.usageTimers.at(-1);
+  let release; ui.setFetchWait(new Promise(resolve => { release = resolve; }));
+  const pending = first.fn();
+  assert.equal(first.active, false);
+  assert.equal(ui.state.pending, true);
+  await first.fn();
+  assert.equal(ui.requests.length, 2);
+  assert.equal(ui.usageTimers.filter(timer => timer.active).length, 0);
+  release(); await pending;
+  assert.equal(ui.usageTimers.filter(timer => timer.active).length, 1);
+  ui.document.hidden = true; ui.listeners.get('document:visibilitychange')();
+  assert.equal(ui.usageTimers.filter(timer => timer.active).length, 0);
+  ui.document.hidden = false; await ui.listeners.get('document:visibilitychange')();
+  assert.equal(ui.requests.length, 3);
+  assert.equal(ui.usageTimers.filter(timer => timer.active).length, 1);
 });

@@ -11,6 +11,20 @@ const security = {
   'Strict-Transport-Security': 'max-age=31536000', 'Cache-Control': 'no-store'
 };
 export const GRAFT_VIEWER_PATH = '/graft/viewer/index.html';
+export const MAX_HTTP_WAITERS = 32;
+export function createRequestAdmission() {
+  let active = 0;
+  return () => {
+    if (active >= MAX_HTTP_WAITERS) return null;
+    active++; let released = false;
+    const release = () => {
+      if (released) return;
+      released = true; active--;
+    };
+    // Disconnection does not retire the async handler; keep its slot until finally.
+    return release;
+  };
+}
 export function graftViewerHeaders(html) {
   const hashes = tag => [...html.matchAll(tag === 'script' ? /<script\b[^>]*>([\s\S]*?)<\/script>/gi : /<style\b[^>]*>([\s\S]*?)<\/style>/gi)]
     .map(match => "'sha256-" + createHash('sha256').update(match[1]).digest('base64') + "'").join(' ');
@@ -27,6 +41,25 @@ function response(body, status = 200, headers = {}) {
 const text = (x, max) => typeof x === 'string' && x.length <= max && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(x);
 const count = n => Number.isFinite(n) && n >= 0;
 const date = d => typeof d==='string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && Number.isFinite(Date.parse(d));
+function publicUsageMetadata(value) {
+  const timestamp = x => typeof x === 'string' && x.length === 24 && Number.isFinite(Date.parse(x)) && new Date(x).toISOString() === x;
+  const result = {};
+  const s = value.source;
+  if (s?.method === 'usage.cost' && ['fresh', 'refreshing', 'partial', 'stale'].includes(s.status) &&
+      timestamp(s.reportUpdatedAt) && (s.refreshedAt === null || timestamp(s.refreshedAt))) {
+    result.source = { method: 'usage.cost', status: s.status, reportUpdatedAt: s.reportUpdatedAt, refreshedAt: s.refreshedAt };
+    result.sourceUpdatedAt = s.refreshedAt; // Latest observed rollup refresh, not aggregate assembly time.
+  }
+  const l = value.live;
+  if (l?.transport === 'poll' && l.pollIntervalMs === 5000 && timestamp(l.sampledAt) &&
+      (l.lastAttemptAt === null || timestamp(l.lastAttemptAt)) && ['ok', 'degraded', 'loading'].includes(l.status) &&
+      Number.isFinite(l.retryAfterMs) && l.retryAfterMs >= 0 && l.retryAfterMs <= 60000 &&
+      typeof l.revision === 'string' && /^[a-f0-9]{64}$/.test(l.revision)) {
+    result.live = { transport: 'poll', pollIntervalMs: 5000, sampledAt: l.sampledAt, lastAttemptAt: l.lastAttemptAt,
+      status: l.status, retryAfterMs: l.retryAfterMs, revision: l.revision };
+  }
+  return result;
+}
 export function validateSnapshot(value) {
   if (value?.scopeMode !== undefined && !['scoped', 'all-conversations', 'installation'].includes(value.scopeMode)) return false;
   if (!value || value.schemaVersion!==1 || !Number.isFinite(Date.parse(value.generatedAt)) || !value.range || !date(value.range.start) || !date(value.range.end) || value.range.start>value.range.end || value.range.timeZone!=='Europe/Zurich' || !text(value.scopeLabel,160)) return false;
@@ -42,7 +75,7 @@ export function publicSnapshot(value) {
   if (!validateSnapshot(value)) throw new Error('Invalid snapshot');
   const pick = (object, keys) => Object.fromEntries(keys.map(key => [key, object[key]]));
   if (value.scopeMode === 'installation') return {
-    ...pick(value, ['schemaVersion', 'generatedAt']), scopeMode: 'installation', scopeLabel: INSTALLATION_LABEL,
+    ...pick(value, ['schemaVersion', 'generatedAt']), ...publicUsageMetadata(value), scopeMode: 'installation', scopeLabel: INSTALLATION_LABEL,
     range: pick(value.range, ['start', 'end', 'timeZone']),
     daily: value.daily.map(row => ({ ...pick(row, ['date', 'input', 'output', 'cacheRead', 'cacheWrite', 'totalTokens', 'costUsd']),
       model: 'All models', provider: 'All providers', requests: null })),

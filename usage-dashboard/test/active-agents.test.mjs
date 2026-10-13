@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createActiveAgentsSource, projectActiveSessions, publicActiveAgents } from '../src/active-agents.mjs';
+import { createSharedGatewayReader } from '../src/live-usage.mjs';
 import { handle } from '../src/handler.mjs';
 const at = Date.parse('2026-10-13T12:00:00Z');
 const report = (sessions = [], ts = at) => ({ ts, sessions, hasMore: false, nextOffset: null });
@@ -50,4 +51,15 @@ test('public endpoint is independent of usage collection, privacy projected and 
   for(const missing of [{},{ACTIVE_AGENTS:async()=>{throw new Error('PRIVATE');}},{ACTIVE_AGENTS:async()=>({observedAt:new Date(now-16000).toISOString(),status:'ok',agents:[]})}]) {
     const result=await handle(new Request(url),missing);assert.equal(result.status,200);assert.equal((await result.json()).status,'unavailable');
   }
+});
+
+
+test('expired queued active read aborts before shared child admission', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] }); let release, calls = 0;
+  const reader = createSharedGatewayReader(async () => { calls++; return await new Promise(resolve => { release = resolve; }); });
+  const first = reader('usage.cost', {}); for (let i = 0; i < 5; i++) await Promise.resolve();
+  const get = createActiveAgentsSource({ rpc: reader, timeoutMs: 100 });
+  const queued = get(); t.mock.timers.tick(100);
+  assert.equal((await queued).status, 'unavailable'); release({}); await first;
+  for (let i = 0; i < 10; i++) await Promise.resolve(); assert.equal(calls, 1);
 });

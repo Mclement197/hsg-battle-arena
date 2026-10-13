@@ -5,6 +5,8 @@
   const TZ = 'Europe/Zurich';
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const DAY_MS = 86400000;
+  const USAGE_POLL_MS = 5000;
+  const ACTIVE_POLL_MS = 5000;
   const categories = [
     ['input', 'New input', 'category-input'],
     ['output', 'Output', 'category-output'],
@@ -25,7 +27,7 @@
   const state = {
     data: null, period: 7, model: '', measure: 'tokens', historyLimit: 20,
     skillsExpanded: false, selectedDay: -1, days: [], models: [], pending: false,
-    stale: false, today: '', controller: null, page: 'overview'
+    stale: false, today: '', controller: null, page: 'overview', fingerprint: null
   };
 
   function element(tag, className, content) {
@@ -94,6 +96,19 @@
     const isDay = (value) => isString(value) && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value + 'T00:00:00Z')) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value;
     const assert = (condition) => { if (!condition) throw new Error('invalid-snapshot'); };
     assert(isObject(data) && data.schemaVersion === 1 && isInstant(data.generatedAt));
+    assert(data.sourceUpdatedAt == null || isInstant(data.sourceUpdatedAt));
+    if (data.source != null) {
+      assert(isObject(data.source) && data.source.method === 'usage.cost' &&
+        ['fresh', 'refreshing', 'partial', 'stale'].includes(data.source.status) && isInstant(data.source.reportUpdatedAt) &&
+        (data.source.refreshedAt === null || isInstant(data.source.refreshedAt)) &&
+        (data.sourceUpdatedAt == null || data.sourceUpdatedAt === data.source.refreshedAt));
+    }
+    if (data.live != null) {
+      assert(isObject(data.live) && data.live.transport === 'poll' && data.live.pollIntervalMs === USAGE_POLL_MS &&
+        isInstant(data.live.sampledAt) && (data.live.lastAttemptAt === null || isInstant(data.live.lastAttemptAt)) &&
+        ['ok', 'degraded', 'loading'].includes(data.live.status) && isNumber(data.live.retryAfterMs) &&
+        data.live.retryAfterMs <= 60000 && /^[a-f0-9]{64}$/.test(data.live.revision));
+    }
     assert(isString(data.scopeLabel) && isObject(data.range));
     assert(isDay(data.range.start) && isDay(data.range.end) && data.range.start <= data.range.end && data.range.timeZone === TZ);
     assert(Array.isArray(data.daily) && Array.isArray(data.skills) && Array.isArray(data.requests));
@@ -141,12 +156,9 @@
 
   let activePending = false;
   let activeObservedAt = null;
+  let activeNames = null;
   async function loadActiveAgents() {
     if (document.hidden || activePending) return;
-    if (activeObservedAt && Date.now() - activeObservedAt >= 30000) {
-      $('active-agents-list').replaceChildren();
-      setText('active-agents-status', 'Status stale · checking…');
-    }
     activePending = true;
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 10000);
@@ -162,28 +174,32 @@
           !Array.isArray(data.agents) || !data.agents.every((agent) => typeof agent?.id === 'string' && typeof agent.name === 'string')) throw new Error('unavailable');
       if (Date.now() - observed >= 30000) {
         activeObservedAt = observed;
-        $('active-agents-list').replaceChildren();
-        setText('active-agents-status', 'Status stale · checking…');
+        setText('active-agents-status', 'Last observation stale · checking…');
         return;
       }
       activeObservedAt = observed;
-      $('active-agents-list').replaceChildren(...data.agents.map((agent) => element('li', '', agent.name)));
+      const names = JSON.stringify(data.agents.map((agent) => [agent.id, agent.name]));
+      if (names !== activeNames) {
+        $('active-agents-list').replaceChildren(...data.agents.map((agent) => element('li', '', agent.name)));
+        activeNames = names;
+      }
       setText('active-agents-status', data.agents.length ? count(data.agents.length) + ' active' : 'Idle · no agents running');
     } catch {
-      $('active-agents-list').replaceChildren();
-      setText('active-agents-status', activeObservedAt ? 'Status stale · unavailable' : 'Status unknown · unavailable');
+      setText('active-agents-status', activeObservedAt ? 'Last observation stale · unavailable now' : 'Status unknown · unavailable');
     } finally {
       window.clearTimeout(timeout);
       activePending = false;
     }
   }
 
-  function setBusy(busy, label = 'Refreshing…') {
+  function setBusy(busy, quiet = false) {
     state.pending = busy;
     $('refresh-button').disabled = busy;
     $('retry-button').disabled = busy;
-    $('app-shell').setAttribute('aria-busy', String(busy));
-    $('refresh-button').querySelector('span').textContent = busy ? label : 'Refresh';
+    if (!quiet) {
+      $('app-shell').setAttribute('aria-busy', String(busy));
+      $('refresh-button').querySelector('span').textContent = busy ? 'Refreshing…' : 'Refresh';
+    }
   }
 
   function showNotice(title, message, retry = true) {
@@ -201,6 +217,9 @@
 
   function clearData() {
     state.data = null;
+    state.fingerprint = null;
+    window.clearTimeout(usageTimer);
+    document.body.classList.toggle('installation-mode', false);
     state.requestRows = [];
     state.chartCoordinates = [];
     state.days = [];
@@ -256,24 +275,41 @@
     tableMessage($('model-table-body'), 5, 'No snapshot loaded.');
   }
 
-  async function loadUsage() {
+  let usageTimer;
+  async function loadUsage({ quiet = false } = {}) {
     if (state.pending) return;
-    setBusy(true);
-    announce(state.data ? 'Refreshing your usage snapshot.' : 'Loading your usage snapshot.');
+    window.clearTimeout(usageTimer);
+    setBusy(true, quiet);
+    if (!quiet) announce(state.data ? 'Refreshing your usage snapshot.' : 'Loading your usage snapshot.');
     try {
       const response = await api();
       if (!response.ok) throw new Error('usage-unavailable');
       const data = validateSnapshot(response.payload);
+      const fingerprint = JSON.stringify({ ...data, generatedAt: null, sourceUpdatedAt: null, source: null, live: null });
+      const changed = fingerprint !== state.fingerprint;
+      const wasStale = state.stale;
       state.data = data;
+      state.fingerprint = fingerprint;
       state.stale = false;
-      state.today = dateKey(Date.now());
-      state.requestRows = data.requests.map((row) => ({ ...row, day: dateKey(row.at) })).sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+      const today = dateKey(Date.now());
+      const newDay = today !== state.today;
+      state.today = today;
       $('notice').hidden = true;
       showShell();
-      populateModels();
-      renderSnapshot();
-      renderRoute(false);
-      announce('Usage snapshot loaded. ' + count(data.daily.length) + ' daily model records available.');
+      if (data.live?.status === 'degraded') showNotice('Usage source unavailable', 'Showing the last successfully sampled totals. The source is retrying; these totals may lag recent completed responses.', false);
+      else if (data.live?.status === 'loading') showNotice('Usage source is loading', 'Showing the retained totals while a new source sample is pending.', false);
+      if (changed || newDay) {
+        state.requestRows = data.requests.map((row) => ({ ...row, day: dateKey(row.at) })).sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+        populateModels();
+        renderSnapshot();
+        renderRoute(false);
+        announce('Usage snapshot loaded. ' + count(data.daily.length) + ' daily records available.');
+      } else {
+        setText('coverage-generated', fullDateFormat.format(new Date(data.generatedAt)) + ' (Europe/Zurich)');
+        setText('coverage-source', data.sourceUpdatedAt ? fullDateFormat.format(new Date(data.sourceUpdatedAt)) + ' (Europe/Zurich) · latest rollup, not a completeness watermark' : 'Not supplied by source');
+        updateFreshness();
+        if (wasStale && data.live?.status !== 'degraded') announce('Usage refresh recovered.');
+      }
     } catch (error) {
       showShell();
       if (state.data) {
@@ -286,13 +322,14 @@
       }
       announce(state.data ? 'Refresh failed. The previous snapshot is still displayed and marked stale.' : 'Usage could not be loaded. Try refreshing.');
     } finally {
-      setBusy(false);
+      setBusy(false, quiet);
+      if (!document.hidden) usageTimer = window.setTimeout(refreshVisibleUsage, USAGE_POLL_MS);
     }
   }
 
   function populateModels() {
     const models = [...new Set([...state.data.daily.map((row) => row.model), ...state.data.requests.map((row) => row.model)])].sort((a, b) => a.localeCompare(b));
-    if (!models.includes(state.model)) state.model = '';
+    if (state.data.scopeMode === 'installation' || !models.includes(state.model)) state.model = '';
     const fragment = document.createDocumentFragment();
     fragment.append(new Option('All models', ''));
     models.forEach((model) => fragment.append(new Option(model || 'Unspecified model', model)));
@@ -313,17 +350,24 @@
     else label = 'Snapshot generated ' + Math.floor(minutes / 1440) + ' d ago';
     if (state.stale) label += ' · refresh failed';
     else if (minutes >= 15) label += ' · may be stale';
+    const source = state.data.sourceUpdatedAt;
+    if (source) label += ' · latest rollup refresh ' + fullDateFormat.format(new Date(source)) + ' Zurich';
+    if (state.data.source?.status && state.data.source.status !== 'fresh') label += ' · rollup ' + state.data.source.status;
+    if (state.data.live?.status === 'degraded') label += ' · source unavailable, last good totals';
+    else if (state.data.live?.status === 'loading') label += ' · source sampling pending';
     setText('freshness-text', label);
-    $('freshness').classList.toggle('is-stale', state.stale || minutes >= 15 || age < -60000);
-    $('freshness').title = 'Generated ' + fullDateFormat.format(generated) + ' (Europe/Zurich). Checks every minute while visible; collection runs every five minutes after the previous collection finishes. Recorded usage may lag completed model responses; this is not a live token stream.';
+    $('freshness').classList.toggle('is-stale', state.stale || state.data.live?.status !== undefined && state.data.live.status !== 'ok' || state.data.source?.status === 'stale' || minutes >= 15 || age < -60000);
+    $('freshness').title = 'Last successful sample ' + fullDateFormat.format(generated) + ' (Europe/Zurich).' + (source ? ' Latest reported rollup refresh ' + fullDateFormat.format(new Date(source)) + ' (Europe/Zurich); not a completeness watermark.' : ' Source rollup refresh time unavailable.') + ' Checks 5 seconds after each response while visible; provider usage may arrive only after completion. Not a token stream.';
   }
 
   function renderSnapshot() {
     const data = state.data;
+    document.body.classList.toggle('installation-mode', data.scopeMode === 'installation');
     const scope = data.scopeMode === 'installation' ? data.scopeLabel : data.scopeMode === 'all-conversations' ? 'All conversations with main · delegated specialists · retained partial history' : 'Project-only · ' + (data.scopeLabel || 'selected conversation and tasks');
     setText('scope-label', scope);
     setText('coverage-scope', scope);
     setText('coverage-generated', fullDateFormat.format(new Date(data.generatedAt)) + ' (Europe/Zurich)');
+    setText('coverage-source', data.sourceUpdatedAt ? fullDateFormat.format(new Date(data.sourceUpdatedAt)) + ' (Europe/Zurich) · latest rollup, not a completeness watermark' : 'Not supplied by source');
     setText('coverage-range', data.range.start + ' to ' + data.range.end + ' (Europe/Zurich)');
     setText('coverage-summary', data.coverage.sessions === null ? 'Session count unavailable' : count(data.coverage.sessions) + ' sessions in snapshot');
     $('coverage-notes').replaceChildren(...data.coverage.notes.map((note) => element('li', '', note)));
@@ -359,6 +403,14 @@
     state.models = [...modelMap.values()].sort((a, b) => b.totalTokens - a.totalTokens || a.model.localeCompare(b.model));
     const leader = state.models[0];
     const modelHref = pageUrl('models', { ...(state.period !== 7 ? { period: state.period } : {}), ...(state.model ? { filter: state.model } : {}) });
+    $('metric-installation-cost').hidden = data.scopeMode !== 'installation';
+    if (data.scopeMode === 'installation') {
+      const knownCost = rows.reduce((sum, row) => sum + (row.costUsd ?? 0), 0);
+      const incomplete = rows.some((row) => row.costUsd == null);
+      setText('metric-cost', covered && !incomplete ? currencyFormat.format(knownCost) : 'Unavailable');
+      setText('metric-cost-note', !covered ? 'Outside snapshot coverage' : incomplete ? 'Reported cost incomplete in selected dates' : 'USD · reported aggregate, not an invoice');
+    }
+    $('metric-tokens-link').querySelector('.metric-action').textContent = data.scopeMode === 'installation' ? 'View daily totals →' : 'View models →';
     $('metric-tokens-link').href = modelHref;
     $('metric-calls-link').href = modelHref;
     $('metric-model-link').href = leader && leader.totalTokens > 0 ? pageUrl('models', { model: leader.model, ...(state.period !== 7 ? { period: state.period } : {}), ...(state.model ? { filter: state.model } : {}) }) : modelHref;
@@ -399,9 +451,12 @@
       for (let day = start; day <= end; day = shiftDay(day, 1)) bins.set(day, { date: day, ...emptyTotals() });
       rows.forEach((row) => addTotals(bins.get(row.date), row));
     }
+    const selectedDate = state.days[state.selectedDay]?.date;
     state.days = [...bins.values()];
-    state.selectedDay = state.days.length - 1;
+    const previousDay = state.days.findIndex((day) => day.date === selectedDate);
+    state.selectedDay = previousDay < 0 ? Math.max(0, state.days.length - 1) : previousDay;
     renderTimeline();
+    if (data.scopeMode === 'installation') return;
     renderModels();
     renderHistory();
     renderUsageCharts();
@@ -742,7 +797,7 @@
   function restoreFilters() {
     const period = Number(queryValue('period'));
     state.period = [1, 7, 30].includes(period) ? period : 7;
-    state.model = queryValue('filter');
+    state.model = state.data?.scopeMode === 'installation' ? '' : queryValue('filter');
     $('model-filter').value = state.model;
     document.querySelectorAll('[data-period]').forEach((item) => item.setAttribute('aria-pressed', String(Number(item.dataset.period) === state.period)));
     $('skills-search').value = currentPage() === 'skills' ? queryValue('q') : '';
@@ -766,7 +821,7 @@
   function renderDetails() {
     for (const id of ['model-detail', 'agent-detail', 'skill-detail', 'activity-detail']) $(id).hidden = true;
     if (!state.data) return;
-    if (currentPage() === 'models' && queryValue('model')) {
+    if (state.data.scopeMode !== 'installation' && currentPage() === 'models' && queryValue('model')) {
       const name = queryValue('model'), model = state.models.find((row) => row.model === name);
       const box = details('model-detail', model ? name : 'Model unavailable', 'models', model ? [
         ['Recorded tokens', count(model.totalTokens)], ['Model entries', model.requests === null ? 'Unavailable' : count(model.requests)],
@@ -895,22 +950,25 @@
       link.classList.toggle('is-active', active);
       if (active) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
     });
-    $('global-filters').hidden = page === 'graft';
-    $('model-control').hidden = !['overview', 'models'].includes(page);
+    const installation = state.data?.scopeMode === 'installation';
+    $('global-filters').hidden = page === 'graft' || installation && !['overview', 'models'].includes(page);
+    $('model-control').hidden = installation || !['overview', 'models'].includes(page);
     for (const kind of ['agents', 'skills']) $(kind + '-usage-panel').hidden = page === kind && !!queryValue(kind === 'agents' ? 'agent' : 'skill');
-    $('models-overview').hidden = page === 'models' && !!queryValue('model');
+    $('models-overview').hidden = page === 'models' && !installation && !!queryValue('model');
     $('agents-list').hidden = page === 'agents' && !!queryValue('agent');
     $('skills').hidden = page === 'skills' && !!queryValue('skill');
     $('skills-search').parentNode && ($('skills-search').parentNode.hidden = page === 'skills' && !!queryValue('skill'));
     $('history').hidden = page === 'activity' && !!(queryValue('task') || queryValue('run'));
-    renderDetails();
+    if (installation) {
+      for (const id of ['model-detail', 'agent-detail', 'skill-detail', 'activity-detail']) $(id).hidden = true;
+    } else renderDetails();
     const isDetail = (page === 'models' && queryValue('model')) || (page === 'agents' && queryValue('agent')) ||
       (page === 'skills' && queryValue('skill')) || (page === 'activity' && (queryValue('task') || queryValue('run')));
-    setText('page-title', titles[page] + (isDetail ? ' detail' : ''));
+    setText('page-title', installation && page === 'models' ? 'Installation tokens' : titles[page] + (isDetail && !installation ? ' detail' : ''));
     document.title = titles[page] + ' — AFP Usage';
     announce(titles[page] + (isDetail ? ' detail' : '') + ' loaded.');
     if (focus) { $('page-title').focus({ preventScroll: true }); window.scrollTo?.(0, 0); }
-    if (page === 'models' && !isDetail && state.data) renderTimeline();
+    if (page === 'models' && (!isDetail || installation) && state.data) renderTimeline();
   }
   document.addEventListener('click', (event) => {
     const link = event.target.closest?.('a[href]');
@@ -1023,11 +1081,14 @@
     updateFreshness();
     const today = dateKey(Date.now());
     if (state.data && today !== state.today) { state.today = today; renderFiltered(); }
-    return loadUsage();
+    return loadUsage({ quiet: true });
   }
-  window.setInterval(refreshVisibleUsage, 60000);
-  window.setInterval(() => { if (!document.hidden) loadActiveAgents(); }, 15000);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshVisibleUsage(); loadActiveAgents(); } });
+  // Schedule the next usage check only after this response settles, never on a fixed clock.
+  window.setInterval(() => { if (!document.hidden) loadActiveAgents(); }, ACTIVE_POLL_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) window.clearTimeout(usageTimer);
+    else { const usage = refreshVisibleUsage(); loadActiveAgents(); return usage; }
+  });
   renderRoute(false);
   loadUsage();
   loadActiveAgents();

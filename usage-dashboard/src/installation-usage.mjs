@@ -40,6 +40,9 @@ export function installationSnapshot(report, range, now) {
   }
   return {
     schemaVersion: 1, generatedAt: now.toISOString(), scopeMode: 'installation', scopeLabel: INSTALLATION_LABEL,
+    source: { method: 'usage.cost', status: cache.status, reportUpdatedAt: new Date(report.updatedAt).toISOString(),
+      // Gateway merges refreshedAt with MAX across agents; this is not a complete-history watermark.
+      refreshedAt: Number.isFinite(cache.refreshedAt) && cache.refreshedAt >= 0 && cache.refreshedAt <= now.getTime() ? new Date(cache.refreshedAt).toISOString() : null },
     range: { ...range }, daily, skills: [], requests: [],
     agents: null, agentDaily: null, tasks: null, skillCatalog: null, skillDaily: null, agentRunDaily: null,
     coverage: { sessions: null,

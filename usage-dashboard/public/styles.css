@@ -497,3 +497,17 @@ input[type="search"] { padding-left: 40px; font-size: 12px; min-height: 44px; }
 .usage-charts { margin-top: 24px; }
 .usage-panel { margin-bottom: 24px; }
 .usage-panel .model-row { text-decoration: none; }
+
+.aggregate-note { display: none; max-width: 72ch; padding: 17px 20px; border: 1px solid #d8e2e6; border-left: 4px solid var(--blue); border-radius: 8px; background: #f6f9fc; color: var(--ink); line-height: 1.5; }
+.aggregate-note p { margin: 5px 0 0; color: var(--muted); }
+.installation-mode .aggregate-note { display: block; }
+.installation-mode #metric-calls-link, .installation-mode #metric-model-link, .installation-mode #metric-skills-link,
+.installation-mode .usage-charts, .installation-mode .overview-links a:not(:first-child),
+.installation-mode .models-panel, .installation-mode #model-detail,
+.installation-mode #agents-page > :not(.aggregate-note),
+.installation-mode #skills-page > :not(.aggregate-note),
+.installation-mode #activity-page > :not(.aggregate-note) { display: none !important; }
+.installation-mode #overview-page .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 700px; }
+@media (max-width: 600px) { .installation-mode #overview-page .metric-grid { grid-template-columns: minmax(0, 1fr); } }
+.installation-mode .overview-links { grid-template-columns: minmax(0, 1fr); max-width: 380px; }
+.installation-mode #models-overview { grid-template-columns: minmax(0, 1fr); }
