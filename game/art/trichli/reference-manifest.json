@@ -1,0 +1,84 @@
+{
+  "venue": {
+    "name": "Trischli Club",
+    "address": "Br\u00fchlgasse 15, 9000 St. Gallen, Switzerland",
+    "site": "https://www.trischli.ch/"
+  },
+  "studied": "2026-10-14",
+  "policy": "Official photographs inspected privately as architectural reference only. Copyright/reuse rights unknown; no source photos in this asset package, blend file or materials.",
+  "references": [
+    {
+      "url": "https://images.squarespace-cdn.com/content/v1/64e67cc98516980d8295f049/25c67131-85ea-4179-9dab-8a0ccc42c241/LORUENSERPHOTO--72.jpg",
+      "tag": "observed",
+      "observed": [
+        "black wood-base upholstered sofas",
+        "small tables",
+        "zigzag lounge rug",
+        "glass screens",
+        "linear ceiling lights"
+      ]
+    },
+    {
+      "url": "https://images.squarespace-cdn.com/content/v1/64e67cc98516980d8295f049/2551873e-645d-4854-8f1c-6944e0e101f0/main_2neu.JPG",
+      "tag": "observed",
+      "observed": [
+        "amber haze",
+        "dark wood floor",
+        "wood partitions",
+        "linear ceiling grid"
+      ]
+    },
+    {
+      "url": "https://images.squarespace-cdn.com/content/v1/64e67cc98516980d8295f049/ac825d5a-16c9-4b17-8e1c-1dc350a15395/LORUENSERPHOTO--44.jpg",
+      "tag": "observed",
+      "observed": [
+        "three white chevrons",
+        "two decks and central mixer",
+        "black exposed technical ceiling"
+      ]
+    },
+    {
+      "url": "https://images.squarespace-cdn.com/content/v1/64e67cc98516980d8295f049/4bcdc19d-2c13-4d8f-b98f-c935fa117e19/LORUENSERPHOTO--18+Kopie.jpg",
+      "tag": "observed",
+      "observed": [
+        "narrow white down-beams",
+        "walnut bar and partitions",
+        "dark floor",
+        "glass lounge edge"
+      ]
+    },
+    {
+      "url": "https://images.squarespace-cdn.com/content/v1/64e67cc98516980d8295f049/ca91c9af-b882-4c11-a9ea-bccdd4ff8814/LORUENSERPHOTO--43+Kopie.jpg",
+      "tag": "observed",
+      "observed": [
+        "detailed two-deck mixer arrangement",
+        "parallel light strips"
+      ]
+    },
+    {
+      "url": "https://images.squarespace-cdn.com/content/v1/64e67cc98516980d8295f049/dbb923b2-d68b-4a82-b2bf-d97d01e4b353/LORUENSERPHOTO--153.JPG",
+      "tag": "observed",
+      "observed": [
+        "gold mirrored disco-ball cluster"
+      ]
+    },
+    {
+      "url": "https://images.squarespace-cdn.com/content/v1/64e67cc98516980d8295f049/dbf59128-f60b-4047-bce7-f63f8a8bd35e/LORUENSERPHOTO--130+Kopie.jpg",
+      "tag": "observed",
+      "observed": [
+        "warm wood",
+        "metal stair railing",
+        "small brass table lamp"
+      ]
+    }
+  ],
+  "inferred": [
+    "16 \u00d7 20m room dimensions and all measured-looking dimensions",
+    "Single-room synthesis of the venue; not an exact floor plan",
+    "DJ-back / bar-east / lounge-west adjacency",
+    "0.36m raised western lounge placement, stair locations and glass-screen openings",
+    "Open central combat envelope, spawn positions and simplified collision helpers",
+    "Bottle inventory, typography placements, joinery construction details and technical fixture spacing"
+  ],
+  "authorship": "Original procedural geometry and materials; generated from generate.py without external asset dependencies."
+}

@@ -1,0 +1,24 @@
+{
+  "objects": 1468,
+  "mesh_objects": 1444,
+  "materials": 24,
+  "mesh_vertices": 47022,
+  "mesh_polygons": 24071,
+  "collections": [
+    "Architecture",
+    "Cameras",
+    "Ceiling \u2022 cutaway toggle",
+    "Collision",
+    "Gameplay",
+    "Lighting",
+    "Props"
+  ],
+  "reference_count": 7,
+  "dimensions_m": [
+    16.4,
+    20.4,
+    5.15
+  ],
+  "blender": "5.0.1",
+  "renderer": "BLENDER_EEVEE"
+}

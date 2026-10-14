@@ -1,0 +1,47 @@
+{
+  "pass": true,
+  "checks": {
+    "required_collections": true,
+    "three_cameras": true,
+    "three_white_chevrons": true,
+    "two_decks": true,
+    "mixer": true,
+    "gold_ball_cluster": true,
+    "gameplay_helpers": true,
+    "collision_hidden": true,
+    "metric": true,
+    "ceiling_present_and_enabled": true,
+    "active_interior_camera": true,
+    "full_resolution": true,
+    "procedural_only": true,
+    "no_linked_libraries": true,
+    "no_external_fonts": true,
+    "no_missing_resources": true,
+    "finite_transforms": true,
+    "room_dimensions": true,
+    "material_coverage": true
+  },
+  "missing_resources": [],
+  "objects": 1468,
+  "materials": 24,
+  "images": 1,
+  "architecture_bounds_m": {
+    "min": [
+      -8.199999809265137,
+      -10.199999809265137,
+      -0.3199999928474426
+    ],
+    "max": [
+      8.199999809265137,
+      10.199999809265137,
+      4.829999923706055
+    ],
+    "extent": [
+      16.399999618530273,
+      20.399999618530273,
+      5.149999916553497
+    ]
+  },
+  "blend_bytes": 920264,
+  "blender": "5.0.1"
+}

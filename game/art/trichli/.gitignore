@@ -1,0 +1,6 @@
+# Keep requested .blend and final PNG deliverables; omit only temporary artifacts.
+*.blend1
+*.blend2
+__pycache__/
+*.pyc
+*.log
