@@ -1,24 +1,32 @@
 {
-  "objects": 1468,
-  "mesh_objects": 1444,
-  "materials": 24,
-  "mesh_vertices": 47022,
-  "mesh_polygons": 24071,
-  "collections": [
-    "Architecture",
-    "Cameras",
-    "Ceiling \u2022 cutaway toggle",
-    "Collision",
-    "Gameplay",
-    "Lighting",
-    "Props"
-  ],
-  "reference_count": 7,
-  "dimensions_m": [
-    16.4,
-    20.4,
-    5.15
-  ],
+  "revision": 3,
   "blender": "5.0.1",
-  "renderer": "BLENDER_EEVEE"
+  "renderer": "BLENDER_EEVEE",
+  "scenes": {
+    "dj": {
+      "name": "DJ / reference 13",
+      "objects": 630,
+      "camera": "DJ / matched reference 13",
+      "reference": "13"
+    },
+    "main": {
+      "name": "MAIN / reference 14",
+      "objects": 946,
+      "camera": "MAIN / matched reference 14",
+      "reference": "14"
+    },
+    "lounge": {
+      "name": "LOUNGE / reference 11",
+      "objects": 1502,
+      "camera": "LOUNGE / matched reference 11",
+      "reference": "11"
+    }
+  },
+  "objects": 3078,
+  "meshes": 3042,
+  "materials": 29,
+  "authored_vertices": 47746,
+  "scale": "Estimated metric units; no measured dimensions",
+  "connected_floorplan": false,
+  "photo_assets": 0
 }

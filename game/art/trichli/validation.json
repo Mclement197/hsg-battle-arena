@@ -1,47 +1,271 @@
 {
   "pass": true,
   "checks": {
-    "required_collections": true,
-    "three_cameras": true,
-    "three_white_chevrons": true,
-    "two_decks": true,
-    "mixer": true,
-    "gold_ball_cluster": true,
-    "gameplay_helpers": true,
-    "collision_hidden": true,
-    "metric": true,
-    "ceiling_present_and_enabled": true,
-    "active_interior_camera": true,
-    "full_resolution": true,
+    "three_named_independent_scenes": true,
+    "one_named_camera_per_scene": true,
+    "no_shared_objects_between_studies": true,
+    "full_resolution_3_to_2": true,
+    "editable_meshes": true,
+    "metric_estimated_scale_disclosed": true,
+    "three_far_chevrons": true,
+    "two_dj_players": true,
+    "mixer_present": true,
+    "chevrons_across_room_not_behind_decks": true,
+    "one_continuous_carpet": true,
+    "no_invented_gameplay_or_disco": true,
+    "ceiling_per_study": true,
+    "material_coverage": true,
     "procedural_only": true,
-    "no_linked_libraries": true,
+    "no_external_libraries": true,
     "no_external_fonts": true,
-    "no_missing_resources": true,
+    "no_missing_file_resources": true,
     "finite_transforms": true,
-    "room_dimensions": true,
-    "material_coverage": true
+    "blend_under_25MiB": true,
+    "three_final_PNGs": true
   },
-  "missing_resources": [],
-  "objects": 1468,
-  "materials": 24,
-  "images": 1,
-  "architecture_bounds_m": {
-    "min": [
-      -8.199999809265137,
-      -10.199999809265137,
-      -0.3199999928474426
-    ],
-    "max": [
-      8.199999809265137,
-      10.199999809265137,
-      4.829999923706055
-    ],
-    "extent": [
-      16.399999618530273,
-      20.399999618530273,
-      5.149999916553497
-    ]
+  "images": {
+    "dj": {
+      "width": 1800,
+      "height": 1200,
+      "bytes": 1313738
+    },
+    "main": {
+      "width": 1800,
+      "height": 1200,
+      "bytes": 1788320
+    },
+    "lounge": {
+      "width": 1800,
+      "height": 1200,
+      "bytes": 1995253
+    }
   },
-  "blend_bytes": 920264,
-  "blender": "5.0.1"
+  "landmarks_normalized_top_left": {
+    "dj": {
+      "Far white chevron": [
+        {
+          "center": [
+            0.381,
+            0.428
+          ],
+          "bounds": [
+            0.324,
+            0.352,
+            0.437,
+            0.503
+          ],
+          "crosses_camera_plane": false
+        },
+        {
+          "center": [
+            0.508,
+            0.428
+          ],
+          "bounds": [
+            0.452,
+            0.352,
+            0.565,
+            0.503
+          ],
+          "crosses_camera_plane": false
+        },
+        {
+          "center": [
+            0.635,
+            0.428
+          ],
+          "bounds": [
+            0.579,
+            0.352,
+            0.692,
+            0.503
+          ],
+          "crosses_camera_plane": false
+        }
+      ],
+      "Media player chassis": [
+        {
+          "center": [
+            0.283,
+            0.714
+          ],
+          "bounds": [
+            0.159,
+            0.671,
+            0.384,
+            0.767
+          ],
+          "crosses_camera_plane": false
+        },
+        {
+          "center": [
+            0.717,
+            0.714
+          ],
+          "bounds": [
+            0.616,
+            0.671,
+            0.841,
+            0.767
+          ],
+          "crosses_camera_plane": false
+        }
+      ],
+      "Four-channel mixer": [
+        {
+          "center": [
+            0.5,
+            0.713
+          ],
+          "bounds": [
+            0.409,
+            0.668,
+            0.591,
+            0.767
+          ],
+          "crosses_camera_plane": false
+        }
+      ]
+    },
+    "main": {
+      "Far bar panel front core": [
+        {
+          "center": [
+            0.5,
+            0.573
+          ],
+          "bounds": [
+            0.344,
+            0.537,
+            0.656,
+            0.609
+          ],
+          "crosses_camera_plane": false
+        }
+      ],
+      "Large right walnut enclosure front core": [
+        {
+          "center": [
+            0.788,
+            0.635
+          ],
+          "bounds": [
+            0.718,
+            0.527,
+            0.86,
+            0.746
+          ],
+          "crosses_camera_plane": false
+        }
+      ],
+      "Black high tabletop": [
+        {
+          "center": [
+            0.328,
+            0.612
+          ],
+          "bounds": [
+            0.259,
+            0.6,
+            0.389,
+            0.626
+          ],
+          "crosses_camera_plane": false
+        },
+        {
+          "center": [
+            0.68,
+            0.612
+          ],
+          "bounds": [
+            0.619,
+            0.6,
+            0.749,
+            0.626
+          ],
+          "crosses_camera_plane": false
+        },
+        {
+          "center": [
+            0.551,
+            0.54
+          ],
+          "bounds": [
+            0.533,
+            0.537,
+            0.57,
+            0.542
+          ],
+          "crosses_camera_plane": false
+        }
+      ]
+    },
+    "lounge": {
+      "ONE continuous large lounge carpet": [
+        {
+          "center": [
+            0.627,
+            0.867
+          ],
+          "bounds": [
+            -1.051,
+            0.521,
+            1.773,
+            3.835
+          ],
+          "crosses_camera_plane": false
+        }
+      ],
+      "Lounge view / walnut enclosure front core": [
+        {
+          "center": [
+            0.725,
+            0.334
+          ],
+          "bounds": [
+            0.598,
+            0.25,
+            0.849,
+            0.423
+          ],
+          "crosses_camera_plane": false
+        }
+      ],
+      "Far bar panel front core": [
+        {
+          "center": [
+            0.283,
+            0.366
+          ],
+          "bounds": [
+            0.162,
+            0.306,
+            0.39,
+            0.428
+          ],
+          "crosses_camera_plane": false
+        }
+      ]
+    }
+  },
+  "scenes": {
+    "dj": {
+      "name": "DJ / reference 13",
+      "camera": "DJ / matched reference 13",
+      "objects": 630
+    },
+    "main": {
+      "name": "MAIN / reference 14",
+      "camera": "MAIN / matched reference 14",
+      "objects": 946
+    },
+    "lounge": {
+      "name": "LOUNGE / reference 11",
+      "camera": "LOUNGE / matched reference 11",
+      "objects": 1502
+    }
+  },
+  "blend_bytes": 1382762,
+  "blender": "5.0.1",
+  "scope": "Technical checks and screen landmarks; visual fidelity reviewed separately. No survey claim."
 }

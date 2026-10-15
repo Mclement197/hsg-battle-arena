@@ -1,22 +1,24 @@
 {
   "venue": {
     "name": "Trischli Club",
-    "address": "Br\u00fchlgasse 15, 9000 St. Gallen, Switzerland",
+    "address": "Brühlgasse 15, 9000 St. Gallen, Switzerland",
     "site": "https://www.trischli.ch/"
   },
-  "studied": "2026-10-14",
+  "studied": "2026-10-15",
   "policy": "Official photographs inspected privately as architectural reference only. Copyright/reuse rights unknown; no source photos in this asset package, blend file or materials.",
   "references": [
     {
       "url": "https://images.squarespace-cdn.com/content/v1/64e67cc98516980d8295f049/25c67131-85ea-4179-9dab-8a0ccc42c241/LORUENSERPHOTO--72.jpg",
       "tag": "observed",
       "observed": [
-        "black wood-base upholstered sofas",
-        "small tables",
-        "zigzag lounge rug",
-        "glass screens",
-        "linear ceiling lights"
-      ]
+        "one continuous large zigzag carpet",
+        "several black sofas on walnut bases, facing the carpet",
+        "slender tables and glass edge",
+        "bar upper-left; paneled walnut enclosure upper-right",
+        "dense horizontal ceiling light strips"
+      ],
+      "study": "lounge",
+      "reference_number": 11
     },
     {
       "url": "https://images.squarespace-cdn.com/content/v1/64e67cc98516980d8295f049/2551873e-645d-4854-8f1c-6944e0e101f0/main_2neu.JPG",
@@ -26,26 +28,35 @@
         "dark wood floor",
         "wood partitions",
         "linear ceiling grid"
-      ]
+      ],
+      "use": "Supplementary prior reference only; does not establish adjacency or placement in revision 2"
     },
     {
       "url": "https://images.squarespace-cdn.com/content/v1/64e67cc98516980d8295f049/ac825d5a-16c9-4b17-8e1c-1dc350a15395/LORUENSERPHOTO--44.jpg",
       "tag": "observed",
       "observed": [
-        "three white chevrons",
-        "two decks and central mixer",
-        "black exposed technical ceiling"
-      ]
+        "view FROM two decks and mixer foreground across room",
+        "three large luminous chevrons on FAR wall, not behind booth",
+        "black booth parapet across middle-lower view",
+        "dense horizontal linear lights and low technical ceiling"
+      ],
+      "study": "dj",
+      "reference_number": 13
     },
     {
       "url": "https://images.squarespace-cdn.com/content/v1/64e67cc98516980d8295f049/4bcdc19d-2c13-4d8f-b98f-c935fa117e19/LORUENSERPHOTO--18+Kopie.jpg",
       "tag": "observed",
       "observed": [
-        "narrow white down-beams",
-        "walnut bar and partitions",
-        "dark floor",
-        "glass lounge edge"
-      ]
+        "long narrow-looking floor axis; bar across far end",
+        "black pedestal tables foreground left/right",
+        "glass partitions left",
+        "large paneled walnut enclosure mid-right",
+        "curved illuminated steps near-right",
+        "dense low technical ceiling; narrow white spot beams",
+        "dark narrow staggered floorboards"
+      ],
+      "study": "main",
+      "reference_number": 14
     },
     {
       "url": "https://images.squarespace-cdn.com/content/v1/64e67cc98516980d8295f049/ca91c9af-b882-4c11-a9ea-bccdd4ff8814/LORUENSERPHOTO--43+Kopie.jpg",
@@ -53,14 +64,16 @@
       "observed": [
         "detailed two-deck mixer arrangement",
         "parallel light strips"
-      ]
+      ],
+      "use": "Supplementary prior reference only; does not establish adjacency or placement in revision 2"
     },
     {
       "url": "https://images.squarespace-cdn.com/content/v1/64e67cc98516980d8295f049/dbb923b2-d68b-4a82-b2bf-d97d01e4b353/LORUENSERPHOTO--153.JPG",
       "tag": "observed",
       "observed": [
         "gold mirrored disco-ball cluster"
-      ]
+      ],
+      "use": "Supplementary prior reference only; does not establish adjacency or placement in revision 2"
     },
     {
       "url": "https://images.squarespace-cdn.com/content/v1/64e67cc98516980d8295f049/dbf59128-f60b-4047-bce7-f63f8a8bd35e/LORUENSERPHOTO--130+Kopie.jpg",
@@ -69,16 +82,25 @@
         "warm wood",
         "metal stair railing",
         "small brass table lamp"
-      ]
+      ],
+      "use": "Supplementary prior reference only; does not establish adjacency or placement in revision 2"
     }
   ],
   "inferred": [
-    "16 \u00d7 20m room dimensions and all measured-looking dimensions",
-    "Single-room synthesis of the venue; not an exact floor plan",
-    "DJ-back / bar-east / lounge-west adjacency",
-    "0.36m raised western lounge placement, stair locations and glass-screen openings",
-    "Open central combat envelope, spawn positions and simplified collision helpers",
-    "Bottle inventory, typography placements, joinery construction details and technical fixture spacing"
+    "All metric dimensions and scale, camera intrinsics/positions and photographic perspective fit",
+    "Hidden surfaces, bounded study side/back extents and exact fixture spacing",
+    "Exact seating count beyond crop, upholstery detailing and bottle/equipment make/model",
+    "Main/lounge connection is not proven; scenes intentionally use separate coordinates",
+    "Glass/atmospheric exposure and procedural wood grain are render approximations"
   ],
-  "authorship": "Original procedural geometry and materials; generated from generate.py without external asset dependencies."
+  "authorship": "Original procedural geometry and materials; generated from generate.py without external asset dependencies.",
+  "revision": 2,
+  "deliverable": "Three independent bounded photographic 3D reconstruction studies; no joined floorplan",
+  "corrections": [
+    "Removed invented combat envelope, spawn/collision helpers and DJ dais",
+    "Moved chevrons across the room from the DJ camera",
+    "Bar at far end in main-axis study rather than side bar",
+    "Replaced split rug islands with one continuous lounge carpet",
+    "Removed arbitrary gold disco-ball cluster from these three views"
+  ]
 }

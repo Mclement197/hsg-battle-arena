@@ -1,327 +1,283 @@
-"""Original Trischli-inspired game environment. Blender 5.0+, no dependencies.
-Run: blender -b -t 3 --python generate.py -- --output-dir PATH [--draft] [--render all|hero|detail|overhead|none]
-All geometry/materials are authored here; venue photos are reference-only, not inputs.
+"""Trischli reference reconstruction, three independent editable photographic studies.
+Blender 5.0.1; no downloaded assets, photos, add-ons, or Python dependencies.
+blender -b -t 3 --python-exit-code 1 --python generate.py -- --output-dir PATH [--draft] [--render all|dj|main|lounge|none]
 """
-import bpy, math, random, argparse, sys, os, json
+import bpy, math, random, argparse, os, sys, json
 from mathutils import Vector
 random.seed(15)
-p=argparse.ArgumentParser()
-p.add_argument('--output-dir',default=os.path.dirname(os.path.abspath(__file__)))
-p.add_argument('--draft',action='store_true')
-p.add_argument('--render',default='all',choices=['all','hero','detail','overhead','none'])
-a=p.parse_args(sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else [])
-os.makedirs(a.output_dir,exist_ok=True); os.makedirs(os.path.join(a.output_dir,'renders'),exist_ok=True)
-bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete(use_global=False)
-for c in list(bpy.data.collections):
-    if c.name!='Collection': bpy.data.collections.remove(c)
-root=bpy.context.scene.collection
-if bpy.data.collections.get('Collection'): bpy.data.collections.remove(bpy.data.collections['Collection'])
-C={n:bpy.data.collections.new(n) for n in ['Architecture','Props','Lighting','Cameras','Gameplay','Collision']}
-for c in C.values(): root.children.link(c)
-ceiling=bpy.data.collections.new('Ceiling • cutaway toggle'); C['Architecture'].children.link(ceiling)
+p=argparse.ArgumentParser();p.add_argument('--output-dir',default=os.path.dirname(os.path.abspath(__file__)));p.add_argument('--draft',action='store_true');p.add_argument('--render',default='all',choices=['all','dj','main','lounge','none']);a=p.parse_args(sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else [])
+os.makedirs(os.path.join(a.output_dir,'renders'),exist_ok=True)
+for o in list(bpy.data.objects):bpy.data.objects.remove(o,do_unlink=True)
+for s in list(bpy.data.scenes)[1:]:bpy.data.scenes.remove(s)
+for c in list(bpy.data.collections):bpy.data.collections.remove(c)
 
-def link(o,col='Props'):
-    for c in list(o.users_collection): c.objects.unlink(o)
-    (C[col] if isinstance(col,str) else col).objects.link(o)
-    return o
-
-def mat(n,color,rough=.5,metal=0,emission=0):
-    m=bpy.data.materials.new(n); m.diffuse_color=(*color,1); m.use_nodes=True
-    s=m.node_tree.nodes.get('Principled BSDF'); s.inputs['Base Color'].default_value=(*color,1)
-    s.inputs['Roughness'].default_value=rough; s.inputs['Metallic'].default_value=metal
-    if emission: s.inputs['Emission Color'].default_value=(*color,1); s.inputs['Emission Strength'].default_value=emission
-    return m
-black=mat('Charcoal / powder-coated steel',(.014,.019,.022),.36,.5)
-wall=mat('Graphite plaster',(.033,.038,.042),.8)
-leather=mat('Black leather / fine grain',(.018,.024,.029),.37)
-gold=mat('Brushed champagne brass',(.53,.29,.085),.26,.8)
-stone=mat('Smoked stone counter',(.055,.06,.065),.23,.2)
-white=mat('Warm-white linear LED',(.85,.91,1),.2,0,4)
-amber=mat('2700K amber LED',(1,.42,.09),.25,0,4)
-cream=mat('Ivory woven rug',(.55,.51,.42),.9)
-ink=mat('Rug charcoal weave',(.055,.065,.07),.9)
-blue=mat('Equipment screen',(.08,.36,.5),.25,0,1.2)
-label=mat('Bottle paper',(.64,.55,.35),.7)
-# Wood shaders use generated coordinates; no bitmap, external data or pack step.
+def mat(n,c,r=.5,metal=0,e=0):
+ m=bpy.data.materials.new(n);m.diffuse_color=(*c,1);m.use_nodes=True;bs=m.node_tree.nodes.get('Principled BSDF');bs.inputs['Base Color'].default_value=(*c,1);bs.inputs['Roughness'].default_value=r;bs.inputs['Metallic'].default_value=metal
+ if e:bs.inputs['Emission Color'].default_value=(*c,1);bs.inputs['Emission Strength'].default_value=e
+ return m
+black=mat('Black powdercoat',(.009,.011,.013),.36,.35);wall=mat('Dark graphite plaster',(.026,.025,.026),.87);leather=mat('Charcoal upholstery',(.012,.016,.021),.64);brass=mat('Muted brass edge',(.23,.16,.071),.3,.65);ivory=mat('Rug ivory',(.45,.46,.45),.95);ink=mat('Rug black',(.042,.046,.053),.97);gray=mat('Rug gray',(.19,.21,.24),.97);white=mat('White LED',(.83,.89,1),.25,0,4);arrows=mat('Chevron light',(.95,.98,1),.3,0,2.8);amber=mat('Amber stair LED',(1,.4,.07),.3,0,3);screen=mat('Deck LCD',(.7,.8,.8),.3,0,.6);paper=mat('Bottle labels',(.74,.7,.58),.8)
 def wood(n,c1,c2):
-    m=mat(n,c1,.36); ns=m.node_tree.nodes; ls=m.node_tree.links
-    tex=ns.new('ShaderNodeTexNoise'); tex.inputs['Scale'].default_value=4; tex.inputs['Detail'].default_value=2
-    co=ns.new('ShaderNodeTexCoord'); scale=ns.new('ShaderNodeVectorMath'); scale.operation='MULTIPLY'; scale.inputs[1].default_value=(5,1,16)
-    ls.new(co.outputs['Generated'],scale.inputs[0]); ls.new(scale.outputs[0],tex.inputs['Vector'])
-    ramp=ns.new('ShaderNodeValToRGB'); ramp.color_ramp.elements[0].position=.2; ramp.color_ramp.elements[0].color=(*c1,1); ramp.color_ramp.elements[1].position=.8; ramp.color_ramp.elements[1].color=(*c2,1)
-    ls.new(tex.outputs['Fac'],ramp.inputs[0]); ls.new(ramp.outputs[0],ns.get('Principled BSDF').inputs['Base Color'])
-    bump=ns.new('ShaderNodeBump'); bump.inputs['Strength'].default_value=.12; bump.inputs['Distance'].default_value=.025
-    ls.new(tex.outputs['Fac'],bump.inputs['Height']); ls.new(bump.outputs[0],ns.get('Principled BSDF').inputs['Normal']); return m
-walnut=wood('Honey walnut / long grain',(.13,.054,.018),(.42,.23,.085))
-floors=[wood('Smoked oak plank %02d'%i,(.045+i*.006,.025+i*.003,.016+i*.002),(.14+i*.012,.076+i*.006,.037+i*.003)) for i in range(5)]
-# Subtle leather pore bump.
-ns=leather.node_tree.nodes; noise=ns.new('ShaderNodeTexNoise'); noise.inputs['Scale'].default_value=180
-bump=ns.new('ShaderNodeBump'); bump.inputs['Strength'].default_value=.18; bump.inputs['Distance'].default_value=.012
-leather.node_tree.links.new(noise.outputs['Fac'],bump.inputs['Height']); leather.node_tree.links.new(bump.outputs[0],ns.get('Principled BSDF').inputs['Normal'])
+ m=mat(n,c1,.49);ns=m.node_tree.nodes;ls=m.node_tree.links;co=ns.new('ShaderNodeTexCoord');v=ns.new('ShaderNodeVectorMath');v.operation='MULTIPLY';v.inputs[1].default_value=(7,1,18);noise=ns.new('ShaderNodeTexNoise');noise.inputs['Scale'].default_value=4;noise.inputs['Detail'].default_value=2;ls.new(co.outputs['Generated'],v.inputs[0]);ls.new(v.outputs[0],noise.inputs['Vector']);r=ns.new('ShaderNodeValToRGB');r.color_ramp.elements[0].color=(*c1,1);r.color_ramp.elements[1].color=(*c2,1);ls.new(noise.outputs['Fac'],r.inputs[0]);ls.new(r.outputs[0],ns.get('Principled BSDF').inputs['Base Color']);return m
+walnut=wood('Walnut panel grain',(.10,.044,.021),(.27,.145,.062));floors=[wood('Smoked narrow oak %d'%i,(.035+i*.004,.026+i*.003,.021+i*.002),(.105+i*.01,.074+i*.007,.05+i*.005)) for i in range(6)]
+glass=mat('Clear screen / Eevee alpha approximation',(.16,.2,.22),.15,.15);bs=glass.node_tree.nodes.get('Principled BSDF');bs.inputs['Alpha'].default_value=.08;glass.surface_render_method='DITHERED';glass.diffuse_color=(.16,.2,.22,.08)
+bottles=[mat('Bottle '+str(i),c,.22,.12) for i,c in enumerate([(.16,.064,.012),(.037,.091,.047),(.26,.24,.14),(.35,.32,.24)])]
+C={};S={}
+def link(o,col):
+ for c in list(o.users_collection):c.objects.unlink(o)
+ C[col].objects.link(o);return o
 
-def cube(n,loc,dim,m=black,bev=.025,col='Props'):
-    bpy.ops.mesh.primitive_cube_add(size=1,location=loc); o=bpy.context.object; o.name=n; o.dimensions=dim
-    bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
-    if m:o.data.materials.append(m)
-    if bev:
-        b=o.modifiers.new('Soft manufactured edges','BEVEL'); b.width=bev; b.segments=2
-        o.modifiers.new('Weighted corner normals','WEIGHTED_NORMAL')
-    return link(o,col)
-def cyl(n,loc,r,depth,m=black,vertices=32,col='Props'):
-    bpy.ops.mesh.primitive_cylinder_add(vertices=vertices,radius=r,depth=depth,location=loc); o=bpy.context.object; o.name=n; o.data.materials.append(m)
-    b=o.modifiers.new('Edge radius','BEVEL'); b.width=.008;b.segments=2;o.modifiers.new('Weighted normals','WEIGHTED_NORMAL');return link(o,col)
-def rod(n,v1,v2,r,m=black,col='Props'):
-    d=Vector(v2)-Vector(v1);o=cyl(n,(Vector(v1)+Vector(v2))/2,r,d.length,m,16,col);o.rotation_euler=d.to_track_quat('Z','Y').to_euler();return o
-def mesh(n,verts,faces,m,col='Props'):
-    me=bpy.data.meshes.new(n);me.from_pydata(verts,[],faces);me.update();o=bpy.data.objects.new(n,me);(C[col] if isinstance(col,str) else col).objects.link(o);o.data.materials.append(m);return o
-def text(n,body,loc,size,m=gold,rot=(math.pi/2,0,0),align='CENTER'):
-    cu=bpy.data.curves.new(n,'FONT');cu.body=body;cu.size=size;cu.align_x=align;cu.extrude=.0015;cu.bevel_depth=.0006
-    o=bpy.data.objects.new(n,cu);C['Props'].objects.link(o);o.location=loc;o.rotation_euler=rot;o.data.materials.append(m);return o
-def area(n,loc,target,power,color,size=3):
-    d=bpy.data.lights.new(n,'AREA');d.energy=power;d.color=color;d.shape='DISK';d.size=size
-    o=bpy.data.objects.new(n,d);C['Lighting'].objects.link(o);o.location=loc;o.rotation_euler=(Vector(target)-o.location).to_track_quat('-Z','Y').to_euler();return o
-
-def point(n,loc,power,color,r=.2):
-    d=bpy.data.lights.new(n,'POINT');d.energy=power;d.color=color;d.shadow_soft_size=r;o=bpy.data.objects.new(n,d);C['Lighting'].objects.link(o);o.location=loc;return o
-# Meter-scaled 16 x 20 room. Back = +Y. Open front is the presentation cutaway.
-cube('Foundation / 16m × 20m',(0,0,-.17),(16.4,20.4,.3),wall,.05,'Architecture')
-for ix in range(40):
-    x=-7.8+ix*.4
-    for j in range(-1,7):
-        y=-10+j*3+(1.5 if ix%2 else 0);y0=max(y,-10);y1=min(y+2.99,10)
-        if y1>y0:cube('Individual oak floorboard',(x,(y0+y1)/2,.006),(.393,y1-y0,.025),random.choice(floors),.004,'Architecture')
-cube('Back wall',(0,10.05,2.4),(16.2,.2,4.8),wall,.02,'Architecture')
-cube('West wall',(-8.05,0,2.4),(.2,20,4.8),wall,.02,'Architecture')
-cube('East wall',(8.05,0,2.4),(.2,20,4.8),wall,.02,'Architecture')
-for x in [-7.9,7.9]:
-    cube('Continuous walnut dado',(x,0,.64),(.09,20,1.25),walnut,.015,'Architecture')
-    cube('Brass dado cap',(x,0,1.29),(.12,20,.035),gold,.008,'Architecture')
-# Structural columns frame peripheral circulation, not central fighting zone.
-for x in [-5.8,5.8]:
-    for y in [-6,1.5,8.8]:
-        cube('Steel structural pier',(x,y,2.23),(.22,.22,4.46),black,.02,'Architecture')
-        cube('Pier brass collar',(x,y,.14),(.25,.25,.26),gold,.01,'Architecture')
-# DJ: raised end stage, walnut front, three luminous chevrons as documented.
-cube('DJ dais',(0,8.5,.18),(8,3,.34),black,.04,'Architecture')
-cube('DJ counter',(0,8.2,1.17),(5.4,1.05,.16),stone,.04)
-cube('DJ booth core',(0,8.22,.71),(5.2,.82,.82),black,.025)
-for i in range(53):cube('DJ walnut fluting',(-2.55+i*.098,7.79,.73),(.06,.055,.78),walnut,.012)
-cube('DJ amber reveal',(0,7.735,.36),(5.1,.025,.022),amber,.005)
-cube('Chevron backdrop / black panel',(0,9.88,2.75),(7.5,.08,2.45),black,.02)
-for xx in [-2.05,0,2.05]:
-    v=[(xx-.68,9.81,3.55),(xx+.04,9.81,3.55),(xx+.86,9.81,2.76),(xx+.04,9.81,1.97),(xx-.68,9.81,1.97),(xx+.14,9.81,2.76)]
-    mesh('White chevron / reference motif',v,[(0,1,2,3,4,5)],white)
-text('DJ venue wordmark','T R I S C H L I',(0,7.726,.75),.18,gold)
-# Decks, illuminated ring jog wheels, displays, knobs and central four-channel mixer.
-for dx in [-1.02,1.02]:
-    cube('Media player chassis',(dx,8.17,1.315),(.81,.72,.15),black,.035)
-    cyl('Jog wheel machined rim',(dx,8.01,1.405),.247,.035,gold,64)
-    cyl('Jog wheel black platter',(dx,8.01,1.429),.218,.02,black,64)
-    cyl('Jog wheel LED centre',(dx,8.01,1.443),.061,.012,white,48)
-    cube('Player LCD',(dx,8.39,1.405),(.42,.18,.018),blue,.01)
-    for z in range(4):
-        cyl('Deck transport control',(dx-.31+z*.095,7.87,1.407),.022,.018,white if z==0 else gold,16)
-    cube('Pitch slider rail',(dx+.32,8.13,1.41),(.016,.27,.012),gold,.003)
-    cube('Pitch slider cap',(dx+.32,8.15,1.427),(.065,.035,.022),black,.004)
-cube('Four-channel mixer',(0,8.17,1.32),(.82,.73,.17),black,.025)
-for x in [-.27,-.09,.09,.27]:
-    for y in [8.1,8.24,8.38]:cyl('Mixer EQ rotary',(x,y,1.43),.027,.044,gold,16)
-    cube('Channel fader track',(x,7.97,1.415),(.01,.16,.012),gold,.002)
-    cube('Channel fader',(x,7.97+random.uniform(-.05,.05),1.44),(.07,.025,.025),white,.004)
-rod('Headphone cable',(.42,8.4,1.45),(.65,8.65,1.3),.012)
-# Speakers have inset cones and protective grille bars.
-for x in [-3.15,3.15]:
-    cube('PA cabinet',(x,8.35,1.72),(.65,.63,1.08),black,.065)
-    for z,r in [(1.52,.2),(1.94,.12)]:
-        o=cyl('PA driver',(x,8.022,z),r,.025,stone,32);o.rotation_euler[0]=math.pi/2
-        for xx in range(-3,4):rod('Cabinet grille',(x+xx*.065,7.997,z-.18),(x+xx*.065,7.997,z+.18),.006,black)
-# East bar: counter runs along Y; bartending aisle remains behind it.
-cube('Back bar mirror',(7.9,3.7,2.3),(.035,8,2.3),mat('Smoked mirror',(.18,.2,.21),.08,.92),.005)
-cube('Bar core',(6.15,3.45,.59),(1.08,8.2,1.16),black,.035)
-cube('Monolithic stone bartop',(6.14,3.45,1.21),(1.45,8.5,.15),stone,.04)
-for j in range(82):cube('Bar vertical walnut slat',(5.59,-.55+j*.099,.63),(.065,.065,1.05),walnut,.012)
-rod('Bar brass footrest',(5.29,-.4,.21),(5.29,7.3,.21),.035,gold)
-for y in [-.3,2,4.3,7.1]:rod('Footrest bracket',(5.29,y,.21),(5.59,y,.21),.025,gold)
-cube('Bar amber toe light',(5.54,3.45,.11),(.025,8.02,.024),amber,.003)
-for z in [1.55,2.23,2.91]:
-    cube('Floating back-bar shelf',(7.58,3.55,z),(.69,7.6,.065),walnut,.015)
-    cube('Shelf warm LED',(7.22,3.55,z-.032),(.018,7.55,.02),amber,.002)
-bottle_m=[mat('Bottle '+n,c,.23,.2) for n,c in [('amber',(.22,.065,.012)),('green',(.028,.12,.065)),('clear',(.26,.31,.28))]]
-for z in [1.59,2.27,2.95]:
-    for j in range(25):
-        y=-.05+j*.295;x=7.55;h=random.uniform(.26,.38);m=random.choice(bottle_m)
-        cyl('Bottle body',(x,y,z+h*.35),.061,h*.7,m,16);cyl('Bottle shoulder',(x,y,z+h*.72),.044,h*.16,m,16);cyl('Bottle neck',(x,y,z+h*.91),.025,h*.25,m,16)
-        cyl('Bottle label',(x,y,z+h*.34),.062,h*.26,label,16);cyl('Bottle cap',(x,y,z+h*1.05),.027,.025,gold,16)
-# Tap fittings, bar mats, stacked glasses.
-for y in [1.2,4.9]:
-    rod('Beer tap riser',(6.05,y,1.3),(6.05,y,1.76),.045,gold)
-    rod('Beer tap spout',(6.05,y,1.72),(5.88,y,1.72),.032,gold)
-    cube('Rubber drip tray',(5.95,y,1.3),(.5,.55,.025),black,.01)
-for y in [0,2.8,6.8]:
-    for k in range(3):cyl('Lowball glass',(6.05,y+k*.14,1.36),.045,.13,stone,24)
-# Black upholstered lounges on inferred .36m western terrace, open walk-through gaps.
-cube('Lounge terrace / inferred arrangement',(-5.75,.1,.18),(4.4,15.6,.35),walnut,.04,'Architecture')
-for y in [-5.8,.1,5.9]:
-    for k in range(2):
-        cube('Lounge access step',(-3.42+k*.22,y,.09+(1-k)*.09),(.43,1.75,.18+(1-k)*.18),walnut,.02,'Architecture')
-        cube('Amber stair nosing',(-3.21+k*.22,y,.19+(1-k)*.18),(.018,1.65,.016),amber,.003)
-# Rug chevrons are original modeled fabric motif; not a photo.
-for cy in [-3.1,3.15]:
-    cube('Lounge ivory rug',(-5.72,cy,.366),(4.05,4.95,.014),cream,.002)
-    for k in range(17):
-        yy=cy-2.35+k*.29
-        pts=[(-7.65,yy,.377),(-6.7,yy+.23,.377),(-5.75,yy,.377),(-4.8,yy+.23,.377),(-3.85,yy,.377)]
-        for j in range(4):
-            q=pts[j];r=pts[j+1]
-            mesh('Woven rug zigzag',[(q[0],q[1],q[2]),(r[0],r[1],r[2]),(r[0],r[1]+.075,r[2]),(q[0],q[1]+.075,q[2])],[(0,1,2,3)],ink)
-
-def sofa(n,x,y,length=2.65,angle=0):
-    # Local Y back; rotate all elements around local center.
-    parts=[]
-    def b(name,loc,d,m,bev=.03):parts.append(cube(n+' / '+name,(x+loc[0],y+loc[1],loc[2]),d,m,bev))
-    b('walnut plinth',(0,0,.49),(length,.94,.23),walnut)
-    b('shadow foot',(0,0,.385),(length-.25,.73,.08),black)
-    for j in range(3):
-        xx=-length/3+j*length/3
-        b('seat cushion',(xx,-.07,.73),(length/3-.018,.78,.26),leather,.065)
-        b('back cushion',(xx,.34,1.06),(length/3-.016,.19,.67),leather,.055)
-        b('fine piping',(xx,-.443,.78),(length/3-.045,.009,.008),black,.002)
-    for sign in [-1,1]:b('arm',(sign*(length/2-.065),0,.89),(.13,.94,.48),leather,.05)
-    for o in parts:
-        v=Vector((o.location.x-x,o.location.y-y,0));v.rotate(__import__('mathutils').Euler((0,0,angle)));o.location.x=x+v.x;o.location.y=y+v.y;o.rotation_euler.z=angle
-for y in [-3.1,3.15]:
-    sofa('Lounge sofa',-6.15,y+1.25,3.1,0)
-    sofa('Lounge sofa',-6.15,y-1.25,3.1,math.pi)
-    # two small tables rather than overscaled center obstacle.
-    for x in [-6.95,-5.2]:
-        cube('Coffee table smoked top',(x,y,.87),(1.28,.68,.055),stone,.025)
-        cube('Coffee table brass edge',(x,y,.835),(1.31,.71,.025),gold,.012)
-        for dx in [-.53,.53]:
-            for dy in [-.24,.24]:rod('Slender table leg',(x+dx,y+dy,.39),(x+dx,y+dy,.82),.017,black)
-        cyl('Votive holder',(x-.28,y,.94),.065,.09,gold,24);cyl('Votive glow',(x-.28,y,.99),.04,.015,amber,24)
-        cube('Drinks menu',(x+.3,y,1.03),(.19,.035,.28),black,.005)
-# Low glass screens; deliberately not full-height barriers.
-glass=mat('Lounge glass / subtle transparent',(.24,.3,.31),.13,.2)
-bs=glass.node_tree.nodes.get('Principled BSDF');bs.inputs['Transmission Weight'].default_value=1;bs.inputs['IOR'].default_value=1.03
-# Alpha surface is a deliberate Eevee architectural-glass approximation.
-bs.inputs['Base Color'].default_value=(.3,.42,.45,1);bs.inputs['Roughness'].default_value=.08
-bs.inputs['Transmission Weight'].default_value=0;bs.inputs['Alpha'].default_value=.16;glass.diffuse_color=(.3,.42,.45,.16)
-glass.surface_render_method='DITHERED'
-for y0,y1 in [(-7.2,-6.8),(-4.8,-.9),(1,4.9),(6.8,7.7)]:
-    for y in [y0,y1]:rod('Screen brass post',(-3.6,y,.37),(-3.6,y,1.41),.022,gold)
-    rod('Screen brass cap',(-3.6,y0,1.41),(-3.6,y1,1.41),.019,gold)
-    cube('Glass lounge screen',(-3.6,(y0+y1)/2,.96),(.016,y1-y0,1),glass,.002)
-# Foreground social tables and small copper lamps preserve central arena emptiness.
-for x,y in [(-5.7,-8.8),(6.4,-4.4),(6.4,-7.5)]:
-    cyl('Hexagonal cocktail tabletop',(x,y,1.11),.67,.065,stone,6)
-    cyl('Cocktail pedestal',(x,y,.56),.055,1.06,black)
-    cyl('Cocktail base',(x,y,.04),.32,.06,black)
-    cyl('Table lamp foot',(x,y,1.17),.11,.035,gold)
-    rod('Table lamp stem',(x,y,1.17),(x,y,1.48),.018,gold)
-    cyl('Table lamp shade',(x,y,1.49),.14,.09,gold)
-    cyl('Table lamp diffuser',(x,y,1.446),.12,.009,amber)
-    point('Table lamp warm pool',(x,y,1.39),12,(1,.52,.22),.12)
-# Rear staff door and discreet wayfinding.
-cube('Staff door',(6.15,9.92,1.15),(1.25,.05,2.3),black,.015)
-text('Staff door type','PRIVATE',(6.15,9.88,1.65),.095,gold)
-rod('Door lever',(6.53,9.84,1),(6.35,9.84,1),.016,gold)
-text('Bar typography','B A R',(7.88,3.5,3.62),.33,gold,(math.pi/2,0,-math.pi/2))
-# Black exposed technical ceiling + staggered linear grid. Complete but toggleable.
-cube('Technical ceiling plane',(0,0,4.77),(16,20,.12),black,.01,ceiling)
-for x in [-4.7,0,4.7]:
-    rod('Ventilation main duct',(x,-9.8,4.42),(x,9.8,4.42),.19,black,ceiling)
-    for y in range(-9,10,2):
-        # seam rings around longitudinal ducts
-        bpy.ops.mesh.primitive_torus_add(major_radius=.192,minor_radius=.012,major_segments=24,minor_segments=6,location=(x,y,4.42),rotation=(math.pi/2,0,0));o=bpy.context.object;o.name='Duct folded seam';o.data.materials.append(stone);link(o,ceiling)
-for y in [-8,-4,0,4,8]:cube('Ceiling service beam',(0,y,4.53),(15.8,.09,.16),black,.01,ceiling)
-for ix in range(9):
-    x=-6.8+ix*1.7
-    for j in range(4):
-        y=-7.9+j*4.8+(ix%2)*.55;length=3.6 if ix%3 else 2.8
-        cube('Linear luminaire housing',(x,y,4.16),(.074,length,.065),black,.008,ceiling)
-        cube('Warm-white linear luminaire',(x,y,4.119),(.027,length-.05,.012),white,.003,ceiling)
-        for yy in [y-length*.35,y+length*.35]:rod('Light suspension',(x,yy,4.2),(x,yy,4.65),.007,black,ceiling)
-# Golden mirror-ball cluster: mesh of separate beveled quads with real seams.
-def disco(x,y,z,r):
-    rod('Disco suspension',(x,y,z+r),(x,y,4.67),.009,black,ceiling)
-    verts=[];faces=[];rows=20;cols=40
-    for i in range(rows):
-        t0=math.pi*(i+.07)/rows;t1=math.pi*(i+.93)/rows
-        for j in range(cols):
-            p0=math.tau*(j+.06)/cols;p1=math.tau*(j+.94)/cols
-            base=len(verts)
-            for t,ph in [(t0,p0),(t0,p1),(t1,p1),(t1,p0)]:verts.append((x+r*math.sin(t)*math.cos(ph),y+r*math.sin(t)*math.sin(ph),z+r*math.cos(t)))
-            faces.append((base,base+1,base+2,base+3))
-    mesh('Golden mirrored disco ball',verts,faces,gold,ceiling)
-for b in [(-.65,4.8,3.58,.43),(.38,4.9,3.81,.31),(.08,4.1,3.35,.26),(-1.25,4.4,3.9,.24),(1.05,4.5,3.58,.24)]:disco(*b)
-# Moving heads and narrow actual spot beams in a restrained haze.
-for x,y in [(-2.8,-4),(2.9,-1),(-1.8,3.7),(3.1,6.5),(-6.6,2.5),(5.5,3.3)]:
-    cube('Moving-head yoke',(x,y,3.99),(.22,.18,.23),black,.025,ceiling)
-    cyl('Moving-head barrel',(x,y,3.8),.12,.25,black,24,ceiling)
-    cyl('Moving-head lens',(x,y,3.668),.09,.01,white,24,ceiling)
-    d=bpy.data.lights.new('Narrow white atmospheric beam','SPOT');d.energy=700;d.color=(.86,.91,1);d.spot_size=.18;d.spot_blend=.55;d.shadow_soft_size=.06
-    o=bpy.data.objects.new(d.name,d);C['Lighting'].objects.link(o);o.location=(x,y,3.65)
-# Controlled broad pools separate the warm joinery from the charcoal architecture.
-area('Soft frontal architectural key',(1,-6,3.8),(0,2,0),280,(.82,.85,1),6)
-area('Bar amber wash',(7,3.5,3.8),(5.3,3.5,.4),500,(1,.48,.17),5)
-area('Lounge tungsten wash',(-6,0,3.9),(-5.5,0,.5),420,(1,.58,.28),5)
-area('DJ backdrop spill',(0,9.1,3.6),(0,6,1),250,(.83,.9,1),4)
-area('Dancefloor softbox',(0,1,4.35),(0,1,0),250,(.91,.85,.7),5)
-area('Gold ball glint',(1.7,4,3.8),(-.5,4.5,3.6),160,(1,.58,.22),.7)
-# Cheap Eevee volume only; no fake solid light cones.
-haze=bpy.data.materials.new('Thin club haze');haze.use_nodes=True;ns=haze.node_tree.nodes;ns.clear();out=ns.new('ShaderNodeOutputMaterial');v=ns.new('ShaderNodeVolumePrincipled');v.inputs['Density'].default_value=.009;v.inputs['Color'].default_value=(.55,.59,.64,1);v.inputs['Anisotropy'].default_value=.3;haze.node_tree.links.new(v.outputs['Volume'],out.inputs['Volume'])
-cube('Atmosphere',(0,0,2.2),(15.9,19.9,4.4),haze,0,'Lighting')
-# Hidden gameplay helpers. No floor paint or ring graphics.
-for n,loc in [('Spawn_A',(-1.7,-1.8,.04)),('Spawn_B',(1.7,1.8,.04)),('Arena_centre',(0,0,.04))]:
-    o=bpy.data.objects.new(n,None);C['Gameplay'].objects.link(o);o.location=loc;o.empty_display_type='CIRCLE';o.empty_display_size=.4;o['inferred']='Game-adaptation helper, not surveyed venue geometry'
-zone=cube('Playable envelope / 7 × 10 m',(0,-.3,1),(6.8,10,2),None,0,'Gameplay');zone.display_type='WIRE';zone.hide_render=True;zone.hide_set(True)
-for n,loc,dim in [('floor',(0,0,-.18),(16,20,.3)),('back',(0,10.05,2),(16,.2,4)),('west',(-8.05,0,2),(.2,20,4)),('east',(8.05,0,2),(.2,20,4)),('bar',(6.15,3.45,.6),(1.5,8.5,1.2)),('dais',(0,8.5,.18),(8,3,.36)),('lounge',(-5.75,.1,.18),(4.4,15.6,.36))]:
-    o=cube('COL_'+n,loc,dim,None,0,'Collision');o.display_type='WIRE';o.hide_render=True;o.hide_set(True)
-C['Collision'].hide_render=True
-# Cameras: interior hero, equipment/bar diagonal, explanatory cutaway.
+def cube(n,loc,d,m=black,bev=0,col='Props'):
+ bpy.ops.mesh.primitive_cube_add(size=1,location=loc);o=bpy.context.object;o.name=n;o.dimensions=d;bpy.ops.object.transform_apply(location=False,rotation=False,scale=True);o.data.materials.append(m)
+ if bev:b=o.modifiers.new('Editable edge softness','BEVEL');b.width=bev;b.segments=2;o.modifiers.new('Corner normals','WEIGHTED_NORMAL')
+ return link(o,col)
+def mesh(n,v,f,m,col='Props'):
+ me=bpy.data.meshes.new(n);me.from_pydata(v,[],f);me.update();o=bpy.data.objects.new(n,me);C[col].objects.link(o);o.data.materials.append(m);return o
+def cyl(n,loc,r,h,m=black,col='Props',vertices=24):
+ bpy.ops.mesh.primitive_cylinder_add(vertices=vertices,radius=r,depth=h,location=loc);o=bpy.context.object;o.name=n;o.data.materials.append(m);return link(o,col)
+def rod(n,p,q,r=.012,m=black,col='Props'):
+ v=Vector(q)-Vector(p);o=cyl(n,(Vector(p)+Vector(q))/2,r,v.length,m,col,16);o.rotation_euler=v.to_track_quat('Z','Y').to_euler();return o
+def area(n,loc,target,power,color=(.9,.92,1),size=4):
+ d=bpy.data.lights.new(n,'AREA');d.energy=power;d.color=color;d.shape='DISK';d.size=size;o=bpy.data.objects.new(n,d);C['Lights'].objects.link(o);o.location=loc;o.rotation_euler=(Vector(target)-o.location).to_track_quat('-Z','Y').to_euler();return o
 def camera(n,loc,target,lens):
-    d=bpy.data.cameras.new(n);o=bpy.data.objects.new(n,d);C['Cameras'].objects.link(o);o.location=loc;o.rotation_euler=(Vector(target)-o.location).to_track_quat('-Z','Y').to_euler();d.lens=lens;d.clip_end=150;return o
-cams={
-'hero':camera('HERO / entrance toward DJ + bar',(0,-10.8,2.6),(.1,4,1.6),23),
-'detail':camera('DETAIL / deck, joinery and bar',(-3.65,3.7,2.75),(.7,8.5,1.8),25),
-'overhead':camera('CUTAWAY / inferred game layout',(19,-24,26),(0,0,0),42)}
-s=bpy.context.scene;s.unit_settings.system='METRIC';s.unit_settings.length_unit='METERS';s.render.engine='BLENDER_EEVEE'
-s.render.threads_mode='FIXED';s.render.threads=3
-s.eevee.taa_render_samples=24 if a.draft else 96
-s.eevee.shadow_pool_size='1024'
-s.render.image_settings.file_format='PNG';s.render.image_settings.color_mode='RGB';s.render.image_settings.compression=60
-s.render.resolution_percentage=50 if a.draft else 100
-s.world.color=(.065,.065,.065);s.world.use_nodes=True;s.world.node_tree.nodes['Background'].inputs['Color'].default_value=(.1,.13,.18,1);s.world.node_tree.nodes['Background'].inputs['Strength'].default_value=.22
-s.view_settings.view_transform='AgX';s.view_settings.look='AgX - Medium High Contrast';s.view_settings.exposure=.05
-# Subtle optical halation (not a neon bloom wash).
-g=bpy.data.node_groups.new('Restrained lens halation','CompositorNodeTree');g.interface.new_socket(name='Image',in_out='OUTPUT',socket_type='NodeSocketColor')
-r=g.nodes.new('CompositorNodeRLayers');gl=g.nodes.new('CompositorNodeGlare');gl.inputs['Type'].default_value='Fog Glow';gl.inputs['Quality'].default_value='Medium';gl.inputs['Threshold'].default_value=1.8;gl.inputs['Strength'].default_value=.35
-out=g.nodes.new('NodeGroupOutput');g.links.new(r.outputs['Image'],gl.inputs['Image']);g.links.new(gl.outputs['Image'],out.inputs['Image']);s.compositing_node_group=g
-s.camera=cams['hero'];s.render.resolution_x=1920;s.render.resolution_y=1080
-s['venue']='Trischli Club, Brühlgasse 15, St. Gallen';s['design_status']='Venue-inspired game adaptation. Dimensions, adjacency and raised lounge placement inferred; not a surveyed reconstruction.'
-s['reference_policy']='Seven official images studied privately. No photos/textures embedded or redistributed.'
-s['cutaway_usage']='Ceiling collection is independently toggleable. Overhead render temporarily hides ceiling and atmosphere.'
-# Start in a useful camera view in desktop Blender.
-for screen in bpy.data.screens:
-    for ar in screen.areas:
-        if ar.type=='VIEW_3D': ar.spaces.active.region_3d.view_perspective='CAMERA'
-blend=os.path.join(a.output_dir,'trichli-arena.blend');bpy.ops.wm.save_as_mainfile(filepath=blend,compress=True)
-statistics={'objects':len(bpy.data.objects),'mesh_objects':sum(o.type=='MESH' for o in bpy.data.objects),'materials':sum(m.users>0 for m in bpy.data.materials),'mesh_vertices':sum(len(m.vertices) for m in bpy.data.meshes),'mesh_polygons':sum(len(m.polygons) for m in bpy.data.meshes),'collections':[c.name for c in bpy.data.collections],'reference_count':7,'dimensions_m':[16.4,20.4,5.15],'blender':bpy.app.version_string,'renderer':s.render.engine}
-with open(os.path.join(a.output_dir,'scene-stats.json'),'w') as f:json.dump(statistics,f,indent=2)
-for key in (list(cams) if a.render=='all' else [] if a.render=='none' else [a.render]):
-    s.camera=cams[key];s.render.resolution_x=1920;s.render.resolution_y=1440 if key=='overhead' else 1080
-    ceiling.hide_render=(key=='overhead');bpy.data.objects['Atmosphere'].hide_render=(key=='overhead')
-    # Camera-facing east wall is sectioned away only in the explanatory cutaway.
-    bpy.data.objects['East wall'].hide_render=(key=='overhead')
-    if key=='overhead':
-        s.view_settings.exposure=.65
-        # Section away the back-bar mirror/shelves to reveal the working counter.
-        for o in bpy.data.objects:
-            if o.location.x>7.15 and (o.type=='MESH' or o.name=='Bar typography'):o.hide_render=True
-        area('Cutaway presentation fill',(4,-7,13),(0,0,0),1700,(.77,.83,1),10)
-        for o in bpy.data.objects:
-            if o.name.startswith('Continuous walnut dado') or o.name.startswith('Brass dado cap'):
-                o.hide_render=o.location.x>0
-    else:s.view_settings.exposure=.05
-    s.render.filepath=os.path.join(a.output_dir,'renders',key+'.png');bpy.ops.render.render(write_still=True)
-print('TRISCHLI_COMPLETE',json.dumps(statistics))
+ d=bpy.data.cameras.new(n);o=bpy.data.objects.new(n,d);C['Cameras'].objects.link(o);o.location=loc;o.rotation_euler=(Vector(target)-o.location).to_track_quat('-Z','Y').to_euler();d.lens=lens;d.clip_end=80;return o
+def newscene(key,ref,loc,target,lens):
+ global C
+ s=bpy.data.scenes[0] if not S else bpy.data.scenes.new(key);s.name=key.upper()+' / reference '+ref;bpy.context.window.scene=s;C={}
+ for n in ['Architecture','Furniture','Props','Ceiling','Lights','Cameras']:
+  c=bpy.data.collections.new(key+' / '+n);s.collection.children.link(c);C[n]=c
+ s.render.engine='BLENDER_EEVEE';s.eevee.taa_render_samples=24 if a.draft else 80;s.eevee.shadow_pool_size='1024';s.eevee.volumetric_tile_size='4';s.eevee.volumetric_samples=64;s.render.threads_mode='FIXED';s.render.threads=3;s.render.resolution_x=1800;s.render.resolution_y=1200;s.render.resolution_percentage=50 if a.draft else 100;s.render.image_settings.file_format='PNG';s.render.image_settings.color_mode='RGB';s.render.image_settings.compression=70
+ s.world=bpy.data.worlds.new(key+' / night');s.world.use_nodes=True;s.world.node_tree.nodes['Background'].inputs['Color'].default_value=(.09,.1,.12,1);s.world.node_tree.nodes['Background'].inputs['Strength'].default_value=.16
+ s.view_settings.view_transform='AgX';s.view_settings.look='AgX - Medium High Contrast';s.view_settings.exposure=0
+ s.unit_settings.system='METRIC';s.unit_settings.scale_length=1;s.camera=camera(key.upper()+' / matched reference '+ref,loc,target,lens)
+ s['venue']='Trischli Club, St. Gallen';s['revision']=3;s['reference']=ref;s['status']='Bounded photographic reconstruction; estimated scale, not surveyed. Independent study, not a joined venue floorplan.';s['source_photo_embedded']=False
+ S[key]=s;return s
+
+def floor(x0,x1,y0,y1,z=0):
+ cube('Subfloor',((x0+x1)/2,(y0+y1)/2,z-.08),(x1-x0,y1-y0,.14),wall,col='Architecture')
+ for i in range(math.ceil((x1-x0)/.21)):
+  x=x0+.105+i*.21
+  for j in range(-1,math.ceil((y1-y0)/1.9)+1):
+   y=y0+j*1.9+(i%3)*.63;lo=max(y,y0);hi=min(y+1.895,y1)
+   if hi>lo:cube('Narrow staggered smoked floorboard',(x,(lo+hi)/2,z),(.206,hi-lo,.018),random.choice(floors),col='Architecture')
+def ceiling(x0,x1,y0,y1,z=3.3,axis='y'):
+ cube('Low black technical ceiling',((x0+x1)/2,(y0+y1)/2,z+.18),(x1-x0,y1-y0,.14),black,col='Ceiling')
+ for y in range(math.floor(y0),math.ceil(y1)+1):
+  cube('Ceiling cross rail',((x0+x1)/2,y,z+.01),(x1-x0,.055,.06),black,col='Ceiling')
+ for x in range(math.floor(x0),math.ceil(x1)+1):
+  cube('Long ceiling rail',(x,(y0+y1)/2,z-.05),(.045,y1-y0,.07),black,col='Ceiling')
+ for x in [x0+.75,0,x1-.6]:
+  rod('Exposed service pipe',(x,y0,z+.05),(x,y1,z+.05),.065,black,'Ceiling')
+ for y in [y0+1,y0+4,y0+7,y0+10]:
+  cube('Broad low air duct',((x0+x1)/2,y,z+.03),(x1-x0,.5,.24),black,col='Ceiling')
+  for x in [x0+.5,x0+2.5,x0+4.5,x0+6.5]:cube('Duct folded panel seam',(x,y,z-.096),(.022,.51,.016),black,col='Ceiling')
+ for x in [x0+.4,x1-.4]:
+  for zoff in [-.05,.015,.08]:rod('Parallel exposed conduit',(x,y0,z+zoff),(x,y1,z+zoff),.018,black,'Ceiling')
+ if axis=='x':
+  for i in range(10):
+   y=y0+i*(y1-y0)/10
+   for x in [x0+(x1-x0)*.23,x0+(x1-x0)*.72]:
+    length=(x1-x0)*random.uniform(.3,.45);cube('Horizontal staggered light bar',(x,y,z-.2),(length,.028,.028),white,col='Ceiling');rod('Light suspension',(x,y,z-.18),(x,y,z+.1),.007,black,'Ceiling')
+ else:
+  for x in [-3,-1.6,0,1.5,3]:
+   for y in [2,6,10]:
+    cube('Axial staggered light bar',(x,y,z-.17),(.028,random.uniform(1.7,2.5),.025),white,col='Ceiling')
+def spotlight(x,y,z=3.0,power=500,width=.075):
+ cube('Moving head hanger',(x,y,z+.15),(.19,.19,.22),black,.025,'Ceiling');cyl('Moving head barrel',(x,y,z),.105,.23,black,'Ceiling');cyl('Downward lens',(x,y,z-.12),.07,.01,white,'Ceiling')
+ d=bpy.data.lights.new('Narrow white spot','SPOT');d.energy=power;d.spot_size=width;d.spot_blend=.3;d.shadow_soft_size=.03;d.color=(.92,.95,1);o=bpy.data.objects.new(d.name,d);C['Lights'].objects.link(o);o.location=(x,y,z-.13)
+def haze(x0,x1,y0,y1,z=3.3,density=.018):
+ m=bpy.data.materials.new('Thin atmospheric scattering');m.use_nodes=True;ns=m.node_tree.nodes;ns.clear();out=ns.new('ShaderNodeOutputMaterial');v=ns.new('ShaderNodeVolumePrincipled');v.inputs['Density'].default_value=density;v.inputs['Color'].default_value=(.72,.75,.78,1);v.inputs['Anisotropy'].default_value=.35;m.node_tree.links.new(v.outputs['Volume'],out.inputs['Volume']);cube('Atmospheric volume',((x0+x1)/2,(y0+y1)/2,z/2),(x1-x0,y1-y0,z),m,col='Lights')
+def panel(n,x,y,w,h=1.2,axis='x',bottom=0):
+ # Framed walnut enclosure, not arbitrary fluting.
+ parts=[cube(n+' core',(x,y,bottom+h/2),(w,.16,h),walnut,.006,'Architecture')]
+ for xx in [x-w/2+.04,x+w/2-.04]:parts.append(cube(n+' outer stile',(xx,y-.095,bottom+h/2),(.055,.045,h),walnut,.005,'Architecture'))
+ for z in [bottom+.055,bottom+h-.055]:parts.append(cube(n+' rail',(x,y-.095,z),(w,.045,.065),walnut,.004,'Architecture'))
+ for i in range(1,max(2,int(w/.55))):
+  xx=x-w/2+i*w/max(2,int(w/.55));parts.append(cube(n+' panel stile',(xx,y-.095,bottom+h/2),(.035,.04,h-.1),walnut,.003,'Architecture'))
+ if axis=='y':
+  for o in parts:
+   dx=o.location.x-x;dy=o.location.y-y;o.location.x=x-dy;o.location.y=y+dx;o.rotation_euler.z=math.pi/2
+ cube(n+' dark cap',(x,y,bottom+h+.025),(w+.07,.28,.055) if axis=='x' else (.28,w+.07,.055),black,.008,'Architecture')
+def glassline(p,q,z0=0,h=1.2):
+ x,y=p;xx,yy=q
+ if abs(x-xx)<.01:cube('Clear glass screen',((x+xx)/2,(y+yy)/2,z0+h/2),(.012,abs(yy-y),h),glass,col='Architecture')
+ else:cube('Clear glass screen',((x+xx)/2,(y+yy)/2,z0+h/2),(abs(xx-x),.012,h),glass,col='Architecture')
+ rod('Fine glass top rail',(x,y,z0+h),(xx,yy,z0+h),.012,brass,'Architecture')
+ for u,v in [p,q]:rod('Glass edge upright',(u,v,z0),(u,v,z0+h),.012,black,'Architecture')
+def table(x,y,z=0,high=True):
+ h=1.06 if high else .56;w=.66 if high else .5;depth=.42 if high else 1.1
+ cube('Black high tabletop' if high else 'Stone coffee tabletop',(x,y,z+h),(w,depth,.05),black if high else gray,.01,'Furniture')
+ if high:cube('Square pedestal foot',(x,y,z+.025),(.48,.4,.05),black,col='Furniture');cube('Table pedestal',(x,y,z+h/2),(.055,.055,h),black,col='Furniture')
+ else:
+  cube('Thin table brass rim',(x,y,z+h-.025),(w+.025,depth+.025,.022),brass,.004,'Furniture')
+  for dx in [-w/2+.05,w/2-.05]:
+   for dy in [-depth/2+.05,depth/2-.05]:rod('Coffee table thin leg',(x+dx,y+dy,z),(x+dx,y+dy,z+h),.012,black,'Furniture')
+ cyl('Votive holder',(x-.15,y,z+h+.06),.04,.07,brass);cyl('Candle',(x-.15,y,z+h+.1),.022,.008,amber)
+ if not high:cube('Menu card',(x+.22,y,z+h+.16),(.14,.025,.28),black,.003)
+def sofa(x,y,length=2.6,angle=0,z=0):
+ parts=[]
+ def b(n,loc,d,m,bev=.025):parts.append(cube('Sofa / '+n,(x+loc[0],y+loc[1],z+loc[2]),d,m,bev,'Furniture'))
+ b('walnut base',(0,0,.16),(length,.86,.18),walnut,.009);b('dark plinth',(0,0,.07),(length-.18,.69,.1),black)
+ for i in range(3):
+  dx=-length/3+i*length/3;b('seat',(dx,-.04,.34),(length/3-.015,.76,.23),leather,.04);b('back',(dx,.32,.65),(length/3-.012,.16,.66),leather,.027)
+ for xx in [-length/2+.035,length/2-.035]:b('slim walnut side',(xx,0,.44),(.055,.86,.65),walnut,.007)
+ for o in parts:
+  dx=o.location.x-x;dy=o.location.y-y;o.location.x=x+dx*math.cos(angle)-dy*math.sin(angle);o.location.y=y+dx*math.sin(angle)+dy*math.cos(angle);o.rotation_euler.z=angle
+
+def bar(x,y,width=5):
+ panel('Far bar panel front',x,y,width,1.02);cube('Warm thick bar top',(x,y-.03,1.09),(width+.17,.76,.12),walnut,.012,'Architecture')
+ cube('Backbar dark wall',(x,y+.95,1.6),(width+1,.1,3.2),wall,col='Architecture')
+ for k in range(2):
+  z=1.12+k*.37
+  cube('Bottle shelf',(x,y+.72,z),(width-.2,.26,.035),black,col='Props')
+  for i in range(24):
+   xx=x-width*.43+i*width*.036;hh=random.uniform(.19,.31);yy=y+.69+random.uniform(-.04,.04);m=random.choice(bottles);cyl('Bottle',(xx,yy,z+hh*.39),.034,hh*.78,m);cyl('Bottle neck',(xx,yy,z+hh*.9),.017,hh*.23,m);cyl('Bottle label',(xx,yy,z+hh*.42),.0345,hh*.26,paper)
+ area('Warm backbar bottle glow',(x,y-.1,2.4),(x,y+.7,1.2),180,(1,.72,.37),3)
+def curvedsteps(cx,cy):
+ for j in range(3):
+  r=1.15+j*.26;inner=0;z=(3-j)*.105
+  v=[(cx,cy,z)]+[(cx+r*math.cos(t),cy+r*math.sin(t),z) for t in [math.pi+k*math.pi/2/32 for k in range(33)]]
+  mesh('Observed curved step tread',v,[tuple(range(len(v)))],floors[2],'Architecture')
+  vv=[];ff=[]
+  for k in range(33):
+   t=math.pi+k*math.pi/64;vv.extend([(cx+r*math.cos(t),cy+r*math.sin(t),0),(cx+r*math.cos(t),cy+r*math.sin(t),z)])
+  for k in range(32):ff.append((k*2,k*2+1,k*2+3,k*2+2))
+  mesh('Curved step walnut riser',vv,ff,walnut,'Architecture')
+  for k in range(32):
+   t=math.pi+k*math.pi/64;tt=t+math.pi/64;rod('Curved amber step nosing',(cx+r*math.cos(t),cy+r*math.sin(t),z+.008),(cx+r*math.cos(tt),cy+r*math.sin(tt),z+.008),.009,amber,'Architecture')
+
+# PHOTO 13: camera is BEHIND decks, looking ACROSS the room at the arrows.
+s=newscene('dj','13',(0,-3.4,1.77),(0,6,1.68),29)
+floor(-5,5,-1.5,10)
+cube('Far dark chevron wall',(0,9.8,1.8),(10,.18,3.6),wall,col='Architecture')
+cube('Far inset display / across room',(0,9.65,1.67),(6.6,.09,2.25),black,col='Architecture')
+for xx in [-2.05,0,2.05]:
+ mesh('Far white chevron',[(xx-.78,9.57,3.23),(xx+.14,9.57,3.23),(xx+1.04,9.57,2.42),(xx+.14,9.57,1.61),(xx-.78,9.57,1.61),(xx+.12,9.57,2.42)],[(0,1,2,3,4,5)],arrows,'Architecture')
+for x in [-3.45,3.45]:cube('Far screen side pier',(x,9.6,1.7),(.18,.27,3.1),wall,col='Architecture')
+ceiling(-5,5,-.5,10,3.25,'x')
+# Additional foreground transverse bars to preserve photo's dense, horizontal silhouette.
+for x,y,w in [(-2,1,4),(2.5,.1,4),(-2.5,2.2,3),(2.8,3,3.8),(0,6,6.5)]:cube('Transverse white light strip',(x,y,2.94),(w,.026,.028),white,col='Ceiling')
+for x,y in [(-3.8,4),(0,6),(3.6,5)]:spotlight(x,y,2.9,55,.25)
+for x in [-2.5,2.5]:sofa(x,7.8,2.25,0);table(x,7.2,high=False)
+glassline((-4.8,6.8),(4.8,6.8),0,.95)
+# Broad unadorned booth parapet and worktop; no invented front branding/dais.
+cube('DJ worktop',(0,.42,.95),(5.3,1.5,.09),black,.009,'Furniture');cube('DJ front parapet',(0,1.25,1.19),(9,.12,.38),black,col='Architecture');cube('DJ lower fascia',(0,-.15,.47),(5.3,.08,.9),black,col='Furniture')
+for x in [-1.03,1.03]:
+ cube('Media player chassis',(x,.42,1.055),(.85,.77,.16),black,.025)
+ cyl('Deck jog silver rim',(x,.22,1.15),.237,.025,brass,vertices=64);cyl('Deck jog platter',(x,.22,1.17),.216,.02,black,vertices=64);cyl('Deck jog white centre',(x,.22,1.183),.063,.007,screen)
+ cube('Deck rear LCD',(x,.68,1.155),(.42,.22,.015),screen,.007)
+ for i in range(4):cyl('Deck button',(x-.31+i*.09,.07,1.16),.019,.016,screen if i==0 else black)
+ cube('Pitch track',(x+.32,.38,1.16),(.014,.27,.01),brass)
+ cube('Pitch fader',(x+.32,.43,1.18),(.055,.032,.018),screen,.003)
+ for j in range(5):
+  cyl('Player selector rotary',(x-.3,.36+j*.07,1.17),.013,.02,black)
+  cube('Player status key',(x+.29,.6+j*.025,1.17),(.035,.012,.008),screen)
+cube('Four-channel mixer',(0,.42,1.06),(.78,.76,.17),black,.012)
+for x in [-.27,-.09,.09,.27]:
+ for y in [.38,.51,.64,.77]:cyl('Mixer rotary',(x,y,1.18),.022,.045,black);cyl('Rotary highlight',(x,y,1.204),.009,.003,brass)
+ cube('Fader slot',(x,.16,1.155),(.009,.17,.01),brass);cube('Fader cap',(x,.17,1.18),(.06,.027,.019),screen,.003)
+ for j in range(5):cube('Mixer channel meter',(x+.032,.34+j*.025,1.16),(.008,.015,.006),screen)
+for i in range(7):
+ x=-.6+i*.19;rod('Equipment cable',(x,.82,1.17),(x+.1,1.01,1.08),.009,black)
+area('Deck readable low key',(0,-.7,2.4),(0,.4,1),35,(.88,.92,1),3);area('Far chevron reflected spill',(0,8.9,2.4),(0,7,0),120,(.88,.92,1),4);area('Ceiling grazing fill',(-3,3,2.4),(0,4,3.2),25,(.7,.75,.8),4)
+
+# Dense exposed cable trays and a curved duct section visible over the DJ axis.
+for y in [1.7,3.6,5.4,7.3]:
+ for x in [-3,-1,1,3]:cube('Black technical cable tray',(x,y,3.04),(1.8,.12,.09),black,col='Ceiling')
+rod('Low transverse ventilation',(0,1.1,3.13),(0,3.3,3.13),.22,black,'Ceiling')
+# PHOTO 14: narrow axial view, bar OPPOSITE, glass left, walnut enclosure right.
+s=newscene('main','14',(0,-.4,1.5),(0,8,1.54),20)
+floor(-4.4,4.4,-1,14)
+for x in [-4.45,4.45]:cube('Dark side wall',(x,6.5,1.8),(.12,15,3.6),wall,col='Architecture')
+ceiling(-4.5,4.5,-1,14,3.3,'y');bar(0,11.6,6.7)
+# Dark intersecting service rails, cable trays and hanging fixture housings.
+for y in [0.4,1.6,2.8,4.1,5.4,6.7,8.0,9.3]:
+ for x in [-3.6,-1.8,0,1.8,3.6]:
+  cube('Main overhead transverse service rail',(x,y,3.1),(1.65,.064,.085),black,col='Ceiling')
+  if (int(y*10)+int(x*10))%3==0:cube('Main cable tray suspended cover',(x,y+.13,2.99),(.5,.27,.11),black,col='Ceiling')
+for x in [-3.1,-2.4,-.8,.65,2.2,3.6]:
+ for z in [3.07,3.15]:rod('Main overhead conduit',(x,-.8,z),(x,11,z),.024,black,'Ceiling')
+for x,y in [(-3,1.25),(3,2.2),(-2.4,3.6),(2.8,5.5),(-.8,6.6),(1.5,8)]:
+ cube('Suspended moving head yoke',(x,y,2.91),(.26,.22,.3),black,.018,'Ceiling')
+ cyl('Suspended dark lens',(x,y,2.73),.10,.13,black,'Ceiling')
+# Left glass side and black upholstered recess, light on inner stair treads.
+panel('Left walnut low wall',-4.1,4,5.8,.9,'y')
+for j in range(3):
+ cube('Left side narrow terrace tread',(-3.32-j*.17,6,.08+j*.08),(.32,7.9,.16+j*.16),floors[2],col='Architecture')
+ for y in [3.4,5.8,8.2]:cube('Left tread warm light',(-3.14-j*.17,y,.17+j*.08),(.025,.4,.012),amber,col='Architecture')
+glassline((-3.04,1.7),(-3.04,9),.2,1.03)
+for y in [4,7.1,9.5]:sofa(-3.7,y,2.3,math.pi/2,z=.24)
+# Paneled rectangular enclosure, with side return visible along the floor axis.
+panel('Large right walnut enclosure front',2.72,4.85,1.26,1.35);panel('Large right walnut enclosure side',3.35,6.82,3.96,1.35,'y');cube('Enclosure dark padded upper lip',(2.73,6.65,1.5),(1.25,3.68,.27),black,.015,'Furniture')
+glassline((3.0,1.45),(3.0,4.0),.29,1.0);glassline((3.0,1.45),(4.4,1.45),.29,1.0)
+curvedsteps(3.0,2.4)
+table(-1.05,3.0);table(1.1,3.0);table(.95,9.9)
+for x,y in [(-1.55,1.5),(0,1.65),(1.6,1.6),(-2.3,4),(2.3,4.5),(-1.8,7),(1.85,7.8),(0,10)]:spotlight(x,y,3.02,1400 if y<3 else 900,.09)
+haze(-4.3,4.3,-.8,12.7,3.35,.019)
+# Main photographic beam starts around upper-center, not at image edge.
+spotlight(0,2.5,3.02,4800,.095)
+for x,y in [(-2.3,4),(2.3,4.5),(-1.8,7),(1.85,7.8),(0,10)]:spotlight(x,y,3.02,1100,.10)
+area('Warm bar architectural key',(0,10,2.8),(0,11.6,.5),280,(1,.73,.43),5);area('Right walnut joinery bounce',(0,3,2.6),(2.1,5,.5),95,(1,.78,.55),3);area('Dim floor bounce',(0,4,3),(0,3,0),22,(.8,.83,.86),5)
+
+# PHOTO 11: continuous central zigzag carpet, sofa rows, glass edge, bar upper left.
+s=newscene('lounge','11',(-1.75,-4.85,3.2),(.15,1.8,.45),25)
+floor(-5.7,6.3,-5,10)
+# Continuous single carpet with actual geometric woven zigzags (no mapped photograph).
+x0,x1,y0,y1=-3.85,3.95,-4.5,1.35
+cube('ONE continuous large lounge carpet',((x0+x1)/2,(y0+y1)/2,.023),(x1-x0,y1-y0,.018),ivory,col='Furniture')
+for i in range(-22,34):
+ for j in range(-5,8):
+  xx=j*.66;yy=i*.29
+  pts=[(xx,yy),(xx+.33,yy+.29),(xx+.66,yy)]
+  for k in range(2):
+   u,v=pts[k];uu,vv=pts[k+1]
+   poly=[(u,v),(uu,vv),(uu,vv+.10),(u,v+.10)]
+   # Sutherland-Hodgman crop: every woven stripe is bounded by the one rectangular rug.
+   for axis,bound,greater in [(0,x0,True),(0,x1,False),(1,y0,True),(1,y1,False)]:
+    out=[]
+    for n,P in enumerate(poly):
+     Q=poly[n-1];inside=lambda t:t[axis]>=bound if greater else t[axis]<=bound
+     if inside(P)!=inside(Q):
+      t=(bound-Q[axis])/(P[axis]-Q[axis]);out.append((Q[0]+t*(P[0]-Q[0]),Q[1]+t*(P[1]-Q[1])))
+     if inside(P):out.append(P)
+    poly=out
+    if not poly:break
+   if len(poly)>2:mesh('Continuous carpet / zigzag weave',[(u,v,.035) for u,v in poly],[tuple(range(len(poly)))],ink if i%3 else gray,'Furniture')
+# Camera-relative seating: near-left cropped sofa, long right-edge sofa,
+# diagonally projecting central island and a narrow strip of continuous carpet.
+sofa(-2.85,-2.15,3.85,.13);table(-2.35,-3.7,high=False)
+sofa(3.72,-1.6,3.5,math.pi/2);table(3.0,-1.2,high=False)
+sofa(1.85,-.1,3.15,.36);table(1.8,-1.6,high=False)
+sofa(-.95,1.45,2.75,0);table(-1.45,.45,high=False)
+sofa(-2.55,3.7,2.6,0);table(-1.8,3.1,high=False)
+sofa(3.6,3.05,2.75,math.pi/2)
+glassline((-4.6,4.08),(4.65,4.08),0,1.2);glassline((4.65,-3.9),(4.65,4.08),0,1.2)
+bar(-2.1,6.2,3.25)
+panel('Lounge view / walnut enclosure front',4.65,4.6,4.2,1.55);panel('Lounge view / walnut enclosure return',6.75,5.8,2.4,1.55,'y');cube('Enclosure black upper bench',(4.65,5.2,1.73),(4.15,1.2,.3),black,.015,'Furniture')
+curvedsteps(.5,5.9)
+for x in [-5.5,7.15]:cube('Dark peripheral wall',(x,3,1.8),(.16,14,3.6),wall,col='Architecture')
+cube('Far warm gray wall',(0,10,1.7),(12,.12,3.4),mat('Background warm gray',(.16,.15,.14),.9),col='Architecture')
+for x in [-4.5,-1.2,2.1,5.4]:
+ cube('Far wall vertical reveal',(x,9.91,1.8),(.06,.04,3.1),wall,col='Architecture')
+ cube('Wall sconce',(x+.2,9.87,2.2),(.08,.025,.15),screen,col='Props')
+ceiling(-5.6,6.2,-5,10,3.4,'x')
+for x,y in [(-3,4.5),(-1,4.5),(1.4,4.5),(3.8,4.5),(-3,7),(1,7)]:spotlight(x,y,3.12,1800,.14)
+haze(-5.5,6,-4.8,9.8,3.4,.012)
+area('Lounge soft cool architectural key',(-2,-1,3.05),(0,1,0),200,(.78,.83,.95),5);area('Lounge walnut soft bounce',(1,5.2,2.9),(1.6,7.4,.7),190,(1,.69,.44),4);area('Rug soft fill',(1,-2,2.8),(0,0,0),90,(.92,.9,.86),4)
+
+# Subtle photographic halation; never a mapped background.
+for key,s in S.items():
+ g=bpy.data.node_groups.new(key+' / restrained halation','CompositorNodeTree');g.interface.new_socket(name='Image',in_out='OUTPUT',socket_type='NodeSocketColor')
+ r=g.nodes.new('CompositorNodeRLayers');r.scene=s;gl=g.nodes.new('CompositorNodeGlare');gl.inputs['Type'].default_value='Fog Glow';gl.inputs['Quality'].default_value='Medium';gl.inputs['Threshold'].default_value=2;gl.inputs['Strength'].default_value=.22
+ out=g.nodes.new('NodeGroupOutput');g.links.new(r.outputs['Image'],gl.inputs['Image']);g.links.new(gl.outputs['Image'],out.inputs['Image']);s.compositing_node_group=g
+# Preserve a useful default camera in every independent scene.
+for screen_ui in bpy.data.screens:
+ for ar in screen_ui.areas:
+  if ar.type=='VIEW_3D':ar.spaces.active.region_3d.view_perspective='CAMERA'
+bpy.context.window.scene=S['main']
+bpy.context.preferences.filepaths.save_version=0
+path=os.path.join(a.output_dir,'trichli-arena.blend');bpy.ops.wm.save_as_mainfile(filepath=path,compress=True)
+stats={'revision':3,'blender':bpy.app.version_string,'renderer':'BLENDER_EEVEE','scenes':{k:{'name':s.name,'objects':len(s.objects),'camera':s.camera.name,'reference':s['reference']} for k,s in S.items()},'objects':len(bpy.data.objects),'meshes':len(bpy.data.meshes),'materials':len(bpy.data.materials),'authored_vertices':sum(len(m.vertices) for m in bpy.data.meshes),'scale':'Estimated metric units; no measured dimensions','connected_floorplan':False,'photo_assets':0}
+with open(os.path.join(a.output_dir,'scene-stats.json'),'w') as f:json.dump(stats,f,indent=2)
+for key in (S if a.render=='all' else [] if a.render=='none' else [a.render]):
+ s=S[key];bpy.context.window.scene=s;s.render.filepath=os.path.join(a.output_dir,'renders',key+'.png');bpy.ops.render.render(write_still=True)
+print('TRISCHLI_V3_COMPLETE',json.dumps(stats))
