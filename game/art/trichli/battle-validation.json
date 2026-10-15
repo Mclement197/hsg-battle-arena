@@ -1,0 +1,78 @@
+{
+  "pass": true,
+  "checks": {
+    "four_scenes_original_studies_preserved": true,
+    "perspective_battle_camera": true,
+    "full_HD": true,
+    "gameplay_not_survey_disclosed": true,
+    "two_original_placeholder_groups": true,
+    "fighters_in_frame": true,
+    "near_left_far_right": true,
+    "bottom_23_percent_fighter_free": true,
+    "world_TRISCHLI_text": true,
+    "sign_unclipped_readable_size": true,
+    "hud_corner_fighter_free": true,
+    "no_study_objects_shared": true,
+    "architecture_preserved": true,
+    "no_lane_tables": true,
+    "editable_separate_fighter_collection": true,
+    "no_external_photos_libraries_fonts": true,
+    "finite_transforms": true,
+    "two_full_HD_under_8MiB": true
+  },
+  "images": {
+    "preview": {
+      "width": 1920,
+      "height": 1080,
+      "bytes": 2340358
+    },
+    "background": {
+      "width": 1920,
+      "height": 1080,
+      "bytes": 2290060
+    }
+  },
+  "landmarks_normalized_top_left": {
+    "player": [
+      0.2547,
+      0.245,
+      0.3677,
+      0.7201
+    ],
+    "opponent": [
+      0.5907,
+      0.2017,
+      0.6645,
+      0.4956
+    ],
+    "sign": [
+      0.3977,
+      0.1002,
+      0.5451,
+      0.1419
+    ]
+  },
+  "camera": {
+    "location": [
+      -0.8999999761581421,
+      -2.5999999046325684,
+      2.5
+    ],
+    "lens_mm": 29.0,
+    "shift_y": -0.07000000029802322
+  },
+  "fighter_positions": {
+    "player": [
+      -1.9,
+      3.8,
+      0
+    ],
+    "opponent": [
+      1.7,
+      7.4,
+      0
+    ]
+  },
+  "blend_bytes": 1550385,
+  "scope": "Technical composition checks. Invented gameplay adaptation, not real venue layout. Actual image inspection recorded separately."
+}

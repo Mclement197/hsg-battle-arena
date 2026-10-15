@@ -1,8 +1,12 @@
-# Trischli — photographic reference studies, revision 3
+# Trischli — reference studies + turn-based battle view
 
-Three **independent editable 3D studies**, bounded to the best-documented photographic views. This replaces the rejected venue-inspired combat arena. It is **not a surveyed venue model or a connected full floorplan**. The historical asset filename/slug is retained for continuity; the venue is spelled Trischli.
+Three **independent editable 3D studies**, bounded to the best-documented photographic views, plus a separate **BATTLE / gameplay adaptation** derived from MAIN. The reference studies replaced the rejected venue-inspired combat arena; the new battle scene is explicitly invented staging, not a revised claim about the real layout. It is **not a surveyed venue model or a connected full floorplan**. The historical asset filename/slug is retained for continuity; the venue is spelled Trischli.
 
-## Deliverables
+## Battle view
+
+See [BATTLE.md](BATTLE.md) for the new full-HD perspective battle view, two original placeholder fighters, visible world-mounted **TRISCHLI** sign, matching fighter-free background and reproduction/validation commands. This fourth scene is an explicit gameplay adaptation; the photographic studies below are preserved.
+
+## Reference-study deliverables
 
 - `trichli-arena.blend` — scenes **DJ / reference 13**, **MAIN / reference 14**, **LOUNGE / reference 11**, each with its own matched-view camera and separately editable Architecture, Furniture, Props, Ceiling and Lights collections.
 - `renders/dj.png`, `renders/main.png`, `renders/lounge.png` — original 1800 × 1200 PNGs (3:2, as in the three reference photos).
@@ -27,7 +31,7 @@ blender -b -t 3 --python-exit-code 1 --python generate.py -- --output-dir /tmp/t
 blender -b trichli-arena.blend -t 3 --python-exit-code 1 --python validate.py
 ~~~
 
-Do not use this directory as an output target unless intentionally replacing deliverables. Select the desired scene in Blender's scene selector; MAIN is the saved default. Meshes are individually named; bevels remain editable modifiers. Ceiling and atmospheric Lights collections can be toggled for inspection. Independent scene coordinates deliberately overlap: do not append them as if they were a proven joined floorplan. Native mesh geometry and procedural shaders are authoritative; there are no source-photo cards, mapped photographs, linked libraries, or missing external image resources. Volumetric beams are actual spot lighting in thin atmosphere, not solid cones. Glass uses a disclosed Eevee alpha approximation.
+Do not use this directory as an output target unless intentionally replacing deliverables. Select the desired scene in Blender's scene selector; BATTLE is the saved default in the combined delivery; generate.py alone defaults to MAIN. Meshes are individually named; bevels remain editable modifiers. Ceiling and atmospheric Lights collections can be toggled for inspection. Independent scene coordinates deliberately overlap: do not append them as if they were a proven joined floorplan. Native mesh geometry and procedural shaders are authoritative; there are no source-photo cards, mapped photographs, linked libraries, or missing external image resources. Volumetric beams are actual spot lighting in thin atmosphere, not solid cones. Glass uses a disclosed Eevee alpha approximation.
 
 ## What was corrected
 

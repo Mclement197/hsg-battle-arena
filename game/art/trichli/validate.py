@@ -5,9 +5,9 @@ from mathutils import Vector
 base=os.path.dirname(bpy.data.filepath)
 scenes={k:next((s for s in bpy.data.scenes if s.name.startswith(k.upper()+' /')),None) for k in ['dj','main','lounge']}
 checks={}
-checks['three_named_independent_scenes']=len(bpy.data.scenes)==3 and all(scenes.values())
+checks['three_named_independent_scenes']=all(scenes.values()) and len([s for s in bpy.data.scenes if not s.get('gameplay_adaptation')])==3
 checks['one_named_camera_per_scene']=all(s and s.camera and s.camera in list(s.objects) and sum(o.type=='CAMERA' for o in s.objects)==1 for s in scenes.values())
-checks['no_shared_objects_between_studies']=all(len(o.users_scene)==1 for o in bpy.data.objects)
+checks['no_shared_objects_between_studies']=all(len(o.users_scene)==1 for s in scenes.values() for o in s.objects)
 checks['full_resolution_3_to_2']=all(s.render.resolution_x==1800 and s.render.resolution_y==1200 and s.render.resolution_percentage==100 for s in scenes.values())
 checks['editable_meshes']=all(sum(o.type=='MESH' for o in s.objects)>200 for s in scenes.values())
 checks['metric_estimated_scale_disclosed']=all(s.unit_settings.system=='METRIC' and 'estimated' in s['status'].lower() for s in scenes.values())
@@ -16,7 +16,7 @@ checks['two_dj_players']=len([o for o in scenes['dj'].objects if o.name.startswi
 checks['mixer_present']=any(o.name.startswith('Four-channel mixer') for o in scenes['dj'].objects)
 checks['chevrons_across_room_not_behind_decks']=all(o.location.y==0 and min(v.co.y for v in o.data.vertices)>9 for o in scenes['dj'].objects if o.name.startswith('Far white chevron'))
 checks['one_continuous_carpet']=sum(o.name.startswith('ONE continuous large lounge carpet') for o in scenes['lounge'].objects)==1
-checks['no_invented_gameplay_or_disco']=not any(any(n in o.name.lower() for n in ['spawn','combat','disco','playable','dais']) for o in bpy.data.objects)
+checks['no_invented_gameplay_or_disco']=not any(any(n in o.name.lower() for n in ['spawn','combat','disco','playable','dais']) for s in scenes.values() for o in s.objects)
 checks['ceiling_per_study']=all(any(c.name.endswith('/ Ceiling') and len(c.objects)>40 and not c.hide_render for c in s.collection.children) for s in scenes.values())
 checks['material_coverage']=all(o.data.materials for o in bpy.data.objects if o.type=='MESH')
 checks['procedural_only']=not any(i.source=='FILE' for i in bpy.data.images)

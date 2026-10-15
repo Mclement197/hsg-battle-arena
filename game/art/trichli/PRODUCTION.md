@@ -35,3 +35,20 @@ No source photographs are packed, linked, mapped to geometry or copied into Git.
 - Independent parent review accepted these studies as the revised delivery but explicitly noted the visible simplification: this is not a highly accurate surveyed reconstruction of the whole venue. This publication changes assets/docs only; it does not integrate them into game runtime, deploy, or modify services.
 
 Final lounge inspection confirms one continuous carpet, visible facing sofas and glass, with bar upper-left. It is still a looser view match than the DJ study: the paneled enclosure projects nearer upper-center/right and smaller than in photo 11, foreground sofa crop/rotation and carpet zigzag frequency differ, and ceiling bars are thicker/brighter. These are remaining visual deviations, not solved by the passing technical validator. This bounded delivery must not be described as a highly accurate surveyed reconstruction; technical validation does not establish photographic fidelity. Final preview copies were SHA-256 matched to deliverable PNGs; private QA sheets refreshed from the final files.
+
+
+## Battle-view addendum — 2026-10-15
+
+Added **BATTLE / gameplay adaptation**, derived only from MAIN architecture. This is explicitly invented turn-based staging, not photographic evidence or a surveyed venue layout. Original human-ish teal/ochre student placeholders are not final user characters. Existing generate.py and three reference PNGs/manifests/targets were compared byte-for-byte to HEAD and are unchanged. No runtime/game implementation files changed.
+
+Two draft renders were opened as actual images. First revealed too little horizontal separation and bottom space. Second adjusted camera/positions and reduced cool lighting. Both full-resolution final images were then personally opened: unclipped readable TRISCHLI world sign, distinct near-left/back-facing player and far-right/front-facing opponent, unobstructed central floor lane, retained walnut/glass/bar/ceiling/amber stairs. Background matches camera/lighting with fighters and their shadows absent; position inlays intentionally remain. No HUD is baked in.
+
+Executed checks:
+
+- Blender 5.0.1 Eevee, three threads, sequential full-HD preview and background renders: exit 0.
+- Fresh-process validate-battle.py: **18/18 passed**; validate.py: **21/21 passed** on the combined four-scene blend. Rebuilding battle.py from the delivered four-scene blend with --render none also exited 0, with 992 battle objects (no stacked staging).
+- Actual 1920 × 1080 PNGs: preview 2,340,358 bytes; background 2,290,060 bytes, both below 8 MiB. Editable compressed blend: 1,550,385 bytes.
+- Projected player bounds x .255–.368 / y .245–.720; opponent x .591–.665 / y .202–.496. Bottom 23% is fighter-free, top corner HUD zones are fighter-free. Actual world TRISCHLI lettering spans about **283 × 45 px**, within image bounds, centered high over the far bar.
+- Four Python scripts AST parsed; scoped git diff --check passed; original study generator/three previews/reference manifest/targets unchanged by byte comparison. Media copies matched SHA-256 at handoff. No source photographs, external image resources, third-party character assets or external fonts.
+
+Parent visual review is required before committing/pushing. No commit or push was made by this task. See BATTLE.md for reproduction and limitations.
