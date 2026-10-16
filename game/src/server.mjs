@@ -83,7 +83,7 @@ function consume(bucket, key, limit, now) {
   entry.count++;
 }
 function publicStaticPath(pathname) {
-  return ['/game/', '/game/index.html', '/game/app.js', '/game/styles.css'].includes(pathname) ||
+  return ['/game/', '/game/index.html', '/game/app.js', '/game/styles.css', '/game/fighter-data.js'].includes(pathname) ||
     /^\/game\/assets\/[A-Za-z0-9_-]+\.(svg|png|webp|jpg|ico|woff2|ttf|mp3|wav|ogg)$/.test(pathname) ||
     /^\/game\/assets\/audio\/[A-Za-z0-9_-]+\.wav$/.test(pathname);
 }
@@ -198,10 +198,12 @@ export function createGameServer({ arena, publicOrigin = 'http://127.0.0.1:3210'
         ipEntry.creates++;
         const setup = await body(req);
         fields(setup, Object.hasOwn(setup || {}, 'mode') ? ['mode'] : []);
-        if (Object.hasOwn(setup, 'mode') && setup.mode !== 'bot') fail(400, 'invalid_mode', 'Mode must be bot, or omit mode for online');
+        if (Object.hasOwn(setup, 'mode') && !['bot', 'friend', 'groups'].includes(setup.mode)) fail(400, 'invalid_mode', 'Mode must be bot, friend or groups; omit mode for legacy group play');
         sweep();
         const room = arena.create();
         if (setup.mode === 'bot') arena.enableBot(room);
+        if (setup.mode === 'friend') arena.enableFriend(room);
+        if (setup.mode === 'groups') room.mode = 'groups';
         return json(res, 201, { roomId: room.id, hostToken: room.hostToken, joinUrl: joinUrl(room),
           qrUrl: '/game/api/rooms/' + room.id + '/qr.svg', state: arena.snapshot(room, { role: 'host' }) });
       }

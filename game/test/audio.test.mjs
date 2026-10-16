@@ -257,7 +257,8 @@ test('actual UI hook: selection/local expiry silent, server result once, mute/un
     }
   };
   const source = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
-  vm.runInNewContext(source.replace(/^export /gm, ''), sandbox);
+  Object.assign(sandbox, await import('../public/fighter-data.js'));
+  vm.runInNewContext(source.replace(/^import .*;\n/gm, '').replace(/^export /gm, ''), sandbox);
   await flush();
   const send = async () => {
     readNext({ done: false, value: new TextEncoder().encode('event: state\ndata: ' + JSON.stringify(arena.snapshot(room, player)) + '\n\n') });

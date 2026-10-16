@@ -75,13 +75,13 @@ The presenter’s arena/character selections are validated by the server and sha
 
 ## Campus edition — five-screen flow
 
-- **Main menu:** Play vs Bot, Play vs Friend ONLINE, How to play, and Main Menu navigation.
+- **Main menu:** Play with a Friend (real online 1v1), Play with a Bot (solo), Play in Groups (presenter + voting teams). Join by room code, How to play, Return to your room and Main Menu remain available.
 - **Arena:** Library, Trischli and Mensa B. Presentation-only; all three use the same balanced rules.
-- **Fighters:** Luca Di Grazia, free rider in group project, tryhard, assessment student, Trischli warrior and bad teacher. Select the active Team A/Team B (or You/Bot) slot, then any fighter. Characters intentionally share stats.
+- **Fighters:** Luca Di Grazia, free rider in group project, tryhard, assessment student, Trischli warrior and bad teacher. Select the active Team A/Team B (or You/Bot) slot, then any fighter. Every fighter has four distinct command stats displayed as numbers and segmented bars. The shared profile module also drives server-authoritative combat; see below.
 - **Battle:** two fighters, authoritative HP, timer, results, themed effects and sound activation. Phone participants see both fighters’ health above the original vote controls.
-- **Game over:** winning fighter, Play Again (same selections), Main Menu. Online Play Again resets everyone to the same lobby and preserves participant capabilities; the presenter starts again.
+- **Game over:** winning fighter, Play Again (same selections), Main Menu. Groups Play Again returns everyone to the lobby for the presenter to start. Friend and Bot replay immediately with the same fighters and restored HP. All preserve participant capabilities.
 
-Online remains the real presenter/room/QR/join/balanced-team/SSE/voting game. A single friend on each team is sufficient; the presenter remains a non-voting host. It is not peer-to-peer or a local hot-seat mode.
+Groups retains the non-playing presenter/room/QR/join/balanced-team/SSE/voting game. Friend is a separate real online 1v1: the host automatically owns Player 1 (A), one guest owns Player 2 (B), and a third join is rejected. Both play on their own browsers; each accepted move resolves immediately, with random legal fallback after 15 seconds. Only the host configures fighters, starts, resets or replays. Reload reconnects the same seat through its saved capability; losing that capability does not free the seat. This is not local hot-seat or peer-to-peer play.
 
 Bot mode uses the same authoritative engine and server, not browser-controlled HP. The host controls Team A through the host-only solo action. A submitted move resolves on the next server tick (normally within 100 ms); Team B chooses a random legal move after one second. If the human does not choose within 15 seconds, the normal no-vote fallback applies. Bot rooms reject external joins. Bot mode requires a working server connection.
 
@@ -95,4 +95,23 @@ With an existing Playwright/Chromium installation (no new runtime dependency):
 
     PLAYWRIGHT_MODULE=/path/to/playwright-core/index.mjs CHROMIUM_EXECUTABLE=/path/to/chrome npm run test:ui
 
-This starts an isolated local origin on port 18993. Set LIVE_URL=https://afp.mclement.ch/game/ to exercise the live game instead; that intentionally creates disposable bot/online rooms. EVIDENCE_DIR selects screenshots; default /tmp/hsg-five-screen-smoke. Checks full bot victory/replay, online host plus two independent clients, real timed voting, vote replacement, reconnect/reset and desktop/mobile overflow.
+This starts an isolated local origin on port 18993. Set LIVE_URL=https://afp.mclement.ch/game/ to exercise the live game instead; that intentionally creates disposable bot/friend/group rooms. EVIDENCE_DIR selects screenshots; default /tmp/hsg-five-screen-smoke. Checks desktop/phone bot victory and replay; real Friend host + isolated guest through victory, host/guest reloads, third-seat rejection, reset and replay; Groups host + two isolated voters through real timed resolution, vote replacement and reset; all 24 displayed stats against engine data; all five desktop/mobile screen captures and overflow.
+
+## Authoritative fighter profiles
+
+| Fighter | Attack (HP) | Defend (% next hit blocked) | Heal (HP) | Special (HP) |
+| --- | ---: | ---: | ---: | ---: |
+| Luca Di Grazia | 28 | 70 | 14 | 42 |
+| Free rider in group project | 17 | 62 | 11 | 30 |
+| Tryhard | 25 | 42 | 8 | 36 |
+| Assessment student | 19 | 56 | 13 | 31 |
+| Trischli warrior | 27 | 35 | 7 | 40 |
+| Bad teacher | 22 | 66 | 9 | 34 |
+
+Luca is intentionally strongest overall, per the explicit request. Others specialize relative to one another: survivor/guard, sustained pressure, recovery, glass cannon, defensive pressure. Roster bars normalize Attack and Special to 50 HP, Defend to 100%, Heal to 20 HP; the exact adjacent number is authoritative, ten segments are rounded visual comparisons. These are not arbitrary 1–10 ratings. Combat uses public/fighter-data.js, also imported by the server. Each snapshot contains teams.A/B.stats; live controls show these values and cooldowns.
+
+Damage rounds to the nearest whole HP after percentage block, minimum 1 HP, capped at current HP. Guard is one-use and does not stack. Heal caps at 100 HP. Special blocks exactly the next three own turns. Defense is at most 70%; every configured heal is below even the weakest basic attack. Tests cover every attacker/defender pair with repeated healing and guarding and establish eventual attack victory. Two players deliberately choosing only non-damaging moves can still prolong a match; no sudden-death rule was added.
+
+Original clients creating with an empty body and omitting fighter configuration retain legacy 20/50%/15/30 fallback values. Normal UI setup always configures named fighters. No client may submit stats, HP or damage.
+
+Design context: [PRODUCT.md](PRODUCT.md), [arcade-surface.md](arcade-surface.md), [DESIGN.md](DESIGN.md). No new dependency or build step. Assets use arcade HTML/module version tokens and no-store.

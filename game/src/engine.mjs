@@ -1,4 +1,5 @@
 import { randomBytes, randomInt } from 'node:crypto';
+import { fighterStats } from '../public/fighter-data.js';
 
 export const RULES = Object.freeze({ turnMs: 15000, maxHp: 100, attack: 20, heal: 15, special: 30, specialCooldownOwnTurns: 3 });
 export const ARENAS = Object.freeze(['library', 'trischli', 'mensa-b']);
@@ -39,6 +40,11 @@ export class Arena {
     human.player.team = 'A'; bot.player.team = 'B';
     room.mode = 'bot';
   }
+  enableFriend(room) {
+    const { player, playerToken } = this.join(room, { nickname: 'Player 1 (host)' });
+    room.credentials.delete(playerToken); // Only the host capability may own Player 1.
+    player.team = 'A'; room.hostPlayer = player; room.mode = 'friend';
+  }
   configure(room, viewer, body) {
     fields(body, ['arenaId', 'characterA', 'characterB']); this.requireRole(viewer, 'host');
     if (room.phase !== 'lobby') fail(409, 'invalid_phase', 'Choose fighters before starting the match');
@@ -50,7 +56,7 @@ export class Arena {
   }
   play(room, viewer, body) {
     this.requireRole(viewer, 'host');
-    if (room.mode !== 'bot') fail(409, 'invalid_mode', 'Solo moves are only available against the bot');
+    if (!['bot', 'friend'].includes(room.mode)) fail(409, 'invalid_mode', 'Direct moves require a bot or friend match');
     const player = [...room.players.values()].find(player => player.team === 'A');
     this.vote(room, { role: 'player', player }, body);
   }
@@ -63,6 +69,7 @@ export class Arena {
     const nickname = body.nickname.trim();
     if ([...nickname].length < 1 || [...nickname].length > 24 || /[\p{Cc}\p{Cf}\p{Cs}]/u.test(nickname))
       fail(400, 'invalid_nickname', 'Nickname must be 1–24 characters without controls');
+    if (room.mode === 'friend' && room.players.size >= 2) fail(409, 'friend_full', 'This 1v1 already has two players. Reconnect with your original browser or create another match');
     if (room.players.size >= this.maxPlayers) fail(503, 'player_capacity', 'Room player capacity reached');
     const countA = [...room.players.values()].filter(player => player.team === 'A').length;
     const countB = room.players.size - countA;
@@ -77,7 +84,7 @@ export class Arena {
   authenticate(room, credential) {
     if (typeof credential !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(credential))
       fail(401, 'unauthorized', 'A valid bearer capability is required');
-    if (credential === room.hostToken) return { role: 'host' };
+    if (credential === room.hostToken) return { role: 'host', ...(room.hostPlayer ? { player: room.hostPlayer } : {}) };
     const player = room.credentials.get(credential);
     if (!player) fail(401, 'unauthorized', 'A valid bearer capability is required');
     return { role: 'player', player };
@@ -115,7 +122,7 @@ export class Arena {
     if (viewer.player.team !== room.turn.team) fail(403, 'wrong_team', 'Only the active team may vote');
     if (!this.available(room).includes(body.move)) fail(409, 'special_cooldown', 'Special is cooling down');
     room.turn.votes.set(viewer.player.id, body.move);
-    if (room.mode === 'bot') room.turn.deadline = this.now(); this.touch(room); room.revision++;
+    if (['bot', 'friend'].includes(room.mode)) room.turn.deadline = this.now(); this.touch(room); room.revision++;
   }
   counts(room) {
     const counts = Object.fromEntries(MOVES.map(move => [move, 0]));
@@ -136,11 +143,13 @@ export class Arena {
     const target = room.teams[otherTeam];
     let damage = 0, healed = 0;
     if (move === 'attack' || move === 'special') {
-      damage = Math.min(target.hp, RULES[move] / (target.shield ? 2 : 1));
+      const power = fighterStats(active.characterId)[move];
+      const block = target.shield ? fighterStats(target.characterId).defend : 0;
+      damage = Math.min(target.hp, Math.max(1, Math.round(power * (100 - block) / 100)));
       target.hp -= damage; target.shield = false;
       if (move === 'special') active.specialReadyOwnTurn = active.ownTurn + RULES.specialCooldownOwnTurns + 1;
     } else if (move === 'defend') active.shield = true;
-    else { healed = Math.min(RULES.heal, RULES.maxHp - active.hp); active.hp += healed; }
+    else { healed = Math.min(fighterStats(active.characterId).heal, RULES.maxHp - active.hp); active.hp += healed; }
     room.lastResult = { turnId: turn.id, number: turn.number, team: turn.team, move,
       voteCounts, totalVotes, tiedMoves, damage, healed, resolvedAt: this.now() };
     if (target.hp === 0) { room.phase = 'finished'; room.winner = turn.team; room.turn = null; }
@@ -150,7 +159,7 @@ export class Arena {
   }
   snapshot(room, viewer) {
     const players = [...room.players.values()];
-    const teams = Object.fromEntries(['A', 'B'].map(key => [key, { ...room.teams[key],
+    const teams = Object.fromEntries(['A', 'B'].map(key => [key, { ...room.teams[key], stats: fighterStats(room.teams[key].characterId),
       specialCooldownRemaining: Math.max(0, room.teams[key].specialReadyOwnTurn - room.teams[key].ownTurn),
       playerCount: players.filter(player => player.team === key).length }]));
     const turn = room.turn && { id: room.turn.id, number: room.turn.number, team: room.turn.team,
@@ -160,7 +169,7 @@ export class Arena {
       mode: room.mode, arenaId: room.arenaId, match: room.match, winner: room.winner, rules: RULES, teams,
       players: players.map(({ id, nickname, team, connections }) => ({ id, nickname, team, connected: connections > 0 })),
       turn, lastResult: room.lastResult,
-      you: viewer.role === 'host' ? { role: 'host' } : { role: 'player', playerId: viewer.player.id,
+      you: viewer.role === 'host' ? { role: 'host', ...(room.hostPlayer ? { playerId: room.hostPlayer.id, team: 'A', vote: room.turn?.votes.get(room.hostPlayer.id) ?? null } : {}) } : { role: 'player', playerId: viewer.player.id,
         team: viewer.player.team, vote: room.turn?.votes.get(viewer.player.id) ?? null } };
   }
 }

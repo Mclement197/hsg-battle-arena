@@ -87,7 +87,7 @@ for (const mobile of [false, true]) {
         return page;
       }
       const host = await page();
-      await host.locator('#play-friend').click();
+      await host.locator('#play-groups').click();
       await host.locator('#create-room').click();
       await host.locator('#arena-next').click();
       await host.locator('#selection-next').click();
@@ -96,8 +96,7 @@ for (const mobile of [false, true]) {
       const players = [];
       for (const [i, device] of (mobile ? ['iPhone 13', 'iPad (gen 7)'] : [null, null]).entries()) {
         const player = await page(device ? devices[device] : {});
-        await player.locator('#play-friend').click();
-        await player.locator('#join-tab').click();
+        await player.locator('#join-existing').click();
         await player.locator('#join-code').fill(roomId);
         await player.locator('#nickname').fill('Audio test ' + i);
         await player.locator('#join-form button').click();

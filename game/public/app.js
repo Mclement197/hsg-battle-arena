@@ -1,3 +1,4 @@
+import { FIGHTER_PROFILES, STAT_META, fighterStats, moveDescription } from './fighter-data.js?v=20261016-arcade';
 // Presentation identities use the authoritative team characterId, never nickname or team order.
 export const CHARACTER_THEMES = Object.freeze({
   'luca-di-grazia': { name: 'Luca Di Grazia', motif: 'chalk', labels: { attack: 'GOLDEN CHALK', defend: 'OPEN BOOK', heal: 'GOOD WORK', special: 'FULL MARKS' } },
@@ -381,7 +382,7 @@ if (typeof document !== 'undefined') (() => {
     $('join-error').hidden = true;
     intent('join', { code, nickname });
   });
-  $('create-room').addEventListener('click', () => beginSetup('online'));
+  $('create-room').addEventListener('click', () => beginSetup('groups'));
   $('start-game').addEventListener('click', () => intent('start'));
   $('reset-game').addEventListener('click', () => { if (window.confirm('Reset this match for everyone?')) intent('reset'); });
   $('replay-game').addEventListener('click', () => intent('replay'));
@@ -621,7 +622,7 @@ if (typeof document !== 'undefined') (() => {
         await client.mutate('vote', { turnId: client.state.turn.id, move });
       } else if ((type === 'start' || type === 'reset' || type === 'replay') && client.role === 'host') {
         const state = await client.mutate(type === 'start' ? 'start' : 'reset');
-        if (state.mode === 'bot' && type !== 'start') await client.mutate('start');
+        if ((state.mode === 'bot' && type !== 'start') || (state.mode === 'friend' && type === 'replay')) await client.mutate('start');
       }
     } catch (error) {
       reportError(error.message);
@@ -638,7 +639,7 @@ if (typeof document !== 'undefined') (() => {
   }
   const arenaNames = { library: 'Library', trischli: 'Trischli', 'mensa-b': 'Mensa B' };
   const arenaDescriptions = { library: 'Quiet zone. Loud rivalry.', trischli: 'Last dance. Last fighter standing.', 'mensa-b': 'Today’s special: a campus showdown.' };
-  let setupMode = 'online', selectedArena = 'library', selectedTeam = 'A';
+  let setupMode = 'groups', selectedArena = 'library', selectedTeam = 'A';
   const selectedCharacters = { A: 'luca-di-grazia', B: 'free-rider' };
   function reportError(message) { setText('global-error', message); $('global-error').hidden = false; }
   function mainMenu() {
@@ -653,10 +654,12 @@ if (typeof document !== 'undefined') (() => {
   $('victory-menu').addEventListener('click', mainMenu);
   $('resume-game').addEventListener('click', () => { const saved = client.remembered(); if (saved) void client.resume(saved); });
   $('play-bot').addEventListener('click', () => beginSetup('bot'));
-  $('play-friend').addEventListener('click', () => { show('entry'); tabs('host'); });
+  $('play-friend').addEventListener('click', () => beginSetup('friend'));
+  $('play-groups').addEventListener('click', () => { show('entry'); tabs('host'); });
+  $('join-existing').addEventListener('click', () => { show('entry'); tabs('join'); });
   $('how-to').addEventListener('click', () => show('help'));
   $('help-back').addEventListener('click', mainMenu);
-  $('arena-back').addEventListener('click', () => show(setupMode === 'bot' ? 'menu' : 'entry'));
+  $('arena-back').addEventListener('click', () => show(setupMode === 'groups' ? 'entry' : 'menu'));
   $('arena-next').addEventListener('click', () => { drawCharacters(); show('character'); });
   $('character-back').addEventListener('click', () => show('arena'));
   for (const team of ['A', 'B']) $('pick-' + team.toLowerCase()).addEventListener('click', () => { selectedTeam = team; drawCharacters(); });
@@ -682,15 +685,37 @@ if (typeof document !== 'undefined') (() => {
     }
     setText('arena-choice', arenaNames[selectedArena] + ' selected');
   }
+  function statBars(id) {
+    const box = document.createElement('div'); box.className = 'stat-bars';
+    for (const [key, meta] of Object.entries(STAT_META)) {
+      const value = fighterStats(id)[key];
+      const row = document.createElement('div'); row.className = 'stat-row'; row.dataset.stat = key;
+      const label = document.createElement('span'); label.textContent = meta.label;
+      const track = document.createElement('span'); track.className = 'stat-track'; track.setAttribute('aria-hidden', 'true');
+      for (let i = 0; i < 10; i++) { const segment = document.createElement('i'); if (i < Math.round(value / meta.max * 10)) segment.className = 'filled'; track.append(segment); }
+      const number = document.createElement('b'); number.textContent = value + (key === 'defend' ? '%' : '');
+      row.setAttribute('aria-label', meta.label + ': ' + value + ' ' + meta.unit); row.append(label, track, number); box.append(row);
+    }
+    return box;
+  }
   function drawCharacters() {
-    const solo = setupMode === 'bot';
-    setText('pick-a', (solo ? 'You' : 'Team A') + ': ' + CHARACTER_THEMES[selectedCharacters.A].name);
-    setText('pick-b', (solo ? 'Bot' : 'Team B') + ': ' + CHARACTER_THEMES[selectedCharacters.B].name);
+    const solo = setupMode === 'bot', friend = setupMode === 'friend';
+    setText('pick-a', (solo || friend ? 'You · P1' : 'Team A') + ': ' + CHARACTER_THEMES[selectedCharacters.A].name);
+    setText('pick-b', (solo ? 'Bot' : friend ? 'Friend · P2' : 'Team B') + ': ' + CHARACTER_THEMES[selectedCharacters.B].name);
     $('pick-a').setAttribute('aria-pressed', String(selectedTeam === 'A'));
     $('pick-b').setAttribute('aria-pressed', String(selectedTeam === 'B'));
-    setText('selection-mode', solo ? 'Choose your fighter, then choose the bot’s opponent below.' : 'The presenter chooses each team’s fighter. Friends join and vote on their phones.');
-    setText('selection-next', solo ? 'Start bot battle' : 'Open online room');
-    setText('fighter-choice', 'Choosing for ' + (solo ? selectedTeam === 'A' ? 'you' : 'the bot' : 'Team ' + selectedTeam) + ' · ' + arenaNames[selectedArena]);
+    setText('selection-mode', solo ? 'Choose your fighter and the bot’s challenger.' : friend ? 'You are Player 1. Choose both fighters, invite one friend, then duel online.' : 'Choose both teams’ fighters. Your group votes on every move.');
+    setText('selection-next', solo ? 'Start bot battle' : friend ? 'Invite your friend' : 'Open group room');
+    setText('fighter-choice', 'Choosing for ' + (solo || friend ? selectedTeam === 'A' ? 'you' : solo ? 'the bot' : 'your friend' : 'Team ' + selectedTeam) + ' · ' + arenaNames[selectedArena]);
+    const selectedId = selectedCharacters[selectedTeam];
+    const preview = $('selected-fighter-art');
+    const artUrl = './assets/' + selectedId + '.svg';
+    if (preview.getAttribute('src') !== artUrl && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) preview.animate?.([{ filter: 'brightness(1.7)' }, { filter: 'brightness(1)' }], { duration: 420, easing: 'cubic-bezier(.16,1,.3,1)' });
+    preview.src = artUrl;
+    $('selected-fighter-art').alt = CHARACTER_THEMES[selectedId].name + ' — original placeholder artwork';
+    setText('selected-fighter-name', CHARACTER_THEMES[selectedId].name);
+    setText('selected-fighter-archetype', FIGHTER_PROFILES[selectedId].archetype);
+    $('selected-fighter-stats').replaceChildren(statBars(selectedId));
     $('character-options').replaceChildren();
     for (const [id, theme] of Object.entries(CHARACTER_THEMES)) {
       const button = document.createElement('button'); button.type = 'button'; button.className = 'character-option'; button.dataset.character = id;
@@ -698,7 +723,7 @@ if (typeof document !== 'undefined') (() => {
       const image = document.createElement('img'); image.src = './assets/' + id + '.svg'; image.alt = '';
       const title = document.createElement('strong'); title.textContent = theme.name;
       const label = document.createElement('small'); label.textContent = Object.entries(selectedCharacters).filter(([, value]) => value === id).map(([team]) => solo ? team === 'A' ? 'YOU' : 'BOT' : 'TEAM ' + team).join(' + ') || theme.labels.special;
-      button.append(image, title, label);
+      button.append(image, title, label, statBars(id));
       button.addEventListener('click', () => { selectedCharacters[selectedTeam] = id; drawCharacters(); $('character-options').querySelector('[data-character="' + id + '"]').focus(); });
       $('character-options').append(button);
     }
@@ -709,7 +734,7 @@ if (typeof document !== 'undefined') (() => {
     setText('selection-next', 'Preparing battle…');
     try {
       if (!pendingSetupRoom || client.room !== pendingSetupRoom) {
-        const room = await client.create(setupMode === 'bot' ? { mode: 'bot' } : {});
+        const room = await client.create({ mode: setupMode });
         pendingSetupRoom = room.roomId;
       }
       await client.mutate('configure', { arenaId: selectedArena, characterA: selectedCharacters.A, characterB: selectedCharacters.B });
@@ -718,7 +743,7 @@ if (typeof document !== 'undefined') (() => {
       render(present(client.state, window.ArenaUI.connected, client.secondsLeft())); renderIdentity(client.state);
       $('global-error').hidden = true;
     } catch (error) { reportError(error.message); }
-    finally { setupBusy = false; $('selection-next').disabled = false; setText('selection-next', setupMode === 'bot' ? 'Start bot battle' : 'Open online room'); }
+    finally { setupBusy = false; $('selection-next').disabled = false; setText('selection-next', setupMode === 'bot' ? 'Start bot battle' : setupMode === 'friend' ? 'Invite your friend' : 'Open group room'); }
   });
   let soloPending = false;
   document.querySelectorAll('[data-solo-move]').forEach(button => button.addEventListener('click', async () => {
@@ -729,12 +754,13 @@ if (typeof document !== 'undefined') (() => {
     finally { soloPending = false; if (client.state) updateSolo(client.state); }
   }));
   function updateSolo(state) {
-    const solo = state.mode === 'bot'; $('solo-controls').hidden = !solo;
+    const solo = ['bot', 'friend'].includes(state.mode); $('solo-controls').hidden = !solo;
     const choosing = state.phase === 'running' && state.turn?.team === 'A' && client.secondsLeft() > 0;
-    setText('solo-status', !window.ArenaUI.connected ? 'Reconnecting. Moves paused.' : choosing ? 'Your turn. Choose a move.' : 'Campus Bot is choosing…');
+    setText('solo-status', !window.ArenaUI.connected ? 'Reconnecting. Moves paused.' : choosing ? 'Your turn. Choose a move.' : state.mode === 'friend' ? 'Your friend is choosing…' : 'Campus Bot is choosing…');
     document.querySelectorAll('[data-solo-move]').forEach(button => {
       button.disabled = !solo || !choosing || !window.ArenaUI.connected || soloPending || !state.turn?.availableMoves.includes(button.dataset.soloMove);
-      if (button.dataset.soloMove === 'special') button.querySelector('small').textContent = state.teams.A.specialCooldownRemaining ? 'Recharging: ' + state.teams.A.specialCooldownRemaining + ' own turns' : '30 damage';
+      const move = button.dataset.soloMove;
+      button.querySelector('small').textContent = move === 'special' && state.teams.A.specialCooldownRemaining ? 'Recharging: ' + state.teams.A.specialCooldownRemaining + ' own turns' : moveDescription(state.teams.A.stats || fighterStats(state.teams.A.characterId), move);
     });
   }
   function renderIdentity(state) {
@@ -754,8 +780,17 @@ if (typeof document !== 'undefined') (() => {
     }
     setText('battle-title', arenaNames[state.arenaId] || 'Campus battle');
     $('battle-title').classList.remove('sr-only');
-    setText('lobby-title', (arenaNames[state.arenaId] || 'Campus') + ': gather your teams.');
+    const friend = state.mode === 'friend';
+    setText('lobby-title', friend ? 'One friend. One showdown.' : 'Rally your groups.');
+    setText('lobby-intro', friend ? 'You play as Player 1. Send the link or QR to one friend for Player 2. Only you can start or reset.' : 'Show the QR on the projector. Players join balanced teams and vote on their phones.');
+    setText('host-role-label', friend ? 'Player 1 · match host' : state.mode === 'bot' ? 'Solo match controls' : 'Presenter controls');
+    setText('player-timer-label', friend ? 'TIME LEFT TO MOVE' : 'TIME LEFT TO VOTE');
+    setText('player-rules-note', friend ? 'Your move resolves immediately. If time runs out, the server chooses an available move. Only the host can reset or replay.' : 'You can change your vote before cutoff. No votes and tied votes are decided randomly.');
+    if (friend && state.phase === 'lobby') setText('lobby-status', state.teams.B.playerCount ? 'Your friend is ready. Start the duel.' : 'Waiting for one friend to join as Player 2.');
     if (state.you.role === 'player') {
+      const stats = state.teams[state.you.team].stats || fighterStats(state.teams[state.you.team].characterId);
+      document.querySelectorAll('[data-move]').forEach(button => { const move = button.dataset.move; button.querySelector('small').textContent = move === 'special' && state.teams[state.you.team].specialCooldownRemaining ? 'Recharging: ' + state.teams[state.you.team].specialCooldownRemaining + ' own turns' : moveDescription(stats, move); });
+      if (friend) { setText('player-title', state.phase === 'lobby' ? 'Your duel is ready.' : 'Make your move.'); setText('player-state', !window.ArenaUI.connected ? 'Reconnecting. Moves paused.' : state.phase === 'lobby' ? 'Player 2 connected. Waiting for Player 1 to start.' : state.turn?.team === state.you.team ? 'Your turn. Pick one move.' : 'Player 1 is choosing…'); setText('vote-feedback', state.phase === 'running' ? 'Each choice resolves immediately. 15 seconds per turn.' : 'Stay here — the match starts automatically on your screen.'); }
       setText('player-team', 'TEAM ' + state.you.team + ' · ' + identities[state.you.team].name);
       $('player-preview').replaceChildren();
       for (const team of ['A', 'B']) {

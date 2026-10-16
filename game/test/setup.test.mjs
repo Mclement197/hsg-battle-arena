@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import { fighterStats } from '../public/fighter-data.js';
 import { Arena, CHARACTERS, ARENAS } from '../src/engine.mjs';
 import { createGameServer } from '../src/server.mjs';
 const host = { role: 'host' };
@@ -29,10 +30,10 @@ test('bot uses authoritative HP, cooldown, alternating turns, victory and replay
   assert.throws(() => arena.join(room, { nickname: 'Late' }), e => e.status === 409);
   assert.throws(() => arena.play(room, { role: 'player' }, {}), e => e.status === 403);
   arena.play(room, host, { turnId: room.turn.id, move: 'special' }); arena.advance(room);
-  assert.equal(room.teams.B.hp, 70); assert.equal(room.turn.team, 'B');
+  assert.equal(room.teams.B.hp, 100 - fighterStats(setup.characterA).special); assert.equal(room.turn.team, 'B');
   assert.throws(() => arena.play(room, host, { turnId: room.turn.id, move: 'attack' }), e => e.status === 403);
   now = room.turn.deadline; arena.advance(room);
-  assert.equal(room.turn.team, 'A'); assert.equal(room.teams.A.hp, 80);
+  assert.equal(room.turn.team, 'A'); assert.equal(room.teams.A.hp, 100 - fighterStats(setup.characterB).attack);
   assert.throws(() => arena.play(room, host, { turnId: room.turn.id, move: 'special' }), e => e.status === 409);
   while (room.phase === 'running') {
     if (room.turn.team === 'A') arena.play(room, host, { turnId: room.turn.id, move: 'attack' });
