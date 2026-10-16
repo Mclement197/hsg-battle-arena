@@ -1,0 +1,48 @@
+{
+  "asset": "HSG main library arena",
+  "revision": 1,
+  "reviewed": "2026-10-16",
+  "sources": [
+    {
+      "id": "2013-symposium-interior",
+      "date": "2013",
+      "url": "https://commons.wikimedia.org/wiki/File:43._St.Gallen_Symposium_2013-Public_Session_in_der_HSG-Bibliothek-HSGH_022-002254-11.jpg",
+      "direct_url": "https://upload.wikimedia.org/wikipedia/commons/7/76/43._St.Gallen_Symposium_2013-Public_Session_in_der_HSG-Bibliothek-HSGH_022-002254-11.jpg",
+      "local_review_only": "/home/mathis/.openclaw/workspace/media/hsg-library-review/references/hsg2013_session.jpg",
+      "personally_viewed": true,
+      "role": "Primary historical structural anchor, upper-gallery diagonal. Not evidence of 2026 furniture.",
+      "reproduction": "Not embedded, copied, traced as texture, or distributed with model."
+    }
+  ],
+  "observed": [
+    "Ground floor plus one upper gallery",
+    "Dense light-gray/white steel book stacks on both levels",
+    "Raw concrete fascia, exposed coffer/beam rhythm",
+    "Broad pale gallery rail band, transparent glass and metal rails",
+    "Paired slender white columns left of center and thick near-right white duct",
+    "Large oval/circular maroon skylight edge and white radial roof structure",
+    "Dark gray carpet",
+    "Central dark folded/upright sculpture on short light round pedestal"
+  ],
+  "excluded": [
+    "1989 pre-move library references (not viewed or used)",
+    "2013 audience/crowd, event banners, auditorium chair rows and black speaker platform",
+    "Additional floors, grand staircase, fantasy wooden shelves"
+  ],
+  "inferred": [
+    "All metric dimensions, exact plan, bay spacing, ceiling profile and camera calibration",
+    "Occluded walls and full atrium boundary",
+    "Book titles/colors and spine arrangement",
+    "Four peripheral reading desks and chair positions",
+    "Simplified abstract original sculpture approximation (not exact art reproduction)"
+  ],
+  "game_adaptations": [
+    "No temporary event seating/platform; clear carpeted battle lane",
+    "HSG BIBLIOTHEK invented game-only label, not observed signage",
+    "Original student stand-ins near-left/far-right; no franchise designs",
+    "Lower 20 percent controls reserve and upper-corner fighter-free HUD zones"
+  ],
+  "rights": "All delivered geometry/materials generated originally using bundled Blender bpy. Referenced photos are visual research only; no photographic or artwork reproduction license is asserted.",
+  "limitations": "Single historical wide-angle photo is not a survey. Recognizable architectural interpretation, not current-2026 as-built or exact artwork.",
+  "workflow_reuse": "Read-only local game/art/trichli/generate.py and battle.py: primitive mesh/material/camera pattern and original student placeholder construction. Trichli files unchanged."
+}

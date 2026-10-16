@@ -1,0 +1,78 @@
+{
+  "pass": true,
+  "checks": {
+    "two_editable_camera_scenes": true,
+    "battle_full_HD": true,
+    "reference_1800x1200": true,
+    "eevee_three_threads": true,
+    "one_upper_gallery": true,
+    "required_structural_landmarks": true,
+    "two_original_placeholder_groups": true,
+    "fighters_in_frame": true,
+    "near_left_far_right": true,
+    "bottom_20_percent_fighter_free": true,
+    "upper_corner_HUD_fighter_free": true,
+    "sign_legible_projection": true,
+    "sign_explicitly_invented": true,
+    "reference_excludes_game_labels_fighters": true,
+    "saved_fighters_editable_visible": true,
+    "no_external_photos_assets_fonts": true,
+    "no_simulation_or_particle_dependencies": true,
+    "finite_transforms": true,
+    "reference-interior_dimensions_size": true,
+    "battle-preview_dimensions_size": true,
+    "battle-background_dimensions_size": true,
+    "blend_under_25MiB": true
+  },
+  "landmarks_normalized_top_left": {
+    "player": [
+      0.28416,
+      0.46281,
+      0.35548,
+      0.75761
+    ],
+    "opponent": [
+      0.62392,
+      0.39766,
+      0.666,
+      0.56231
+    ],
+    "sign": [
+      0.44615,
+      0.30841,
+      0.57509,
+      0.33028
+    ]
+  },
+  "images": {
+    "reference-interior": {
+      "width": 1800,
+      "height": 1200,
+      "bytes": 2219934
+    },
+    "battle-preview": {
+      "width": 1920,
+      "height": 1080,
+      "bytes": 2052272
+    },
+    "battle-background": {
+      "width": 1920,
+      "height": 1080,
+      "bytes": 2021859
+    }
+  },
+  "blend_bytes": 2494702,
+  "objects": 2233,
+  "mesh_vertices": 291858,
+  "blender_version": "5.0.1",
+  "battle_camera": {
+    "location": [
+      -1.600000023841858,
+      -8.600000381469727,
+      3.0999999046325684
+    ],
+    "lens_mm": 22.0,
+    "shift_y": -0.03500000014901161
+  },
+  "scope": "Fresh-open technical composition checks; visual reference comparison recorded separately in README."
+}

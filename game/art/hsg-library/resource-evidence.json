@@ -1,0 +1,64 @@
+{
+  "date": "2026-10-16",
+  "blender": "5.0.1",
+  "engine": "Eevee",
+  "render_threads": 3,
+  "renders": "sequential, never concurrent",
+  "limit_bytes": 4294967296,
+  "all_runs_below_4GiB": true,
+  "runs": {
+    "draft": {
+      "peak_rss_KiB": 902080,
+      "wall_time": "1:15.36",
+      "exit_status": 0
+    },
+    "refined-draft": {
+      "peak_rss_KiB": 961116,
+      "wall_time": "1:18.97",
+      "exit_status": 0
+    },
+    "final": {
+      "peak_rss_KiB": 1024672,
+      "wall_time": "2:08.41",
+      "exit_status": 0
+    },
+    "final-camera": {
+      "peak_rss_KiB": 868584,
+      "wall_time": "0:29.71",
+      "exit_status": 0
+    },
+    "final-sign": {
+      "peak_rss_KiB": 862472,
+      "wall_time": "0:27.60",
+      "exit_status": 0
+    },
+    "validation": {
+      "peak_rss_KiB": 429180,
+      "wall_time": "0:00.61",
+      "exit_status": 0
+    }
+  },
+  "files": {
+    "hsg-library.blend": {
+      "bytes": 2494702,
+      "sha256": "a2aed0058a15fe9ba54311e032809eff624f9d244c027f284a5083ff66faf39f"
+    },
+    "renders/battle-background.png": {
+      "bytes": 2021859,
+      "sha256": "bfca95ce7f10f821c3b8322d5fbd0e150ca3cc6d9933e010533fde4f845ae3a1"
+    },
+    "renders/battle-preview.png": {
+      "bytes": 2052272,
+      "sha256": "be875f98fa940e61a74a0224be986a1c339bed8fbf62ea23cd17dcf8f44a6000"
+    },
+    "renders/reference-interior.png": {
+      "bytes": 2219934,
+      "sha256": "8d5e39e16d5177061d2d50619528bef8bef68164771e86642a999bcd64d667e3"
+    }
+  },
+  "verification": "Fresh-open validate.py passed all 22 checks; actual final images privately opened and compared. No runtime/config changes.",
+  "initial_validation_failures_fixed": [
+    "Reference scene fake user preserves scene across fresh reopen",
+    "Sign enlarged to meet unchanged 210x22 px minimum"
+  ]
+}

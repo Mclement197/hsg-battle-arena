@@ -1,0 +1,6 @@
+# User-authorized editable blend and final rendered deliverables are intentional.
+*.blend1
+*.blend2
+__pycache__/
+*.pyc
+*.log
