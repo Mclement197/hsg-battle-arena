@@ -100,3 +100,21 @@ After publication, the opt-in read-only public frontend test passed on desktop, 
 The selected music WAV local SHA-256 is `393273797bd9c6bc198bd5fd1d84f22686986701423d1b2f24772dbb0a864ec4`. Public browser tests establish successful fetch/decode, not a byte-for-byte public WAV hash. The source uploader disclaims ownership; no reuse license is established, and attribution does not clear rights.
 
 Public HTTPS byte verification after push: `index.html` SHA-256 `2128eea0d9c077ac244560002970e12c94b0cc6b0f9435cb4c12b44aa8539f9e`, `app.js` `39d6d3f85022d262a503db9a439c78d5e8abaa6e922044842adb371a1ddf6e3c`, `styles.css` `93997d21af43cebf19d45876606d87f3d1c304791071a3ee21dab494cd4f1a1f`, and `lobby-loop.wav` `393273797bd9c6bc198bd5fd1d84f22686986701423d1b2f24772dbb0a864ec4`; all returned HTTP 200 and exactly matched the local checkout bytes.
+
+
+## Default sound preference display correction — 2026-10-17 (candidate)
+
+Philippe's fresh-page report was reproduced on the unchanged source and on the public HTTPS page in native Chromium: before any click/tap/key the button displayed “sound is off”. The regression expected “sound is on” and failed before the fix. Root cause: both the HTML and UI updater represented browser/decode readiness as the preference, and the first toggle could activate instead of mute while locked.
+
+The button now reports only the selected preference: exactly “sound is on” initially, “sound is off” only after explicit mute. Its pressed state reflects mute; the accessible name matches its visible text. A separate aria-describedby live hint reports waiting for first interaction, loading, suspension, unavailable audio or a resume/decode error. Native readiness still gates all playback; this label is not an audibility claim. First-toggle mute cannot resume audio and later gestures/loading cannot reverse it. Existing synchronous trusted-gesture activation, gain buses, music, countdown, Ready/Fight, action/win and deduplication behavior are retained. No asset/source-rights changes.
+
+Candidate is isolated in /tmp/hsg-sound-default, based on cb51ff9. No static deployment, service restart, room reset, live-room mutation or push was performed. Independent QA and integration/publication remain with the coordinator. The only public probe was a read-only fresh-page assertion; it correctly still failed against the not-yet-updated live page.
+
+Checks actually run:
+- Red: installed Chromium + native browser test named “fresh sound preference is ON before any gesture” failed with actual “sound is off” before the fix; the same symptom was confirmed read-only on public HTTPS.
+- Green: npm test — 81 tests, 76 pass, 5 optional browser/live skips, 0 fail.
+- Green: PLAYWRIGHT_MODULE=/home/mathis/.npm-global/lib/node_modules/openclaw/node_modules/playwright-core/index.mjs CHROMIUM_EXECUTABLE=/home/mathis/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome node --test game/test/audio-browser.test.mjs (from repository root) — 4 pass, 1 intentional live skip, 0 fail. Strict document-user-activation-required policy, not autoplay bypass.
+- Native regressions include passive CDP observation with userGesture:false proving hasBeenActive:false, suspended context, zero sources, ON label and correct pressed state; initial HTML without JavaScript; first-toggle mute via mouse/touch/Enter/Space; subsequent clicks preserving mute; delayed loading, decode failure, resume rejection/recovery, suspension, unavailable API; normal create/join activation, independent sliders, music stopping at battle, countdown/Ready-Fight ordering and action dedup/reset/reconnect/reload. Native output graph peaks were nonzero.
+- git diff --check passed. Screenshot: /tmp/hsg-sound-default-before-gesture.png. Logs: /tmp/hsg-sound-default-native-final.log, /tmp/hsg-sound-default-unit-final.log, /tmp/hsg-sound-default-live-red.log. An earlier native run used Tab while the toggle was still focused (correctly excluded from global unlock), causing test-only timeouts; recovery probes now use an ordinary non-toggle click and the complete suite passes.
+
+Physical speaker output and actual iOS Safari remain unverified; phone/tablet coverage is native Chromium touch emulation. Broad unrelated visual smoke was not rerun for this audio-only correction.

@@ -221,7 +221,8 @@ test('actual UI hook: selection/local expiry silent, server result once, mute/un
     if (!elements.has(id)) elements.set(id, {
       id, dataset: {}, handlers: {}, disabled: false, classList: { toggle() {}, remove() {}, contains() { return false; } },
       addEventListener(type, handler) { this.handlers[type] = handler; },
-      setAttribute() {}, getAttribute() { return null; }, focus() {}, append() {}, replaceChildren() {},
+      attributes: {}, setAttribute(name, value) { this.attributes[name] = value; },
+      getAttribute(name) { return this.attributes[name] ?? null; }, focus() {}, append() {}, replaceChildren() {},
       querySelector: selector => selector === 'img' && id === 'qr-container' ? null : element(id + selector)
     });
     return elements.get(id);
@@ -260,6 +261,9 @@ test('actual UI hook: selection/local expiry silent, server result once, mute/un
   const source = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
   Object.assign(sandbox, await import('../public/fighter-data.js'));
   vm.runInNewContext(source.replace(/^import .*;\n/gm, '').replace(/^export /gm, ''), sandbox);
+  assert.equal(element('mute').textContent, 'sound is on', 'ON preference renders before asset loading completes');
+  assert.equal(element('mute').getAttribute('aria-pressed'), 'false');
+  assert.equal(element('mute').getAttribute('aria-label'), 'sound is on');
   await flush();
   const send = async () => {
     readNext({ done: false, value: new TextEncoder().encode('event: state\ndata: ' + JSON.stringify(arena.snapshot(room, player)) + '\n\n') });

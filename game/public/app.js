@@ -412,6 +412,8 @@ if (typeof document !== 'undefined') (() => {
   let muted = false; // Desired preference; readiness still depends on browser permission and decoding.
   let audioAttempt = 0;
   let audioLoading = false;
+  let audioError = '';
+  let audioActivated = false;
   const activeTones = new Set();
   let currentJoinUrl = '';
   const setText = (id, value) => { if (value !== undefined && value !== null) $(id).textContent = String(value); };
@@ -481,17 +483,26 @@ if (typeof document !== 'undefined') (() => {
   function updateSoundControl() {
     const supported = !!(window.AudioContext || window.webkitAudioContext);
     const ready = soundReady(); // Zero mixer levels do not mean browser audio is locked.
-    const loading = !muted && audioContext?.state === 'running' && audioLoading && !actionAudio?.ready;
-    $('mute').disabled = !supported;
-    $('mute').dataset.audioState = !supported ? 'unavailable' : ready ? 'ready' : loading ? 'loading' : muted ? 'muted' : 'waiting';
-    $('mute').setAttribute('aria-pressed', String(!ready));
-    $('mute').setAttribute('aria-label', !supported ? 'Sound unavailable in this browser' : ready ?
-      'Sound enabled. Mute sound' : loading ? 'Sound loading. Mute sound' : 'Sound off. Enable sound');
-    setText('mute', ready ? 'sound is on' : 'sound is off');
+    const state = !supported ? 'unavailable' : muted ? 'muted' : audioError ? 'error' : ready ? 'ready' :
+      audioContext?.state !== 'running' ? (audioActivated ? 'suspended' : 'waiting') : audioLoading ? 'loading' : 'error';
+    const label = muted ? 'sound is off' : 'sound is on';
+    // The toggle reflects the user's preference, never browser playback readiness.
+    $('mute').dataset.audioState = state;
+    $('mute').setAttribute('aria-pressed', String(muted));
+    $('mute').setAttribute('aria-label', label);
+    setText('mute', label);
     syncLobbyMusic();
-    $('mute').title = !supported ? 'Web Audio is not supported.' : ready ? 'Sound is on for this device.' :
-      loading ? 'Loading game sounds. Tap to mute.' : muted ? 'Sound muted on this device. Tap sound to enable.' : 'Sound is enabled by default. Tap, click or press a key to activate audio on this device.';
-    setText('sound-hint', !supported ? 'Audio unavailable' : ready ? '' : loading ? 'Loading audio…' : muted ? 'Muted on this device' : 'Waiting for browser audio permission — tap, click or press a key');
+    const hints = {
+      unavailable: 'Audio unavailable in this browser',
+      muted: 'Muted on this device',
+      error: audioError || 'Audio unavailable — game sounds could not load',
+      ready: '',
+      loading: 'Loading audio…',
+      suspended: 'Audio suspended — click, tap or press a key to resume',
+      waiting: 'Waiting for browser audio permission — click, tap or press a key'
+    };
+    setText('sound-hint', hints[state]);
+    $('mute').title = muted ? 'Enable sound on this device.' : 'Mute sound on this device.';
   }
   function cue(kind, options) {
     // Server events are not gestures: never resume or queue sound here.
@@ -516,8 +527,8 @@ if (typeof document !== 'undefined') (() => {
     } catch { /* Audio is optional. */ }
   }
   $('mute').addEventListener('click', () => {
-    // Loading is also an enabled preference: a second click must cancel it.
-    if (!muted && (soundReady() || (audioLoading && audioContext?.state === 'running'))) {
+    // Toggling ON always mutes, even before browser activation or asset loading.
+    if (!muted) {
       ++audioAttempt;
       muted = true;
       actionAudio?.stop();
@@ -526,6 +537,7 @@ if (typeof document !== 'undefined') (() => {
       updateSoundControl();
     } else {
       muted = false;
+      updateSoundControl();
       activateSound(true);
     }
   });
@@ -534,6 +546,7 @@ if (typeof document !== 'undefined') (() => {
     if (soundReady()) { updateSoundControl(); if (confirmation) cue('turn'); return; }
     if (audioLoading && audioContext?.state === 'running') return;
     const attempt = ++audioAttempt;
+    audioError = '';
     const Audio = window.AudioContext || window.webkitAudioContext;
     if (!Audio) return;
     try {
@@ -546,6 +559,7 @@ if (typeof document !== 'undefined') (() => {
             for (const tone of activeTones) tone.stop();
             activeTones.clear();
           }
+          if (audioContext.state === 'running') audioActivated = true;
           updateSoundControl();
         });
       }
@@ -555,12 +569,23 @@ if (typeof document !== 'undefined') (() => {
       const resumed = audioContext.resume();
       audioLoading = !actionAudio.ready;
       updateSoundControl();
-      const loaded = actionAudio.load().then(() => { audioLoading = false; updateSoundControl(); });
+      const loaded = actionAudio.load().then(() => {
+        audioLoading = false;
+        if (!actionAudio.ready) audioError = 'Audio unavailable — game sounds could not load';
+        updateSoundControl();
+      });
       void Promise.all([resumed, loaded]).then(() => {
         updateSoundControl();
         if (confirmation && attempt === audioAttempt && soundReady()) cue('turn');
-      }).catch(() => { updateSoundControl(); });
-    } catch { audioLoading = false; updateSoundControl(); }
+      }).catch(() => {
+        if (attempt === audioAttempt) audioError = 'Audio could not start — click, tap or press a key to retry';
+        updateSoundControl();
+      });
+    } catch {
+      audioLoading = false;
+      audioError = 'Audio unavailable — could not initialize audio';
+      updateSoundControl();
+    }
   }
   // Capture before create/join/start handlers; resume synchronously inside the trusted gesture.
   for (const type of ['click', 'touchend', 'keydown']) document.addEventListener(type, event => {
