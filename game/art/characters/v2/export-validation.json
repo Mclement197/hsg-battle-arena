@@ -1,0 +1,287 @@
+{
+  "validator": "Khronos glTF Validator 2.0.0-dev.3.10",
+  "assets": [
+    {
+      "id": "luca-di-grazia",
+      "bytes": 2303944,
+      "sha256": "7fd00f6684795f81d3388157627492ab4b0488f1fc6299820722ca80ca26bb3a",
+      "triangles": 67284,
+      "skins": 1,
+      "bones": 52,
+      "clips": [
+        {
+          "name": "idle",
+          "seconds": 2.0416666666666665
+        },
+        {
+          "name": "attack",
+          "seconds": 1.0416666666666667
+        },
+        {
+          "name": "hit",
+          "seconds": 0.7916666666666666
+        },
+        {
+          "name": "defeat",
+          "seconds": 1.5416666666666667
+        },
+        {
+          "name": "defend",
+          "seconds": 1.0416666666666667
+        },
+        {
+          "name": "heal",
+          "seconds": 1.5416666666666667
+        },
+        {
+          "name": "special",
+          "seconds": 1.5416666666666667
+        }
+      ],
+      "externalResources": 0,
+      "validation": {
+        "numErrors": 0,
+        "numWarnings": 0,
+        "numInfos": 0,
+        "numHints": 0,
+        "messages": [],
+        "truncated": false
+      }
+    },
+    {
+      "id": "free-rider",
+      "bytes": 1181892,
+      "sha256": "fc1efc94c2c57a0af70a8bfd66dd4444d93fc84135125a91d1bd22bb0bcbfe3a",
+      "triangles": 28180,
+      "skins": 1,
+      "bones": 48,
+      "clips": [
+        {
+          "name": "idle",
+          "seconds": 2.0416666666666665
+        },
+        {
+          "name": "attack",
+          "seconds": 1.0416666666666667
+        },
+        {
+          "name": "hit",
+          "seconds": 0.7916666666666666
+        },
+        {
+          "name": "defeat",
+          "seconds": 1.5416666666666667
+        },
+        {
+          "name": "defend",
+          "seconds": 1.0416666666666667
+        },
+        {
+          "name": "heal",
+          "seconds": 1.5416666666666667
+        },
+        {
+          "name": "special",
+          "seconds": 1.5416666666666667
+        }
+      ],
+      "externalResources": 0,
+      "validation": {
+        "numErrors": 0,
+        "numWarnings": 0,
+        "numInfos": 0,
+        "numHints": 0,
+        "messages": [],
+        "truncated": false
+      }
+    },
+    {
+      "id": "tryhard",
+      "bytes": 1863148,
+      "sha256": "0106cfc217eb4f8df76369031c431e16a2f1a9d8b95d64361e4b870436ed076c",
+      "triangles": 40944,
+      "skins": 1,
+      "bones": 48,
+      "clips": [
+        {
+          "name": "idle",
+          "seconds": 2.0416666666666665
+        },
+        {
+          "name": "attack",
+          "seconds": 1.0416666666666667
+        },
+        {
+          "name": "hit",
+          "seconds": 0.7916666666666666
+        },
+        {
+          "name": "defeat",
+          "seconds": 1.5416666666666667
+        },
+        {
+          "name": "defend",
+          "seconds": 1.0416666666666667
+        },
+        {
+          "name": "heal",
+          "seconds": 1.5416666666666667
+        },
+        {
+          "name": "special",
+          "seconds": 1.5416666666666667
+        }
+      ],
+      "externalResources": 0,
+      "validation": {
+        "numErrors": 0,
+        "numWarnings": 0,
+        "numInfos": 0,
+        "numHints": 0,
+        "messages": [],
+        "truncated": false
+      }
+    },
+    {
+      "id": "assessment-hoodie",
+      "bytes": 1639964,
+      "sha256": "ff248a586321d8a372abeed734db4bb9e661083ed89460bde38bfd723e3feb94",
+      "triangles": 38800,
+      "skins": 1,
+      "bones": 48,
+      "clips": [
+        {
+          "name": "idle",
+          "seconds": 2.0416666666666665
+        },
+        {
+          "name": "attack",
+          "seconds": 1.0416666666666667
+        },
+        {
+          "name": "hit",
+          "seconds": 0.7916666666666666
+        },
+        {
+          "name": "defeat",
+          "seconds": 1.5416666666666667
+        },
+        {
+          "name": "defend",
+          "seconds": 1.0416666666666667
+        },
+        {
+          "name": "heal",
+          "seconds": 1.5416666666666667
+        },
+        {
+          "name": "special",
+          "seconds": 1.5416666666666667
+        }
+      ],
+      "externalResources": 0,
+      "validation": {
+        "numErrors": 0,
+        "numWarnings": 0,
+        "numInfos": 0,
+        "numHints": 0,
+        "messages": [],
+        "truncated": false
+      }
+    },
+    {
+      "id": "trischli-warrior",
+      "bytes": 1261180,
+      "sha256": "ae58ad49c4a8ad932c42db1ad16e3352abf38aaf60c2576838bf3448e2300e56",
+      "triangles": 33512,
+      "skins": 1,
+      "bones": 48,
+      "clips": [
+        {
+          "name": "idle",
+          "seconds": 2.0416666666666665
+        },
+        {
+          "name": "attack",
+          "seconds": 1.0416666666666667
+        },
+        {
+          "name": "hit",
+          "seconds": 0.7916666666666666
+        },
+        {
+          "name": "defeat",
+          "seconds": 1.5416666666666667
+        },
+        {
+          "name": "defend",
+          "seconds": 1.0416666666666667
+        },
+        {
+          "name": "heal",
+          "seconds": 1.5416666666666667
+        },
+        {
+          "name": "special",
+          "seconds": 1.5416666666666667
+        }
+      ],
+      "externalResources": 0,
+      "validation": {
+        "numErrors": 0,
+        "numWarnings": 0,
+        "numInfos": 0,
+        "numHints": 0,
+        "messages": [],
+        "truncated": false
+      }
+    },
+    {
+      "id": "bad-teacher",
+      "bytes": 1249368,
+      "sha256": "5f825f78d051968d94f7acc10ff30f46f3658ceaf23c292eabd0b6b65610c02e",
+      "triangles": 30646,
+      "skins": 1,
+      "bones": 48,
+      "clips": [
+        {
+          "name": "idle",
+          "seconds": 2.0416666666666665
+        },
+        {
+          "name": "attack",
+          "seconds": 1.0416666666666667
+        },
+        {
+          "name": "hit",
+          "seconds": 0.7916666666666666
+        },
+        {
+          "name": "defeat",
+          "seconds": 1.5416666666666667
+        },
+        {
+          "name": "defend",
+          "seconds": 1.0416666666666667
+        },
+        {
+          "name": "heal",
+          "seconds": 1.5416666666666667
+        },
+        {
+          "name": "special",
+          "seconds": 1.5416666666666667
+        }
+      ],
+      "externalResources": 0,
+      "validation": {
+        "numErrors": 0,
+        "numWarnings": 0,
+        "numInfos": 0,
+        "numHints": 0,
+        "messages": [],
+        "truncated": false
+      }
+    }
+  ]
+}

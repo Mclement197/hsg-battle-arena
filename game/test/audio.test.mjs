@@ -219,10 +219,10 @@ test('actual UI hook: selection/local expiry silent, server result once, mute/un
   const elements = new Map();
   const element = id => {
     if (!elements.has(id)) elements.set(id, {
-      id, dataset: {}, handlers: {}, disabled: false, classList: { toggle() {}, remove() {} },
+      id, dataset: {}, handlers: {}, disabled: false, classList: { toggle() {}, remove() {}, contains() { return false; } },
       addEventListener(type, handler) { this.handlers[type] = handler; },
-      setAttribute() {}, focus() {}, append() {}, replaceChildren() {},
-      querySelector: selector => selector === 'img' ? null : element(id + selector)
+      setAttribute() {}, getAttribute() { return null; }, focus() {}, append() {}, replaceChildren() {},
+      querySelector: selector => selector === 'img' && id === 'qr-container' ? null : element(id + selector)
     });
     return elements.get(id);
   };
@@ -244,6 +244,7 @@ test('actual UI hook: selection/local expiry silent, server result once, mute/un
   let tick;
   const sandbox = {
     document, window: { AudioContext: function () { return context; } },
+    CharacterStage: class { sync() {} play() {} }, modelFor: () => null,
     sessionStorage: { getItem: key => key.endsWith('active') ? JSON.stringify({ room: room.id, role: 'player' }) : 'token' },
     location: { origin: 'http://127.0.0.1', search: '' },
     URLSearchParams, AbortController, TextDecoder, TextEncoder,

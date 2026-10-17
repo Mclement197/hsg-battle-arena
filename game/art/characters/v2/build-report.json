@@ -1,0 +1,44 @@
+[
+  {
+    "id": "luca-di-grazia",
+    "bones": 52,
+    "vertices": 34548,
+    "file": "luca-di-grazia.glb",
+    "bytes": 2303944
+  },
+  {
+    "id": "free-rider",
+    "bones": 48,
+    "vertices": 14640,
+    "file": "free-rider.glb",
+    "bytes": 1181892
+  },
+  {
+    "id": "tryhard",
+    "bones": 48,
+    "vertices": 21640,
+    "file": "tryhard.glb",
+    "bytes": 1863148
+  },
+  {
+    "id": "assessment-hoodie",
+    "bones": 48,
+    "vertices": 23392,
+    "file": "assessment-hoodie.glb",
+    "bytes": 1639964
+  },
+  {
+    "id": "trischli-warrior",
+    "bones": 48,
+    "vertices": 14688,
+    "file": "trischli-warrior.glb",
+    "bytes": 1261180
+  },
+  {
+    "id": "bad-teacher",
+    "bones": 48,
+    "vertices": 16045,
+    "file": "bad-teacher.glb",
+    "bytes": 1249368
+  }
+]

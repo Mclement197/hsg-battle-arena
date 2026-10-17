@@ -85,9 +85,9 @@ Groups retains the non-playing presenter/room/QR/join/balanced-team/SSE/voting g
 
 Bot mode uses the same authoritative engine and server, not browser-controlled HP. The host controls Team A through the host-only solo action. A submitted move resolves on the next server tick (normally within 100 ms); Team B chooses a random legal move after one second. If the human does not choose within 15 seconds, the normal no-vote fallback applies. Bot rooms reject external joins. Bot mode requires a working server connection.
 
-### Replaceable original placeholders
+### Articulated character models
 
-Original six fighter SVGs live at public/assets/CHARACTER_ID.svg, and arena SVGs at public/assets/arena-ARENA_ID.svg. Replace these files in place, keeping their IDs and view boxes (fighters 300×360; arenas 800×360). No API or rule change is necessary. The illustrated identities are playful placeholders, not photographic likenesses. Barlow and Barlow Condensed are self-hosted under their included SIL Open Font License files in public/assets/OFL-*.txt. Existing action audio and original Ace/Dynamo fallback assets are preserved.
+Six original refined fighters now use self-contained skinned GLBs under public/assets/characters/, with the exact server character IDs. Selected preview, battle (including participant phones) and winner view use real Three.js skeletal animation; menu/lobby/roster tiles use portraits rendered from the same models. Static portraits remain the explicitly labeled fallback if WebGL2/assets are unavailable. Native editable blend, anatomy/licensing provenance, seven clips, deformation checks and reproduction commands: [articulated cast v2](art/characters/v2/README.md). Existing SVG fighters remain legacy fallback assets; arena SVGs and gameplay rules are unchanged. These are stylized interpretations, not exact photographic likenesses. Barlow and Barlow Condensed are self-hosted under their included SIL Open Font License files in public/assets/OFL-*.txt. Existing action audio and original Ace/Dynamo fallback assets are preserved.
 
 ### Full UI smoke
 
@@ -114,4 +114,4 @@ Damage rounds to the nearest whole HP after percentage block, minimum 1 HP, capp
 
 Original clients creating with an empty body and omitting fighter configuration retain legacy 20/50%/15/30 fallback values. Normal UI setup always configures named fighters. No client may submit stats, HP or damage.
 
-Design context: [PRODUCT.md](PRODUCT.md), [arcade-surface.md](arcade-surface.md), [DESIGN.md](DESIGN.md). No new dependency or build step. Assets use arcade HTML/module version tokens and no-store.
+Design context: [PRODUCT.md](PRODUCT.md), [arcade-surface.md](arcade-surface.md), [DESIGN.md](DESIGN.md). Three.js 0.186.1 is pinned and vendored locally; gltf-validator/esbuild are development-only verification/vendor tooling. Vendored runtime assets are supplied directly, so no build step is needed to play. Assets use version tokens and no-store.

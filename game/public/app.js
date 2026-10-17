@@ -1,3 +1,4 @@
+import { CharacterStage, modelFor } from './characters.js?v=20261017-rigged';
 import { FIGHTER_PROFILES, STAT_META, fighterStats, moveDescription } from './fighter-data.js?v=20261016-arcade';
 // Presentation identities use the authoritative team characterId, never nickname or team order.
 export const CHARACTER_THEMES = Object.freeze({
@@ -334,6 +335,16 @@ export function present(state, connected, secondsLeft, origin = globalThis.locat
 if (typeof document !== 'undefined') (() => {
   'use strict';
   const $ = (id) => document.getElementById(id);
+  const characters = new CharacterStage();
+  const setFighterArt = (image, id, name, animated = false, team = '') => {
+    const asset = modelFor(id);
+    const url = asset?.portrait || './assets/' + id + '.svg';
+    if (image.getAttribute('src') !== url) image.src = url;
+    image.alt = name;
+    if (animated && asset) { image.dataset.model = id; image.dataset.modelTeam = team; }
+    else { delete image.dataset.model; delete image.dataset.modelTeam; }
+  };
+  let victoryTimer;
   const screens = ['menu', 'arena', 'character', 'help', 'entry', 'lobby', 'battle', 'player', 'victory'];
   let setupBusy = false;
   const moves = ['attack', 'defend', 'heal', 'special'];
@@ -345,10 +356,16 @@ if (typeof document !== 'undefined') (() => {
   const activeTones = new Set();
   let currentJoinUrl = '';
   const setText = (id, value) => { if (value !== undefined && value !== null) $(id).textContent = String(value); };
-  function show(screen) {
+  function show(screen, immediate = false) {
+    if (screen === 'victory' && !immediate && ['battle', 'player'].includes(document.body.dataset.screen)) {
+      victoryTimer ||= setTimeout(() => { victoryTimer = null; show('victory', true); }, 1600);
+      return; // Let the authoritative final hit and defeat finish; game state is already final.
+    }
+    clearTimeout(victoryTimer); victoryTimer = null;
     if (!screens.includes(screen) || document.body.dataset.screen === screen) return;
     screens.forEach((name) => { $(name + '-screen').hidden = name !== screen; });
     document.body.dataset.screen = screen;
+    characters.sync();
     const heading = $(screen + '-screen').querySelector('h1');
     heading.tabIndex = -1;
     heading.focus({ preventScroll: true });
@@ -533,7 +550,7 @@ if (typeof document !== 'undefined') (() => {
     if (view.specialInfo !== undefined) setText('special-info', view.specialInfo);
     if (view.winner !== undefined) {
       const ace = view.winner === 'ace';
-      $('winner-art').src = ace ? './assets/assessment-ace.svg' : './assets/deadline-dynamo.svg';
+      if (!$('winner-art').dataset.model) $('winner-art').src = ace ? './assets/assessment-ace.svg' : './assets/deadline-dynamo.svg';
       setText('victory-title', ace ? 'Team Ace wins!' : 'Team Dynamo wins!');
     }
     if (view.victoryMessage !== undefined) setText('victory-message', view.victoryMessage);
@@ -543,6 +560,7 @@ if (typeof document !== 'undefined') (() => {
   const actionCue = createActionCue(cue);
   let activeEffect, effectTimer;
   function showActionEffect(effect) {
+    characters.play(effect);
     clearTimeout(effectTimer);
     activeEffect?.remove?.();
     // Victory/phone screens have no opposing fighter: stamp the result instead.
@@ -709,10 +727,10 @@ if (typeof document !== 'undefined') (() => {
     setText('fighter-choice', 'Choosing for ' + (solo || friend ? selectedTeam === 'A' ? 'you' : solo ? 'the bot' : 'your friend' : 'Team ' + selectedTeam) + ' · ' + arenaNames[selectedArena]);
     const selectedId = selectedCharacters[selectedTeam];
     const preview = $('selected-fighter-art');
-    const artUrl = './assets/' + selectedId + '.svg';
+    const artUrl = modelFor(selectedId).portrait;
     if (preview.getAttribute('src') !== artUrl && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) preview.animate?.([{ filter: 'brightness(1.7)' }, { filter: 'brightness(1)' }], { duration: 420, easing: 'cubic-bezier(.16,1,.3,1)' });
-    preview.src = artUrl;
-    $('selected-fighter-art').alt = CHARACTER_THEMES[selectedId].name + ' — original placeholder artwork';
+    setFighterArt(preview, selectedId, CHARACTER_THEMES[selectedId].name + ' — articulated 3D fighter', true);
+    characters.sync();
     setText('selected-fighter-name', CHARACTER_THEMES[selectedId].name);
     setText('selected-fighter-archetype', FIGHTER_PROFILES[selectedId].archetype);
     $('selected-fighter-stats').replaceChildren(statBars(selectedId));
@@ -720,7 +738,7 @@ if (typeof document !== 'undefined') (() => {
     for (const [id, theme] of Object.entries(CHARACTER_THEMES)) {
       const button = document.createElement('button'); button.type = 'button'; button.className = 'character-option'; button.dataset.character = id;
       button.setAttribute('aria-pressed', String(selectedCharacters[selectedTeam] === id));
-      const image = document.createElement('img'); image.src = './assets/' + id + '.svg'; image.alt = '';
+      const image = document.createElement('img'); setFighterArt(image, id, '', false);
       const title = document.createElement('strong'); title.textContent = theme.name;
       const label = document.createElement('small'); label.textContent = Object.entries(selectedCharacters).filter(([, value]) => value === id).map(([team]) => solo ? team === 'A' ? 'YOU' : 'BOT' : 'TEAM ' + team).join(' + ') || theme.labels.special;
       button.append(image, title, label, statBars(id));
@@ -741,6 +759,8 @@ if (typeof document !== 'undefined') (() => {
       if (setupMode === 'bot') await client.mutate('start');
       pendingSetupRoom = null; setupBusy = false;
       render(present(client.state, window.ArenaUI.connected, client.secondsLeft())); renderIdentity(client.state);
+      // Baseline setup history even when its SSE snapshots arrived while setupBusy was true.
+      actionCue(client.state); visualCue(client.state);
       $('global-error').hidden = true;
     } catch (error) { reportError(error.message); }
     finally { setupBusy = false; $('selection-next').disabled = false; setText('selection-next', setupMode === 'bot' ? 'Start bot battle' : setupMode === 'friend' ? 'Invite your friend' : 'Open group room'); }
@@ -770,9 +790,12 @@ if (typeof document !== 'undefined') (() => {
     for (const [team, key] of [['A', 'ace'], ['B', 'dynamo']]) {
       const theme = characterTheme(state.teams[team].characterId);
       const name = theme?.name || (team === 'A' ? 'Assessment Ace' : 'Deadline Dynamo');
-      const art = './assets/' + (theme ? state.teams[team].characterId : team === 'A' ? 'assessment-ace' : 'deadline-dynamo') + '.svg';
-      identities[team] = { name, art };
-      for (const image of document.querySelectorAll('.' + key + '-fighter .fighter-art, .' + key + '-roster > img')) { image.src = art; image.alt = name + ' placeholder fighter'; }
+      const id = theme ? state.teams[team].characterId : team === 'A' ? 'assessment-ace' : 'deadline-dynamo';
+      identities[team] = { name, id };
+      for (const image of document.querySelectorAll('.' + key + '-fighter .fighter-art, .' + key + '-roster > img')) {
+        setFighterArt(image, id, name, image.classList.contains('fighter-art'), team);
+        image.dataset.modelPose = state.teams[team].hp === 0 ? 'defeat' : 'idle';
+      }
       document.querySelector('.' + key + '-fighter .health span').textContent = name;
       document.querySelector('.' + key + '-roster h2').textContent = name;
       document.querySelector('.' + key + '-roster .team-tag').textContent = 'TEAM ' + team;
@@ -792,16 +815,18 @@ if (typeof document !== 'undefined') (() => {
       document.querySelectorAll('[data-move]').forEach(button => { const move = button.dataset.move; button.querySelector('small').textContent = move === 'special' && state.teams[state.you.team].specialCooldownRemaining ? 'Recharging: ' + state.teams[state.you.team].specialCooldownRemaining + ' own turns' : moveDescription(stats, move); });
       if (friend) { setText('player-title', state.phase === 'lobby' ? 'Your duel is ready.' : 'Make your move.'); setText('player-state', !window.ArenaUI.connected ? 'Reconnecting. Moves paused.' : state.phase === 'lobby' ? 'Player 2 connected. Waiting for Player 1 to start.' : state.turn?.team === state.you.team ? 'Your turn. Pick one move.' : 'Player 1 is choosing…'); setText('vote-feedback', state.phase === 'running' ? 'Each choice resolves immediately. 15 seconds per turn.' : 'Stay here — the match starts automatically on your screen.'); }
       setText('player-team', 'TEAM ' + state.you.team + ' · ' + identities[state.you.team].name);
-      $('player-preview').replaceChildren();
       for (const team of ['A', 'B']) {
-        const box = document.createElement('div'), image = document.createElement('img'), label = document.createElement('span'), hp = document.createElement('progress');
-        image.src = identities[team].art; image.alt = identities[team].name;
+        let box = $('player-preview').querySelector('[data-preview-team="' + team + '"]');
+        if (!box) { box = document.createElement('div'); box.dataset.previewTeam = team; box.append(document.createElement('img'), document.createElement('span'), document.createElement('progress')); $('player-preview').append(box); }
+        const image = box.querySelector('img'), label = box.querySelector('span'), hp = box.querySelector('progress');
+        setFighterArt(image, identities[team].id, identities[team].name, state.phase !== 'lobby', team);
+        image.dataset.modelPose = state.teams[team].hp === 0 ? 'defeat' : 'idle';
         label.textContent = identities[team].name + ' · ' + state.teams[team].hp + ' HP';
         hp.max = 100; hp.value = state.teams[team].hp; hp.setAttribute('aria-label', identities[team].name + ' health');
-        box.append(image, label, hp); $('player-preview').append(box);
       }
     }
-    if (state.phase === 'finished') { $('winner-art').src = identities[state.winner].art; $('winner-art').alt = identities[state.winner].name; setText('victory-title', identities[state.winner].name + ' wins!'); }
+    if (state.phase === 'finished') { setFighterArt($('winner-art'), identities[state.winner].id, identities[state.winner].name, true); setText('victory-title', identities[state.winner].name + ' wins!'); }
+    characters.sync();
     updateSolo(state);
   }
   document.addEventListener('arena:intent', event => { void handleIntent(event.detail); });

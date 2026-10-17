@@ -1,0 +1,92 @@
+{
+  "renderer": "Chromium SwiftShader software WebGL2; not physical mobile GPU",
+  "checks": [
+    {
+      "width": 1440,
+      "all6Selection": true,
+      "skin": [
+        {
+          "id": "luca-di-grazia",
+          "skinned": 11,
+          "bones": 52,
+          "clips": [
+            "idle",
+            "attack",
+            "hit",
+            "defeat",
+            "defend",
+            "heal",
+            "special"
+          ]
+        },
+        {
+          "id": "trischli-warrior",
+          "skinned": 14,
+          "bones": 48,
+          "clips": [
+            "idle",
+            "attack",
+            "hit",
+            "defeat",
+            "defend",
+            "heal",
+            "special"
+          ]
+        }
+      ],
+      "authoritativeAttack": true,
+      "deduplicatedSSE": true,
+      "defeat": true,
+      "rafPerSecond": 10,
+      "cleanTeardown": true
+    },
+    {
+      "width": 390,
+      "all6Selection": true,
+      "skin": [
+        {
+          "id": "assessment-hoodie",
+          "skinned": 15,
+          "bones": 48,
+          "clips": [
+            "idle",
+            "attack",
+            "hit",
+            "defeat",
+            "defend",
+            "heal",
+            "special"
+          ]
+        },
+        {
+          "id": "bad-teacher",
+          "skinned": 14,
+          "bones": 48,
+          "clips": [
+            "idle",
+            "attack",
+            "hit",
+            "defeat",
+            "defend",
+            "heal",
+            "special"
+          ]
+        }
+      ],
+      "authoritativeAttack": true,
+      "deduplicatedSSE": true,
+      "defeat": true,
+      "rafPerSecond": 17,
+      "cleanTeardown": true
+    },
+    {
+      "reducedMotion": true,
+      "stationaryDefend": true
+    },
+    {
+      "explicitStaticFallback": true
+    }
+  ],
+  "errors": [],
+  "failed": []
+}

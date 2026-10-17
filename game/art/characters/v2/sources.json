@@ -1,0 +1,64 @@
+{
+  "retrieved": "2026-10-17",
+  "geometry": "Original project geometry; no downloaded base meshes, textures, reference photographs or third-party animation clips embedded.",
+  "inherited_identity_provenance": "../source-manifest.json",
+  "references": [
+    {
+      "url": "https://www.kenhub.com/en/library/anatomy/hand-anatomy",
+      "image": "https://www.kenhub.com/thumbor/lMBvIxcOoVIPKRERCAHaQjpOyUA=/fit-in/800x1600/filters:watermark(/images/logo_url.png,-10,-10,0):background_color(FFFFFF):format(jpeg)/images/library/10610/DorsalHand_Thumbnail.png",
+      "access": "Read article via agent-reach Jina route; anatomical diagram actually viewed.",
+      "observed": "Staggered finger lengths; separate three-phalange fingers, two-phalange thumb branching radially from thenar base, not a fifth parallel finger. Thumb mirrored between hands.",
+      "license": "Kenhub copyrighted reference only; no image reused or redistributed."
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Foot",
+      "image": "https://upload.wikimedia.org/wikipedia/commons/3/38/MedialViewOfRightFoot.png",
+      "access": "Read via Jina; medial-view diagram actually viewed.",
+      "observed": "Heel/hindfoot, raised instep, medial longitudinal arch, wider metatarsal forefoot, tapered toe end. Implemented as original shoe-last geometry, not bare anatomical toes.",
+      "license": "Reference-only observation; no article text or image copied into assets."
+    }
+  ],
+  "preflight": [
+    {
+      "url": "https://docs.blender.org/manual/en/latest/addons/import_export/scene_gltf2.html",
+      "decision": "Use installed Blender 5.0.1 native armatures, vertex groups, NLA clips and glTF 2.0 exporter rather than custom rig/format infrastructure."
+    },
+    {
+      "url": "https://static.makehumancommunity.org/about/license.html",
+      "status": "Read successful current license page; core assets CC0, program code GPL/AGPL.",
+      "decision": "Viable permissive base meshes considered, not downloaded: replacing all six authored identities would add proportion/costume rework and dependencies. Original existing native geometry was the smaller complete solution."
+    },
+    {
+      "url": "https://threejs.org/",
+      "version": "0.186.1",
+      "source": "https://www.npmjs.com/package/three",
+      "license": "MIT; preserved in game/public/vendor/THREE-LICENSE.txt",
+      "decision": "Current game was 2D HTML/SVG, no existing 3D renderer. Add established local WebGL2/GLTFLoader/AnimationMixer, retaining authoritative engine, CSS effects, audio and arena artwork."
+    }
+  ],
+  "build_tools": [
+    {
+      "name": "esbuild",
+      "version": "0.28.2",
+      "license": "MIT",
+      "role": "Minimizes locally vendored upstream modules; not required to run the checked-in game."
+    },
+    {
+      "name": "gltf-validator",
+      "version": "2.0.0-dev.3.10",
+      "license": "Apache-2.0",
+      "role": "Khronos validation in test suite."
+    },
+    {
+      "name": "NumPy",
+      "version": "2.5.4",
+      "license": "BSD-3-Clause",
+      "role": "Blender exporter dependency absent from this distro Blender; scoped wheel extracted under ignored .tools/packages, no OS or global Python changes."
+    }
+  ],
+  "limits": [
+    "Stylized interpretation, not photoreal anatomy or exact likeness.",
+    "No reference photos, external resource URLs, downloaded character meshes or textures in GLBs.",
+    "Existing native DejaVu fonts packed in blend; runtime lettering is converted original text geometry."
+  ]
+}

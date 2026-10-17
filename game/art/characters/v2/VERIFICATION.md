@@ -1,0 +1,29 @@
+# Verification and handoff — 2026-10-17
+
+## Native geometry and exported skins
+
+- Fresh-open Blender validation covers all six scenes, 48 bones per character / 52 for Luca, every finger/thumb joint, both Luca wing chains, separate Trischli VFX, seven NLA clips, no external images, and normalized 1–4 skin influences on every body vertex.
+- Actual 0.9-radian additional elbow/knee bends plus finger poses move thousands of vertices. The lower-decile edge-length retention at mixed-weight elbows/knees is 0.852–0.896: no collapsing rigid-segment approximation. Saved renders show all six tested bends.
+- Anatomy visual review corrected palm-forward thumb chirality: thumbs branch radially outward and index fingers are on the thumb side. Closeup review also replaced pointed terminal cones with sampled hemispherical finger/thumb caps. These are original modeled surfaces, not the online reference diagrams.
+- verify-exports.mjs uses the Khronos validator: **zero errors and zero warnings for all six GLBs**, with checksums, geometry counts and clip durations in [export-validation.json](export-validation.json). Files are approximately 1.1–2.4 MB each, approximately 28,000–68,000 triangles; no external buffer/image URIs. No decoder downloads.
+- Node asset tests also load the actual GLBs through the shipped GLTFLoader/AnimationMixer, inspect SkinnedMesh weights and verify that attack playback deforms over 500 vertices per character, not just a root transform.
+
+## Actual browser/game checks
+
+The native-browser script is game/test/characters-browser.mjs, using an owned loopback server on port 18994 and Chromium software WebGL2. It checks all six selected previews on desktop and 390-pixel touch mobile; real skinned meshes, bone counts and seven loaded clips in battle; authoritative attack/target-hit; response/SSE deduplication; final defeat before victory; winner rendering; stationary reduced-motion poses; explicit no-WebGL portrait fallback; no horizontal overflow; and zero retained stage views/GPU geometry after leaving the screen. No page exceptions or failed HTTP responses in the successful run.
+
+The existing npm run test:ui also passed on isolated port 18993: bot victory/replay, real Friend host/guest play, capacity rejection, reload/reconnect, Groups presenter plus two voters, real 15-second resolution, vote replacement, reset, and desktop/mobile five-screen layouts with all 24 displayed stats checked against engine data.
+
+npm test: 66 passed, 3 optional browser checks skipped by default. With the documented existing Playwright/Chromium environment: 68 passed, 1 intentionally unrequested live-site check skipped. Native audio graphs decode the real WAVs, measure nonzero samples, test gesture activation, muting/suspension/recovery and duplicate SSE. Audio graph checks use reduced motion to isolate audio from continuous GPU redraw; the separate character suite exercises full animation. An earlier mixed-load full-motion audio run timed out while Cycles was active; it is not claimed as a pass.
+
+Actual evidence is under /home/mathis/.openclaw/workspace/media/hsg-characters-v2/: lineup.png, bent-joints-contact-sheet.png, pose-contact-sheet.png, hand-thumb-detail.png, shoe-arch-detail.png, browser/, multiplayer/, runtime-attack.webm, hsg-characters-v2.blend and glb/. The WebM records the actual in-game Luca canvas through idle → authoritative attack → idle; it is not an image slideshow. Native Cycles images and actual desktop/mobile browser images were visually inspected.
+
+## Performance and limits
+
+Bounded on-demand cache of six GLBs, one selected view or two battle views, DPR cap 1.5 and 30-fps rendering cap; GPU resources/mixers/observers/RAFs are released. A clean software-renderer run measured about 11 desktop / 31 touch-mobile browser RAF callbacks per second (not a hardware GPU benchmark or guaranteed rendered FPS). Physical phone/iOS compatibility, acoustical speaker output and real projector GPU performance remain unverified. These are stylized models with shared compact animations; no facial blendshapes, finger IK, corrective morphs, cloth simulation or LODs. See README.md for editing/retopology limits.
+
+## Integration ownership
+
+No commit, push, deployment, running-service restart, OS/configuration/scheduler change, balancing or arena edit was performed. Existing dashboard edits and unrelated untracked art/evidence remain untouched. Stage only this v2 directory plus the explicitly changed client/assets/vendor/server/static-route/tests/package files and game README; do not bulk-stage the parent art directory or repository.
+
+**Release the server route allowlist and client/assets together.** A currently running older Node process will not acquire the new GLB/vendor/characters.js routes merely because files changed. The integration owner must use the normal reviewed release procedure; no service operation was attempted here.

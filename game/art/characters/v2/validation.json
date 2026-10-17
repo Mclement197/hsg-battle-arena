@@ -1,0 +1,108 @@
+{
+  "fresh_open": "/home/mathis/hsg-battle-arena/game/art/characters/v2/hsg-characters-v2.blend",
+  "characters": [
+    {
+      "id": "luca-di-grazia",
+      "bones": 52,
+      "vertices": 34548,
+      "blended_vertices": 5612,
+      "deformed_vertices": 8064,
+      "bend_edge_ratio_p10": 0.875,
+      "clips": [
+        "attack",
+        "defeat",
+        "defend",
+        "heal",
+        "hit",
+        "idle",
+        "special"
+      ]
+    },
+    {
+      "id": "free-rider",
+      "bones": 48,
+      "vertices": 14640,
+      "blended_vertices": 2688,
+      "deformed_vertices": 3412,
+      "bend_edge_ratio_p10": 0.896,
+      "clips": [
+        "attack",
+        "defeat",
+        "defend",
+        "heal",
+        "hit",
+        "idle",
+        "special"
+      ]
+    },
+    {
+      "id": "tryhard",
+      "bones": 48,
+      "vertices": 21640,
+      "blended_vertices": 5973,
+      "deformed_vertices": 4228,
+      "bend_edge_ratio_p10": 0.852,
+      "clips": [
+        "attack",
+        "defeat",
+        "defend",
+        "heal",
+        "hit",
+        "idle",
+        "special"
+      ]
+    },
+    {
+      "id": "assessment-hoodie",
+      "bones": 48,
+      "vertices": 23392,
+      "blended_vertices": 10438,
+      "deformed_vertices": 3827,
+      "bend_edge_ratio_p10": 0.853,
+      "clips": [
+        "attack",
+        "defeat",
+        "defend",
+        "heal",
+        "hit",
+        "idle",
+        "special"
+      ]
+    },
+    {
+      "id": "trischli-warrior",
+      "bones": 48,
+      "vertices": 14688,
+      "blended_vertices": 2748,
+      "deformed_vertices": 3275,
+      "bend_edge_ratio_p10": 0.875,
+      "clips": [
+        "attack",
+        "defeat",
+        "defend",
+        "heal",
+        "hit",
+        "idle",
+        "special"
+      ]
+    },
+    {
+      "id": "bad-teacher",
+      "bones": 48,
+      "vertices": 16045,
+      "blended_vertices": 3604,
+      "deformed_vertices": 3349,
+      "bend_edge_ratio_p10": 0.865,
+      "clips": [
+        "attack",
+        "defeat",
+        "defend",
+        "heal",
+        "hit",
+        "idle",
+        "special"
+      ]
+    }
+  ],
+  "external_assets": []
+}
