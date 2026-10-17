@@ -37,7 +37,8 @@ export const AUDIO_SOUNDS = Object.freeze({
   'battle-start': './assets/audio/battle-start.wav',
   countdown: './assets/audio/countdown.wav',
   lobby: './assets/audio/lobby-loop.wav',
-  battle: './assets/audio/battle-loop.webm'
+  battle: './assets/audio/battle-loop.webm',
+  win: './assets/audio/victory.webm'
 });
 
 // Arm only on a live edge. Native audio-clock scheduling avoids timer drift and stale replay.
@@ -59,6 +60,24 @@ export function createBattleStartCue(play, stop = () => {}) {
       if (elapsed < 3) play('battle-start', { delay: 3 - elapsed });
     } else if (started && state.prebattle === undefined) play('battle-start'); // Old server only; never a missed new-server intro.
     if (state.phase === 'lobby' || state.phase === 'finished' || (state.phase === 'running' && state.prebattle === null)) stop();
+  };
+  consume.reset = () => { stop(); scope = null; phase = null; consumed = false; };
+  return consume;
+}
+
+// A finished snapshot is history unless this stream observed the live running edge.
+export function createVictoryCue(play, stop = () => {}) {
+  let scope = null, phase = null, consumed = false;
+  const consume = state => {
+    const nextScope = state.roomId + ':' + state.match;
+    if (scope !== nextScope) {
+      stop(); scope = nextScope; phase = state.phase; consumed = state.phase === 'finished';
+      return;
+    }
+    const won = phase === 'running' && state.phase === 'finished' && !consumed;
+    phase = state.phase;
+    if (phase === 'finished') consumed = true; // Even unavailable/muted outcomes stay consumed.
+    if (won) play('win');
   };
   consume.reset = () => { stop(); scope = null; phase = null; consumed = false; };
   return consume;
@@ -131,8 +150,8 @@ export class ActionAudio {
     this.musicGain.connect(context.destination); this.sfxGain.connect(context.destination);
     this.setVolume('music', this.musicVolume); this.setVolume('sfx', this.sfxVolume);
   }
-  // An unsupported optional battle codec must not silence the unchanged lobby or SFX.
-  get ready() { return Object.keys(AUDIO_SOUNDS).every(move => move === 'battle' || this.buffers.has(move)); }
+  // Optional music codecs must not silence the unchanged lobby or SFX.
+  get ready() { return Object.keys(AUDIO_SOUNDS).every(move => ['battle', 'win'].includes(move) || this.buffers.has(move)); }
   async load() {
     if (this.loading) return this.loading;
     this.loading = Promise.all(Object.entries(AUDIO_SOUNDS).map(async ([move, url]) => {
@@ -166,7 +185,11 @@ export class ActionAudio {
     for (const source of [...this.prebattle]) source.stop();
     this.prebattle.clear();
   }
+  stopVictory() {
+    this.victory?.stop(); this.victory = null;
+  }
   play(move, { delay = 0, offset = 0, loop = false } = {}) {
+    if (move === 'win') { this.setMusic(null); this.stopVictory(); }
     const buffer = this.buffers.get(move);
     // Never queue a stale action while loading or waiting for a user gesture.
     if (!buffer || this.context.state !== 'running') return false;
@@ -174,16 +197,17 @@ export class ActionAudio {
     const gain = this.context.createGain();
     source.buffer = buffer; source.loop = loop; this.lastSource = source;
     gain.gain.setValueAtTime((move === 'countdown' ? .9 : .45) * (move === 'battle' ? .5 : 1), this.context.currentTime);
-    source.connect(gain).connect(['lobby', 'battle'].includes(move) ? this.musicGain : this.sfxGain);
+    source.connect(gain).connect(['lobby', 'battle', 'win'].includes(move) ? this.musicGain : this.sfxGain);
     this.active.add(source);
+    if (move === 'win') this.victory = source;
     if (['countdown', 'battle-start'].includes(move)) this.prebattle.add(source);
-    source.onended = () => { this.active.delete(source); this.prebattle.delete(source); source.disconnect(); gain.disconnect(); };
+    source.onended = () => { if (this.victory === source) this.victory = null; this.active.delete(source); this.prebattle.delete(source); source.disconnect(); gain.disconnect(); };
     source.start(this.context.currentTime + delay, offset);
     return true;
   }
   stop() {
     for (const source of this.active) source.stop();
-    this.active.clear(); this.prebattle.clear(); this.music = null; this.musicKey = null;
+    this.active.clear(); this.prebattle.clear(); this.music = null; this.musicKey = null; this.victory = null;
   }
 }
 
@@ -504,7 +528,9 @@ if (typeof document !== 'undefined') (() => {
       unavailable: 'Audio unavailable in this browser',
       muted: 'Muted on this device',
       error: audioError || 'Audio unavailable — game sounds could not load',
-      ready: actionAudio?.buffers.has('battle') ? '' : audioLoading ? 'Loading battle music…' : 'Battle music unavailable — other game sounds remain enabled',
+      ready: ['battle', 'win'].every(kind => actionAudio?.buffers.has(kind)) ? '' : audioLoading ? 'Loading optional music…' :
+        [!actionAudio?.buffers.has('battle') && 'Battle music unavailable — other game sounds remain enabled',
+          !actionAudio?.buffers.has('win') && 'Victory sound unavailable — other game sounds remain enabled'].filter(Boolean).join('. '),
       loading: 'Loading audio…',
       suspended: 'Audio suspended — click, tap or press a key to resume',
       waiting: 'Waiting for browser audio permission — click, tap or press a key'
@@ -517,7 +543,7 @@ if (typeof document !== 'undefined') (() => {
     if (!soundReady()) return;
     try {
       if (Object.hasOwn(AUDIO_SOUNDS, kind)) { actionAudio?.play(kind, options); return; }
-      const patterns = { turn: [360, 480], win: [330, 440, 550, 660] };
+      const patterns = { turn: [360, 480] };
       (patterns[kind] || patterns.turn).forEach((frequency, i) => {
         const at = audioContext.currentTime + i * .095;
         const oscillator = audioContext.createOscillator();
@@ -604,6 +630,7 @@ if (typeof document !== 'undefined') (() => {
     if (!actionAudio) return;
     const screen = document.body.dataset.screen;
     const state = window.ArenaUI?.connected ? client.state : null;
+    if (state?.phase !== 'finished' || !['battle', 'player', 'victory'].includes(screen)) actionAudio.stopVictory();
     const battle = ['battle', 'player'].includes(screen) && state?.phase === 'running';
     const lobby = ['menu', 'entry', 'arena', 'character', 'lobby', 'help'].includes(screen) ||
       (screen === 'player' && client.state?.phase === 'lobby');
@@ -735,7 +762,7 @@ if (typeof document !== 'undefined') (() => {
     effectTimer = setTimeout(() => { node.remove?.(); if (activeEffect === node) activeEffect = null; }, 850);
   }
   const visualCue = createVisualCue(showActionEffect);
-  let seenWin = null;
+  const victoryCue = createVictoryCue(kind => { if (window.ArenaUI.connected) cue(kind); }, () => actionAudio?.stopVictory());
   const client = new ArenaClient({
     onState(state) {
       if (setupBusy || pendingSetupRoom) return;
@@ -744,9 +771,7 @@ if (typeof document !== 'undefined') (() => {
       battleStartCue(state);
       actionCue(state);
       visualCue(state);
-      const winId = state.phase === 'finished' ? state.roomId + ':' + state.match : null;
-      if (winId && seenWin !== winId && window.ArenaUI.connected) cue('win');
-      seenWin = winId;
+      victoryCue(state);
       if (state.you.role === 'host' && $('qr-container').querySelector('img')?.src !== location.origin + '/game/api/rooms/' + state.roomId + '/qr.svg') {
         const qr = document.createElement('img');
         qr.src = '/game/api/rooms/' + state.roomId + '/qr.svg';
@@ -755,7 +780,7 @@ if (typeof document !== 'undefined') (() => {
       }
     },
     onConnection(status) {
-      if (status !== 'connected') { battleStartCue.reset(); actionCue.reset(); }
+      if (status !== 'connected') { battleStartCue.reset(); actionCue.reset(); victoryCue.reset(); }
       render({ connection: status });
       if (client.state && !setupBusy && !pendingSetupRoom) { render(present(client.state, status === 'connected', client.secondsLeft())); renderIdentity(client.state); }
     },

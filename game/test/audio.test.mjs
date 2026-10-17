@@ -6,7 +6,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
-import { ACTION_SOUNDS, AUDIO_SOUNDS, ActionAudio, createActionCue, createBattleStartCue, ArenaClient } from '../public/app.js';
+import { ACTION_SOUNDS, AUDIO_SOUNDS, ActionAudio, createActionCue, createBattleStartCue, createVictoryCue, ArenaClient } from '../public/app.js';
 import { buildSound } from '../public/assets/audio/generate.mjs';
 import { Arena, MOVES } from '../src/engine.mjs';
 import { createGameServer } from '../src/server.mjs';
@@ -294,9 +294,10 @@ test('actual UI hook: selection/local expiry silent, server result once, mute/un
   arena.vote(room, player, { turnId: room.turn.id, move: 'attack' });
   at(room.turn.deadline); arena.advance(room); await send();
   assert.equal(room.phase, 'finished');
-  assert.equal(context.starts.filter(source => !source.loop).length, 2, 'winning action still sounds');
-  assert.equal(context.oscillators.length, 6, 'explicit enable cue plus existing four-note win cue');
-  await send(); assert.equal(context.starts.filter(source => !source.loop).length, 2); assert.equal(context.oscillators.length, 6);
+  assert.equal(context.starts.filter(source => !source.loop).length, 3, 'winning action and full victory source sound');
+  assert.equal(new TextDecoder().decode(context.starts.at(-1).buffer.bytes), AUDIO_SOUNDS.win);
+  assert.equal(context.oscillators.length, 2, 'only explicit enable cue; no synthesized win overlap');
+  await send(); assert.equal(context.starts.filter(source => !source.loop).length, 3); assert.equal(context.oscillators.length, 2);
 });
 
 
@@ -436,4 +437,60 @@ test('battle-only half gain composes with Music slider and mute without changing
     assert.equal(effective(audio.music), .45 * .5 * volume);
     audio.stop();
   }
+});
+
+test('victory consumes only live running-to-finished edges, resets and unavailable outcomes', () => {
+  const played = []; let available = true;
+  const cue = createVictoryCue(kind => { if (available) played.push(kind); });
+  const state = (phase, match = 0, roomId = 'one') => ({ roomId, match, phase });
+  cue(state('finished')); cue(state('running')); cue(state('finished'));
+  assert.deepEqual(played, [], 'initial/history and regressive state cannot replay a win');
+  cue(state('lobby', 1)); cue(state('running', 1)); cue(state('finished', 1)); cue(state('finished', 1));
+  assert.deepEqual(played, ['win']);
+  cue.reset(); cue(state('finished', 1)); assert.deepEqual(played, ['win'], 'reconnect baseline');
+  cue(state('running', 2)); available = false; cue(state('finished', 2));
+  available = true; cue(state('finished', 2)); assert.deepEqual(played, ['win'], 'no delayed unmute/load');
+  cue(state('running', 3)); cue.reset(); cue(state('finished', 3));
+  assert.deepEqual(played, ['win'], 'finish missed offline');
+  cue(state('running', 4)); cue(state('finished', 4));
+  cue(state('finished', 4, 'two')); assert.deepEqual(played, ['win', 'win']);
+});
+
+test('full victory source identity, Music routing and cancellation leave other sounds working', async () => {
+  const bytes = await readFile(new URL('../public/' + AUDIO_SOUNDS.win, import.meta.url));
+  assert.equal(bytes.length, 82632);
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), 'f0cf0be0c1cb3e061e12957d34300a49f24e5918feea6eb10e963997968046b7');
+  const context = audioContext();
+  context.createGain = () => ({ gain: { setValueAtTime(value) { this.value = value; } },
+    connect(target) { this.target = target; return target; }, disconnect() {} });
+  context.createBufferSource = () => ({ connect(gain) { this.gain = gain; return gain; }, disconnect() {},
+    start(when, offset) { this.offset = offset; this.when = when; context.starts.push(this); },
+    stop() { this.stopped = true; this.onended?.(); } });
+  const audio = new ActionAudio(context, async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(0) }));
+  await audio.load(); audio.setMusic('battle'); const battle = audio.music;
+  audio.setVolume('music', .42); audio.setVolume('sfx', 0); assert.equal(audio.play('win'), true);
+  const win = audio.victory;
+  assert.equal(battle.stopped, true); assert.equal(audio.music, null);
+  assert.equal(win.buffer, audio.buffers.get('win')); assert.equal(win.loop, false);
+  assert.equal(win.offset, 0); assert.equal(win.gain.target, audio.musicGain);
+  assert.equal(win.gain.gain.value, .45); assert.equal(audio.musicGain.gain.value, .42);
+  audio.stopVictory(); assert.equal(win.stopped, true); assert.equal(audio.victory, null);
+  audio.play('win'); audio.stop(); assert.ok(context.starts.every(s => s.stopped));
+  for (const failure of ['fetch', 'decode']) {
+    const broken = new ActionAudio({ ...context, decodeAudioData: async bytes => {
+      if (failure === 'decode' && new TextDecoder().decode(bytes) === AUDIO_SOUNDS.win) throw Error('bad codec');
+      return { bytes };
+    } }, async url => ({ ok: failure !== 'fetch' || url !== AUDIO_SOUNDS.win,
+      arrayBuffer: async () => new TextEncoder().encode(url).buffer }));
+    await broken.load(); assert.equal(broken.ready, true); assert.equal(broken.buffers.has('win'), false);
+    assert.equal(broken.play('win'), false); assert.equal(broken.play('attack'), true);
+    broken.setMusic('lobby'); assert.ok(broken.music);
+  }
+});
+
+test('help credits the exact replacement source without inventing rights clearance', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const help = html.match(/<section id="help-screen"[\s\S]*?<\/section>/)[0];
+  assert.match(help, /https:\/\/www.youtube.com\/watch\?v=N2uyNC-Xz98/);
+  assert.match(help, /SOUND EFFECTS HD/); assert.match(help, /disclaims ownership; redistribution rights are unverified/);
 });

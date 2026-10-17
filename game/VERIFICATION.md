@@ -135,3 +135,56 @@ Worktree `/tmp/hsg-fight-music`, branch `feat/requested-fight-music`, base `06a0
 **Not verified:** actual Safari/WebKit, iOS/macOS speakers, or physical audibility. Only Chromium 1243 is installed; touch emulation is not Safari. Older WebM/Opus-incompatible browsers retain lobby/SFX with a truthful optional-battle warning; no alternate battle encoding is supplied. Full-track loop configuration/hash/duration verified; no claim of a seamless edit or a 143-second real-time boundary listening test.
 
 **Safe integration after independent QA:** integrate the server-only routing commit first while preserving unrelated edits; apply the parent-approved service restart in the agreed room-clearing window (no config change). Existing frontend remains usable. Then integrate the client/asset/tests/docs commit. Verify public WebM GET/HEAD MIME, bytes/hash and normal-gesture lobby/battle readiness; use read-only frontend probes unless a disposable-room acceptance is explicitly authorized. If rolling back, restore client/HTML first; the additive server route can remain until a separately authorized restart. Do not claim live completion from this isolated candidate.
+
+## Replacement victory sound — 2026-10-17 (isolated candidate, not deployed)
+
+Worktree: /tmp/hsg-victory-N2uyNC-Xz98; branch: candidate/victory-N2uyNC-Xz98;
+base: 45c666ea8906b2426493ec6a3d8feb0b0633aab8 (battle half-volume).
+No backend/config/infrastructure edits, service restart, live room mutation,
+publication or push. Main checkout's unrelated dashboard/docs/art edits remain
+untouched. Independent QA/integration/publication remain with the coordinator.
+
+- Inspected the exact new video https://www.youtube.com/watch?v=N2uyNC-Xz98 :
+  “VICTORY 🏆 SOUND EFFECT - FREE SOUND EFFECT HD (NO COPYRIGHT)”, SOUND EFFECTS HD,
+  uploaded 2021-01-15, metadata duration 6 seconds. License field absent. Uploader
+  claims free video use but explicitly disclaims ownership; redistribution rights
+  remain unverified. The Artlist subscription advertisement is not an explicit
+  paid condition for this clip; no purchase or bypass. Full description and
+  attribution are recorded in the audio README and a visible Help credit.
+- Full unchanged format-251 WebM/Opus, 82,632 bytes, SHA-256
+  f0cf0be0c1cb3e061e12957d34300a49f24e5918feea6eb10e963997968046b7.
+  Chromium 1243 native 48 kHz stereo decode: 5.4683125 seconds, 262,479 frames.
+  No trim/normalization/transcode/loop/substitution. Existing 8 MiB WebM route used.
+- Live authoritative running → finished edge only, once per room/match, shared
+  host/player hook. Battle music is stopped BEFORE victory source start. Full
+  source at Music bus/source gain 0.45; existing battle-only 0.5 multiplier and
+  lobby/countdown/SFX levels retained. Synthesized win cue removed (final attack
+  SFX retained). Native probes verify full natural end without a stop/trim, offset
+  zero, non-looping source, zero active loops at start, Music .42/SFX zero routing
+  and nonzero actual native graph activity on host/desktop/touch player clients.
+- Duplicate/regressive/history/initial/reload/reconnect snapshots do not replay;
+  reset re-arms. Mute/suspend/disconnect/reset/leave stop sources. Actual held
+  requests and muted finish demonstrate no delayed victory after load/unmute.
+  Native optional victory decode failure leaves lobby/action graphs and exact ON
+  preference labels operational; base WAV failure still honestly blocks readiness.
+- Final complete suite (from worktree root):
+  PLAYWRIGHT_MODULE=/home/mathis/.npm-global/lib/node_modules/openclaw/node_modules/playwright-core/index.mjs CHROMIUM_EXECUTABLE=/home/mathis/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome npm test --prefix game
+  Result: 93 tests, 92 pass, 0 fail, 1 intentional read-only-live skip; exit 0.
+  Log: /tmp/victory-full-native-final.log. Previous complete native run also passed
+  (92 tests, 91 pass, 1 live skip), before the final Help-credit placement assertion.
+- npm test --prefix game: 93 tests, 84 pass, 0 fail, 9 opt-in browser/live skips;
+  exit 0. Log: /tmp/victory-full-final.log.
+- node --test game/test/audio.test.mjs: 18/18 pass, exit 0; log:
+  /tmp/victory-unit-final.log. Includes exact file hash/GET/HEAD/MIME, lifecycle,
+  Music routing, optional fetch/decode failure, unchanged battle/lobby gains and
+  Help source-credit assertions. Source checks (node --check) and git diff --check
+  passed. No new package dependency or install.
+- Test iteration: the first new native lifecycle test timed out because its
+  TURN 1 label remained from the preceding match. The barrier now waits for each
+  client's fresh active authoritative battle source; focused 2/2 and both complete
+  native runs pass. No production workaround was made for this test-only race.
+
+Not checked: physical speakers, actual iOS/macOS Safari/WebKit, broad visual smoke,
+public deployment or live asset hashes. Touch-device contexts are Chromium
+emulation, not Safari. Rights clearance is not established. Graft executable was
+unavailable; relevant source/callers/tests were inspected directly instead.
