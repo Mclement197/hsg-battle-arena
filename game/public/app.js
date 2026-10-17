@@ -34,25 +34,39 @@ export const ACTION_SOUNDS = Object.freeze({
 
 export const AUDIO_SOUNDS = Object.freeze({
   ...ACTION_SOUNDS,
-  'battle-start': './assets/audio/battle-start.wav'
+  'battle-start': './assets/audio/battle-start.wav',
+  countdown: './assets/audio/countdown.wav',
+  lobby: './assets/audio/lobby-loop.wav'
 });
 
-// A live lobby -> running edge, not a click, reload or reconnect snapshot.
-export function createBattleStartCue(play) {
+// Arm only on a live edge. Native audio-clock scheduling avoids timer drift and stale replay.
+export function createBattleStartCue(play, stop = () => {}) {
   let scope = null, phase = null, consumed = false;
   const consume = state => {
     const nextScope = state.roomId + ':' + state.match;
     if (scope !== nextScope) {
-      scope = nextScope; phase = state.phase; consumed = state.phase !== 'lobby';
+      stop(); scope = nextScope; phase = state.phase; consumed = state.phase !== 'lobby';
       return;
     }
-    const started = phase === 'lobby' && state.phase === 'running' && !consumed;
+    const started = phase === 'lobby' && ['countdown', 'running'].includes(state.phase) && !consumed;
     phase = state.phase;
     if (state.phase !== 'lobby') consumed = true;
-    if (started) play('battle-start'); // Consume even muted/loading/suspended starts.
+    if (started && state.phase === 'countdown' && state.prebattle) {
+      const elapsed = Math.max(0, (state.serverNow - state.prebattle.startedAt) / 1000);
+      // Never start the voice or Ready/Fight late or let it intrude into turn one.
+      if (elapsed < 3) play('countdown', { offset: elapsed });
+      if (elapsed < 3) play('battle-start', { delay: 3 - elapsed });
+    } else if (started && state.prebattle === undefined) play('battle-start'); // Old server only; never a missed new-server intro.
+    if (state.phase === 'lobby' || state.phase === 'finished' || (state.phase === 'running' && state.prebattle === null)) stop();
   };
-  consume.reset = () => { scope = null; phase = null; consumed = false; };
+  consume.reset = () => { stop(); scope = null; phase = null; consumed = false; };
   return consume;
+}
+
+export function prebattleLabel(state, now = state.serverNow) {
+  if (state.phase !== 'countdown' || !state.prebattle) return '';
+  const elapsed = Math.max(0, now - state.prebattle.startedAt);
+  return elapsed < 3000 ? String(3 - Math.floor(elapsed / 1000)) : 'READY… FIGHT!';
 }
 
 // Consume server snapshots only, never votes or the presentation countdown.
@@ -107,6 +121,12 @@ export class ActionAudio {
     this.fetcher = fetcher;
     this.buffers = new Map();
     this.active = new Set();
+    this.prebattle = new Set();
+    this.music = null;
+    this.musicVolume = .35; this.sfxVolume = .8;
+    this.musicGain = context.createGain(); this.sfxGain = context.createGain();
+    this.musicGain.connect(context.destination); this.sfxGain.connect(context.destination);
+    this.setVolume('music', this.musicVolume); this.setVolume('sfx', this.sfxVolume);
   }
   get ready() { return Object.keys(AUDIO_SOUNDS).every(move => this.buffers.has(move)); }
   async load() {
@@ -123,23 +143,39 @@ export class ActionAudio {
     await this.loading;
     this.loading = null;
   }
-  play(move) {
+  setVolume(bus, value) {
+    if (!['music', 'sfx'].includes(bus)) return;
+    value = Number(value);
+    if (!Number.isFinite(value)) return;
+    this[bus + 'Volume'] = Math.max(0, Math.min(1, value));
+    this[bus + 'Gain'].gain.setValueAtTime(this[bus + 'Volume'], this.context.currentTime);
+  }
+  setLobby(enabled) {
+    if (!enabled) { this.music?.stop(); this.music = null; return; }
+    if (!this.music && this.play('lobby', { loop: true })) this.music = this.lastSource;
+  }
+  stopPrebattle() {
+    for (const source of [...this.prebattle]) source.stop();
+    this.prebattle.clear();
+  }
+  play(move, { delay = 0, offset = 0, loop = false } = {}) {
     const buffer = this.buffers.get(move);
     // Never queue a stale action while loading or waiting for a user gesture.
     if (!buffer || this.context.state !== 'running') return false;
     const source = this.context.createBufferSource();
     const gain = this.context.createGain();
-    source.buffer = buffer;
-    gain.gain.setValueAtTime(.45, this.context.currentTime);
-    source.connect(gain).connect(this.context.destination);
+    source.buffer = buffer; source.loop = loop; this.lastSource = source;
+    gain.gain.setValueAtTime(move === 'countdown' ? .9 : .45, this.context.currentTime);
+    source.connect(gain).connect(move === 'lobby' ? this.musicGain : this.sfxGain);
     this.active.add(source);
-    source.onended = () => { this.active.delete(source); source.disconnect(); gain.disconnect(); };
-    source.start();
+    if (['countdown', 'battle-start'].includes(move)) this.prebattle.add(source);
+    source.onended = () => { this.active.delete(source); this.prebattle.delete(source); source.disconnect(); gain.disconnect(); };
+    source.start(this.context.currentTime + delay, offset);
     return true;
   }
   stop() {
     for (const source of this.active) source.stop();
-    this.active.clear();
+    this.active.clear(); this.prebattle.clear(); this.music = null;
   }
 }
 
@@ -342,11 +378,11 @@ export function present(state, connected, secondsLeft, origin = globalThis.locat
     canStart: connected && state.phase === 'lobby' && state.teams.A.playerCount > 0 && state.teams.B.playerCount > 0,
     canControl: host && connected,
     lobbyStatus: state.teams.A.playerCount && state.teams.B.playerCount ? 'Both teams are ready.' : 'Waiting for both teams to join.',
-    turnLabel: state.turn ? 'Team ' + teamName(state.turn.team) + ' is choosing' : 'Match complete',
+    turnLabel: state.phase === 'countdown' ? 'Get ready — voting opens after the intro' : state.turn ? 'Team ' + teamName(state.turn.team) + ' is choosing' : 'Match complete',
     round: state.turn?.number || result?.number || 1,
     secondsLeft, message: last, voteCount: state.turn?.totalVotes || 0, tally: state.turn?.voteCounts || { attack: 0, defend: 0, heal: 0, special: 0 },
     playerTeam: own === 'A' ? 'ace' : own === 'B' ? 'dynamo' : null,
-    playerState: state.phase === 'lobby' ? 'Waiting for the presenter to start.' : state.phase === 'finished' ? 'Match complete.' : !connected ? 'Reconnecting. Voting is paused.' : active ? secondsLeft ? 'Your team is choosing now.' : 'Time is up. Waiting for the server.' : 'Other team is choosing. Watch the projector.',
+    playerState: state.phase === 'countdown' ? 'Get ready — voting opens after the intro.' : state.phase === 'lobby' ? 'Waiting for the presenter to start.' : state.phase === 'finished' ? 'Match complete.' : !connected ? 'Reconnecting. Voting is paused.' : active ? secondsLeft ? 'Your team is choosing now.' : 'Time is up. Waiting for the server.' : 'Other team is choosing. Watch the projector.',
     voteFeedback: state.you.vote ? 'Vote confirmed: ' + state.you.vote + '. You can change it before the timer ends.' : 'You can change your vote until the timer ends.',
     votedMove: state.you.vote || null, canVote: voting, specialReady: !!state.turn?.availableMoves.includes('special'),
     specialInfo: ownTeam?.specialCooldownRemaining ? 'Ready in ' + ownTeam.specialCooldownRemaining + ' own turn(s)' : '30 damage · 3-turn cooldown',
@@ -388,6 +424,8 @@ if (typeof document !== 'undefined') (() => {
     if (!screens.includes(screen) || document.body.dataset.screen === screen) return;
     screens.forEach((name) => { $(name + '-screen').hidden = name !== screen; });
     document.body.dataset.screen = screen;
+    if (!['battle', 'player'].includes(screen)) { actionAudio?.stopPrebattle(); $('prebattle').hidden = true; }
+    syncLobbyMusic();
     characters.sync();
     const heading = $(screen + '-screen').querySelector('h1');
     heading.tabIndex = -1;
@@ -442,22 +480,23 @@ if (typeof document !== 'undefined') (() => {
   }
   function updateSoundControl() {
     const supported = !!(window.AudioContext || window.webkitAudioContext);
-    const ready = soundReady();
+    const ready = soundReady(); // Zero mixer levels do not mean browser audio is locked.
     const loading = !muted && audioContext?.state === 'running' && audioLoading && !actionAudio?.ready;
     $('mute').disabled = !supported;
     $('mute').dataset.audioState = !supported ? 'unavailable' : ready ? 'ready' : loading ? 'loading' : 'muted';
     $('mute').setAttribute('aria-pressed', String(!ready));
     $('mute').setAttribute('aria-label', !supported ? 'Sound unavailable in this browser' : ready ?
       'Sound enabled. Mute sound' : loading ? 'Sound loading. Mute sound' : 'Sound off. Enable sound');
-    setText('mute', !supported ? 'Sound unavailable' : ready ? 'Mute sound' : loading ? 'Loading sound…' : 'Enable sound');
+    setText('mute', ready ? 'sound is on' : 'sound is off');
+    syncLobbyMusic();
     $('mute').title = !supported ? 'Web Audio is not supported.' : ready ? 'Sound is on for this device.' :
       loading ? 'Loading game sounds. Tap to mute.' : 'Tap to enable sound on this device. Each host and player enables sound separately.';
   }
-  function cue(kind) {
+  function cue(kind, options) {
     // Server events are not gestures: never resume or queue sound here.
     if (!soundReady()) return;
     try {
-      if (Object.hasOwn(AUDIO_SOUNDS, kind)) { actionAudio?.play(kind); return; }
+      if (Object.hasOwn(AUDIO_SOUNDS, kind)) { actionAudio?.play(kind, options); return; }
       const patterns = { turn: [360, 480], win: [330, 440, 550, 660] };
       (patterns[kind] || patterns.turn).forEach((frequency, i) => {
         const at = audioContext.currentTime + i * .095;
@@ -468,7 +507,7 @@ if (typeof document !== 'undefined') (() => {
         gain.gain.setValueAtTime(.0001, at);
         gain.gain.exponentialRampToValueAtTime(.065, at + .012);
         gain.gain.exponentialRampToValueAtTime(.0001, at + .14);
-        oscillator.connect(gain).connect(audioContext.destination);
+        oscillator.connect(gain).connect(actionAudio.sfxGain);
         activeTones.add(oscillator);
         oscillator.onended = () => { activeTones.delete(oscillator); oscillator.disconnect(); gain.disconnect(); };
         oscillator.start(at); oscillator.stop(at + .15);
@@ -491,9 +530,17 @@ if (typeof document !== 'undefined') (() => {
       muted = false;
       if (!audioContext) {
         audioContext = new Audio();
-        audioContext.addEventListener?.('statechange', updateSoundControl);
+        audioContext.addEventListener?.('statechange', () => {
+          if (audioContext.state !== 'running') {
+            actionAudio?.stop(); muted = true;
+            for (const tone of activeTones) tone.stop();
+            activeTones.clear();
+          }
+          updateSoundControl();
+        });
       }
       actionAudio ||= new ActionAudio(audioContext);
+      for (const bus of ['music', 'sfx']) actionAudio.setVolume(bus, Number($('volume-' + bus).value || (bus === 'music' ? 35 : 80)) / 100);
       // Invoke synchronously in click/tap, BEFORE any fetch/decode await (Safari/iOS).
       const resumed = audioContext.resume();
       audioLoading = true;
@@ -504,6 +551,15 @@ if (typeof document !== 'undefined') (() => {
         if (attempt === audioAttempt && soundReady()) cue('turn');
       }).catch(() => { updateSoundControl(); });
     } catch { muted = true; updateSoundControl(); }
+  });
+  function syncLobbyMusic() {
+    if (!actionAudio) return;
+    const screen = document.body.dataset.screen;
+    actionAudio.setLobby(soundReady() && (['menu', 'entry', 'arena', 'character', 'lobby', 'help'].includes(screen) || (screen === 'player' && client.state?.phase === 'lobby')));
+  }
+  for (const bus of ['music', 'sfx']) $('volume-' + bus).addEventListener('input', event => {
+    actionAudio?.setVolume(bus, Number(event.target.value) / 100);
+    setText('volume-' + bus + '-value', event.target.value + '%');
   });
   updateSoundControl();
   function roster(id, names) {
@@ -562,6 +618,7 @@ if (typeof document !== 'undefined') (() => {
       setText('countdown', seconds); setText('player-countdown', seconds);
       $('countdown').setAttribute('aria-label', seconds + ' seconds left');
     }
+    syncLobbyMusic();
     if (view.message !== undefined) setText('battle-message', view.message);
     if (view.voteCount !== undefined) setText('vote-count', view.voteCount + (view.voteCount === 1 ? ' vote cast' : ' votes cast'));
     if (view.tally) moves.forEach((move) => setText('tally-' + move, Number(view.tally[move]) || 0));
@@ -581,7 +638,7 @@ if (typeof document !== 'undefined') (() => {
   window.ArenaUI = { render, cue, connected: false };
   $('copy-link').disabled = true;
   const actionCue = createActionCue(cue);
-  const battleStartCue = createBattleStartCue(cue);
+  const battleStartCue = createBattleStartCue(cue, () => actionAudio?.stopPrebattle());
   let activeEffect, effectTimer;
   function showActionEffect(effect) {
     characters.play(effect);
@@ -626,6 +683,7 @@ if (typeof document !== 'undefined') (() => {
   const client = new ArenaClient({
     onState(state) {
       if (setupBusy || pendingSetupRoom) return;
+      if (state.phase === 'countdown') actionAudio?.setLobby(false);
       render(present(state, window.ArenaUI.connected, client.secondsLeft()));
       renderIdentity(state);
       battleStartCue(state);
@@ -805,7 +863,7 @@ if (typeof document !== 'undefined') (() => {
   function updateSolo(state) {
     const solo = ['bot', 'friend'].includes(state.mode); $('solo-controls').hidden = !solo;
     const choosing = state.phase === 'running' && state.turn?.team === 'A' && client.secondsLeft() > 0;
-    setText('solo-status', !window.ArenaUI.connected ? 'Reconnecting. Moves paused.' : choosing ? 'Your turn. Choose a move.' : state.mode === 'friend' ? 'Your friend is choosing…' : 'Campus Bot is choosing…');
+    setText('solo-status', state.phase === 'countdown' ? 'Get ready — moves open after the intro.' : !window.ArenaUI.connected ? 'Reconnecting. Moves paused.' : choosing ? 'Your turn. Choose a move.' : state.mode === 'friend' ? 'Your friend is choosing…' : 'Campus Bot is choosing…');
     document.querySelectorAll('[data-solo-move]').forEach(button => {
       button.disabled = !solo || !choosing || !window.ArenaUI.connected || soloPending || !state.turn?.availableMoves.includes(button.dataset.soloMove);
       const move = button.dataset.soloMove;
@@ -855,8 +913,18 @@ if (typeof document !== 'undefined') (() => {
       }
     }
     if (state.phase === 'finished') { setFighterArt($('winner-art'), identities[state.winner].id, identities[state.winner].name, true); setText('victory-title', identities[state.winner].name + ' wins!'); }
+    renderPrebattle(state);
     characters.sync();
     updateSolo(state);
+  }
+  function renderPrebattle(state) {
+    const label = ['battle', 'player'].includes(document.body.dataset.screen) ? prebattleLabel(state, Date.now() + client.offset) : '';
+    $('prebattle').hidden = !label;
+    setText('prebattle-label', label);
+    if (label) {
+      setText('countdown', label); setText('player-countdown', label);
+      setText('player-state', 'Get ready — voting opens after the intro.');
+    }
   }
   document.addEventListener('arena:intent', event => { void handleIntent(event.detail); });
   const incomingRoom = roomCode(new URLSearchParams(location.search).get('room'));
@@ -869,7 +937,10 @@ if (typeof document !== 'undefined') (() => {
   $('resume-game').hidden = !saved;
   if (saved) void client.resume(saved);
   setInterval(() => {
-    if (!client.state || client.state.phase !== 'running') return;
+    syncLobbyMusic();
+    if (!client.state) return;
+    renderPrebattle(client.state);
+    if (client.state.phase !== 'running') return;
     const seconds = client.secondsLeft();
     updateSolo(client.state);
     setText('countdown', seconds); setText('player-countdown', seconds);

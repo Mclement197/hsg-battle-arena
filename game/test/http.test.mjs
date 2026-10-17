@@ -26,9 +26,18 @@ async function fixture(t, options = {}) {
     });
     req.setTimeout(3000, () => req.destroy(new Error('HTTP timed out'))); req.on('error', reject); req.end(init.body);
   });
-  const post = (url, data = {}, credential, headers = {}) => raw(url, { method: 'POST', headers: {
-    Origin: ORIGIN, 'Content-Type': 'application/json', ...(credential ? { Authorization: 'Bearer ' + credential } : {}), ...headers
-  }, body: JSON.stringify(data) });
+  const post = async (url, data = {}, credential, headers = {}) => {
+    const result = await raw(url, { method: 'POST', headers: {
+      Origin: ORIGIN, 'Content-Type': 'application/json', ...(credential ? { Authorization: 'Bearer ' + credential } : {}), ...headers
+    }, body: JSON.stringify(data) });
+    // Existing turn-focused regressions explicitly finish the new server intro.
+    if (url.endsWith('/start') && result.status === 200) {
+      assert.equal(result.data.state.phase, 'countdown');
+      time = result.data.state.prebattle.deadline; game.tick();
+      result.data.state = arena.snapshot(arena.rooms.get(result.data.state.roomId), { role: 'host' });
+    }
+    return result;
+  };
   const create = async () => { const r = await post('/game/api/rooms'); assert.equal(r.status, 201, r.text); return r.data; };
   const join = async (room, nickname) => { const r = await post('/game/api/rooms/' + room.roomId + '/join', { nickname }); assert.equal(r.status, 201, r.text); return r.data; };
   const state = (room, credential) => raw('/game/api/rooms/' + room.roomId + '/state', { headers: { Authorization: 'Bearer ' + credential } });
@@ -453,4 +462,26 @@ test('full anonymous IP-bucket map cannot block an existing authenticated presen
   } });
   assert.equal(r.status, 200);
   assert.equal((await f.post('/game/api/rooms/' + host.roomId + '/reset', {}, host.hostToken, headers)).status, 200);
+});
+
+test('HTTP start exposes prebattle, rejects votes until full intro completes and starts full turn via SSE', async t => {
+  const f = await fixture(t), host = await f.create();
+  const a = await f.join(host, 'A'); await f.join(host, 'B');
+  const url = '/game/api/rooms/' + host.roomId;
+  const stream = await sse(f.base, host.roomId, a.playerToken); t.after(stream.close);
+  await stream.next();
+  const started = await f.raw(url + '/start', { method: 'POST', headers: { Origin: ORIGIN,
+    'Content-Type': 'application/json', Authorization: 'Bearer ' + host.hostToken }, body: '{}' });
+  assert.equal(started.status, 200); assert.equal(started.data.state.phase, 'countdown');
+  assert.equal(started.data.state.turn, null);
+  const intro = await stream.until(s => s.phase === 'countdown');
+  assert.equal(intro.prebattle.deadline - intro.prebattle.startedAt, 7157);
+  assert.equal((await f.post(url + '/vote', { turnId: '0:1', move: 'attack' }, a.playerToken)).data.error.code, 'invalid_phase');
+  f.setTime(intro.prebattle.deadline - 1); f.tick();
+  assert.equal((await f.state(host, a.playerToken)).data.state.phase, 'countdown');
+  f.setTime(intro.prebattle.deadline); f.tick();
+  const running = await stream.until(s => s.phase === 'running');
+  assert.equal(running.turn.deadline - running.turn.startedAt, 15000);
+  assert.equal(running.turn.number, 1); assert.equal(running.turn.totalVotes, 0);
+  assert.equal((await f.post(url + '/vote', { turnId: running.turn.id, move: 'attack' }, a.playerToken)).status, 200);
 });

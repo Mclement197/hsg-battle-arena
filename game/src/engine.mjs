@@ -2,6 +2,7 @@ import { randomBytes, randomInt } from 'node:crypto';
 import { fighterStats } from '../public/fighter-data.js';
 
 export const RULES = Object.freeze({ turnMs: 15000, maxHp: 100, attack: 20, heal: 15, special: 30, specialCooldownOwnTurns: 3 });
+export const PREBATTLE_MS = 7157; // Three spoken beats + the unmodified 4.156375 s Ready/Fight clip.
 export const ARENAS = Object.freeze(['library', 'trischli', 'mensa-b']);
 export const CHARACTERS = Object.freeze(['luca-di-grazia', 'free-rider', 'tryhard', 'assessment-hoodie', 'trischli-warrior', 'bad-teacher']);
 export const MOVES = Object.freeze(['attack', 'defend', 'heal', 'special']);
@@ -105,10 +106,13 @@ export class Arena {
     if (room.phase !== 'lobby') fail(409, 'invalid_phase', 'Reset before starting another match');
     if (!['A', 'B'].every(team => [...room.players.values()].some(player => player.team === team)))
       fail(409, 'not_enough_players', 'At least one player per team is required');
-    room.phase = 'running'; this.openTurn(room, 'A', 1); this.touch(room); room.revision++;
+    const startedAt = this.now();
+    room.phase = 'countdown'; room.prebattle = { startedAt, readyAt: startedAt + 3000, deadline: startedAt + PREBATTLE_MS };
+    this.touch(room); room.revision++;
   }
   reset(room, viewer, body) {
     fields(body, []); this.requireRole(viewer, 'host');
+    room.prebattle = null;
     room.match++; room.phase = 'lobby'; room.winner = null; room.turn = null; room.lastResult = null;
     room.teams = { A: { ...teamState(), ...(room.teams.A.characterId ? { characterId: room.teams.A.characterId } : {}) }, B: { ...teamState(), ...(room.teams.B.characterId ? { characterId: room.teams.B.characterId } : {}) } }; this.touch(room); room.revision++;
   }
@@ -130,6 +134,11 @@ export class Arena {
     return counts;
   }
   advance(room) {
+    if (room.phase === 'countdown') {
+      if (this.now() < room.prebattle.deadline) return false;
+      room.phase = 'running'; room.prebattle = null; this.openTurn(room, 'A', 1); room.revision++;
+      return true; // A delayed tick still gives turn one its full 15 seconds.
+    }
     if (room.phase !== 'running' || this.now() < room.turn.deadline) return false;
     const turn = room.turn;
     const voteCounts = this.counts(room);
@@ -168,7 +177,7 @@ export class Arena {
     return { roomId: room.id, revision: room.revision, serverNow: this.now(), phase: room.phase,
       mode: room.mode, arenaId: room.arenaId, match: room.match, winner: room.winner, rules: RULES, teams,
       players: players.map(({ id, nickname, team, connections }) => ({ id, nickname, team, connected: connections > 0 })),
-      turn, lastResult: room.lastResult,
+      turn, prebattle: room.prebattle || null, lastResult: room.lastResult,
       you: viewer.role === 'host' ? { role: 'host', ...(room.hostPlayer ? { playerId: room.hostPlayer.id, team: 'A', vote: room.turn?.votes.get(room.hostPlayer.id) ?? null } : {}) } : { role: 'player', playerId: viewer.player.id,
         team: viewer.player.team, vote: room.turn?.votes.get(viewer.player.id) ?? null } };
   }

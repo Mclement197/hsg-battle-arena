@@ -13,7 +13,7 @@ test('distinct move effects target the actor or opponent after authoritative dea
     arena.join(room, { nickname: 'Dynamo' });
     const seen = [], cue = createVisualCue(effect => seen.push(effect));
     const read = () => cue(arena.snapshot(room, { role: 'player', player: a.player }));
-    read(); arena.start(room, { role: 'host' }, {}); read();
+    read(); arena.start(room, { role: 'host' }, {}); read(); now = room.prebattle.deadline; arena.advance(room); read();
     arena.vote(room, { role: 'player', player: a.player }, { turnId: room.turn.id, move }); read();
     now = room.turn.deadline; read();
     assert.deepEqual(seen, [], 'selection/local expiry cannot show ' + move);

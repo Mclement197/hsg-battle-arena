@@ -10,7 +10,7 @@ function fixture(options = {}) {
   const a = arena.join(room, { nickname: 'A' });
   const b = arena.join(room, { nickname: 'B' });
   const viewers = { A: arena.authenticate(room, a.playerToken), B: arena.authenticate(room, b.playerToken) };
-  const start = () => arena.start(room, host, {});
+  const start = () => { arena.start(room, host, {}); time = room.prebattle.deadline; arena.advance(room); };
   const vote = move => arena.vote(room, viewers[room.turn.team], { turnId: room.turn.id, move });
   const resolve = move => { if (move) vote(move); time = room.turn.deadline; assert.equal(arena.advance(room), true); };
   return { arena, room, host, a, b, viewers, start, vote, resolve, setTime: value => { time = value; } };
@@ -22,7 +22,7 @@ test('fixed approved rules, lobby requirements and presenter-only controls', () 
   const f = fixture();
   assert.throws(() => f.arena.start(f.room, f.viewers.A, {}), error('role_required', 403));
   assert.throws(() => f.arena.reset(f.room, f.viewers.B, {}), error('role_required', 403));
-  f.start(); assert.equal(f.room.turn.team, 'A'); assert.equal(f.room.turn.deadline, 115000);
+  f.start(); assert.equal(f.room.turn.team, 'A'); assert.equal(f.room.turn.deadline, 122157);
   assert.throws(f.start, error('invalid_phase', 409));
   const arena = new Arena(); const room = arena.create();
   assert.throws(() => arena.start(room, { role: 'host' }, {}), error('not_enough_players'));

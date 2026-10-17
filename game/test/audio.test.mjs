@@ -62,7 +62,7 @@ test('each action sounds only after authoritative deadline resolution, never on 
     client.room = room.id;
     const accept = () => client.accept(arena.snapshot(room, player));
     accept();
-    arena.start(room, host, {}); accept();
+    arena.start(room, host, {}); accept(); at(room.prebattle.deadline); arena.advance(room); accept();
     arena.vote(room, player, { turnId: room.turn.id, move: move === 'attack' ? 'heal' : 'attack' }); accept();
     arena.vote(room, player, { turnId: room.turn.id, move }); accept();
     at(room.turn.deadline - 1);
@@ -85,7 +85,7 @@ test('no-vote fallback and random tie sound the resolved move, not the selected 
   const played = [];
   const actionCue = createActionCue(move => played.push(move));
   const snapshot = () => actionCue(arena.snapshot(room, host));
-  snapshot(); arena.start(room, host, {}); snapshot();
+  snapshot(); arena.start(room, host, {}); snapshot(); at(room.prebattle.deadline); arena.advance(room); snapshot();
   at(room.turn.deadline); arena.advance(room); snapshot();
   assert.deepEqual(played, ['attack']);
   at(room.turn.deadline); arena.advance(room); snapshot(); // B fallback.
@@ -191,7 +191,7 @@ test('all mapped audio URLs serve as WAV over HTTP, including HEAD; source/docs 
     const head = await get(route, 'HEAD');
     assert.equal(head.status, 200); assert.equal(head.body.length, 0);
   }
-  for (const route of ['/game/assets/audio/generate.mjs', '/game/assets/audio/README.md',
+  for (const route of ['/game/assets/audio/generate.mjs', '/game/assets/audio/README.md', '/game/assets/audio/generate-lobby.mjs', '/game/assets/audio/generate-countdown.py',
     '/game/assets/audio/nested/attack-impact.wav', '/game/assets/audio/attack-impact.wav.bak',
     '/game/assets/audio/%2e%2e/app.js', '/game/assets/nested/attack-impact.wav']) {
     assert.equal((await get(route)).status, 404, route);
@@ -265,7 +265,7 @@ test('actual UI hook: selection/local expiry silent, server result once, mute/un
     readNext({ done: false, value: new TextEncoder().encode('event: state\ndata: ' + JSON.stringify(arena.snapshot(room, player)) + '\n\n') });
     await flush();
   };
-  arena.start(room, host, {}); await send();
+  arena.start(room, host, {}); await send(); at(room.prebattle.deadline); arena.advance(room); await send();
   assert.equal(context.starts.length, 0, 'sound starts muted');
   element('mute').handlers.click(); await flush();
   assert.equal(context.state, 'running', 'user gesture resumes context');
@@ -304,27 +304,27 @@ test('battle start consumes only successful live transitions, including reset/st
   accept(); accept(); // Lobby/configuration/selection snapshots are silent.
   assert.deepEqual(played, []);
   arena.start(room, host, {}); accept(); accept();
-  assert.deepEqual(played, ['battle-start']);
+  assert.deepEqual(played, ['countdown', 'battle-start']);
   assert.throws(() => arena.start(room, host, {}), /Reset before/);
-  accept(); assert.equal(played.length, 1, 'failed/repeated start is silent');
+  accept(); assert.equal(played.length, 2, 'failed/repeated start is silent');
   cue({ ...arena.snapshot(room, host), phase: 'lobby' });
-  accept(); assert.equal(played.length, 1, 'regressive lobby cannot re-arm the same match');
+  accept(); assert.equal(played.length, 2, 'regressive lobby cannot re-arm the same match');
   arena.reset(room, host, {}); accept();
   cue.reset(); // First snapshot of a re-established stream is historical.
   arena.start(room, host, {}); accept(); accept();
-  assert.equal(played.length, 1, 'start missed while disconnected is not replayed');
+  assert.equal(played.length, 2, 'start missed while disconnected is not replayed');
   arena.reset(room, host, {}); accept();
   arena.start(room, host, {}); accept(); accept();
-  assert.deepEqual(played, ['battle-start', 'battle-start']);
+  assert.deepEqual(played, ['countdown', 'battle-start', 'countdown', 'battle-start']);
   const fresh = createBattleStartCue(value => played.push(value));
   fresh(arena.snapshot(room, host));
-  assert.equal(played.length, 2, 'initial running/reopened room stays silent');
+  assert.equal(played.length, 4, 'initial running/reopened room stays silent');
   const empty = arena.create();
   const failedCue = createBattleStartCue(value => played.push(value));
   failedCue(arena.snapshot(empty, host));
   assert.throws(() => arena.start(empty, host, {}), /At least one player/);
   failedCue(arena.snapshot(empty, host));
-  assert.equal(played.length, 2, 'rejected insufficient-player start stays silent');
+  assert.equal(played.length, 4, 'rejected insufficient-player start stays silent');
 });
 
 test('battle-start WAV is the attributed full source effect, not a procedural replacement', async () => {

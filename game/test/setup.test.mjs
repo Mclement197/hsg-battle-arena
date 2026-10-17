@@ -18,14 +18,14 @@ test('host setup validates IDs and roles, synchronizes identities, and survives 
   assert.equal(state.arenaId, 'trischli'); assert.equal(state.teams.B.characterId, 'bad-teacher');
   arena.start(room, host, {});
   assert.throws(() => arena.configure(room, host, setup), e => e.status === 409);
-  assert.throws(() => arena.play(room, host, { turnId: room.turn.id, move: 'attack' }), e => e.status === 409);
+  assert.throws(() => arena.play(room, host, { turnId: room.turn?.id || "0:1", move: 'attack' }), e => e.status === 409);
   arena.reset(room, host, {});
   assert.equal(room.teams.A.characterId, setup.characterA); assert.equal(room.teams.B.characterId, setup.characterB);
   assert.equal(room.players.size, 2); assert.equal(room.arenaId, 'trischli');
 });
 test('bot uses authoritative HP, cooldown, alternating turns, victory and replay', () => {
   let now = 0; const arena = new Arena({ now: () => now, pick: () => 0 }); const room = arena.create();
-  arena.enableBot(room); arena.configure(room, host, setup); arena.start(room, host, {});
+  arena.enableBot(room); arena.configure(room, host, setup); arena.start(room, host, {}); now = room.prebattle.deadline; arena.advance(room);
   assert.equal(room.mode, 'bot'); assert.equal(room.players.size, 2);
   assert.throws(() => arena.join(room, { nickname: 'Late' }), e => e.status === 409);
   assert.throws(() => arena.play(room, { role: 'player' }, {}), e => e.status === 403);
@@ -41,7 +41,7 @@ test('bot uses authoritative HP, cooldown, alternating turns, victory and replay
     arena.advance(room);
   }
   assert.equal(room.winner, 'A'); assert.equal(room.teams.B.hp, 0);
-  arena.reset(room, host, {}); arena.start(room, host, {});
+  arena.reset(room, host, {}); arena.start(room, host, {}); now = room.prebattle.deadline; arena.advance(room);
   assert.equal(room.phase, 'running'); assert.equal(room.teams.B.hp, 100); assert.equal(room.mode, 'bot');
 });
 test('HTTP bot and configure endpoints keep authentication, origin and online contracts', async t => {
@@ -60,6 +60,7 @@ test('HTTP bot and configure endpoints keep authentication, origin and online co
   assert.equal((await request(base + '/configure', setup, bot.body.hostToken)).status, 200);
   assert.equal((await request(base + '/start', {}, bot.body.hostToken)).status, 200);
   const current = game.arena.rooms.get(bot.body.roomId);
+  const introDeadline = current.prebattle.deadline; game.arena.now = () => introDeadline; game.tick();
   assert.equal((await request(base + '/play', { turnId: current.turn.id, move: 'attack' }, bot.body.hostToken)).status, 200);
   const online = await request('', {}); assert.equal(online.body.state.mode, 'online');
   const a = await request('/' + online.body.roomId + '/join', { nickname: 'A' });

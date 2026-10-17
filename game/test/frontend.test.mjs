@@ -24,7 +24,7 @@ async function fixture(t) {
     req.on('error', reject);
     req.end(init.body);
   });
-  return { fetcher };
+  return { fetcher, game };
 }
 async function until(check, ms = 2500) {
   const end = Date.now() + ms;
@@ -43,7 +43,7 @@ test('SSE parser accepts chunked CRLF and ignores heartbeat', () => {
 });
 
 test('real create/join/vote replacement/reconnect/reset with room-scoped browser sessions', { timeout: 10000 }, async t => {
-  const { fetcher } = await fixture(t);
+  const { fetcher, game } = await fixture(t);
   const store = storage();
   const host = new ArenaClient({ fetcher, storage: store });
   const a = new ArenaClient({ fetcher, storage: store });
@@ -59,7 +59,11 @@ test('real create/join/vote replacement/reconnect/reset with room-scoped browser
   assert.equal(store.getItem(a.key(room.roomId, 'player')), joined.playerToken);
   assert.notEqual(room.hostToken, joined.playerToken);
   await until(() => host.state?.teams.A.playerCount && host.state?.teams.B.playerCount);
-  const running = await host.mutate('start');
+  const intro = await host.mutate('start');
+  assert.equal(intro.phase, 'countdown');
+  game.arena.now = () => intro.prebattle.deadline; game.tick();
+  await until(() => host.state.phase === 'running');
+  const running = host.state;
   assert.equal(running.phase, 'running');
   const teamA = joined.team === 'A' ? a : b;
   await teamA.mutate('vote', { turnId: running.turn.id, move: 'attack' });

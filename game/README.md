@@ -48,11 +48,13 @@ Proxy must preserve `/game`, use streaming/no buffering for events, support long
 
 ## Sound on the presenter and player devices
 
-Tap **Enable sound** in the top bar on **each** host computer, phone or tablet. Browsers require a gesture on each device; creating/joining a room does not enable sound. The control becomes **Mute sound** only when Web Audio is running and all five WAVs (four actions and the battle-start effect) have decoded. If the browser suspends audio (for example after backgrounding), tap **Enable sound** again. Device volume, silent mode and muted browser tabs are outside the game’s control.
+Tap **sound is off** on each device to unlock browser audio. The exact lowercase master label becomes **sound is on** only when Web Audio runs and all seven WAVs decode. Loading, muted, failed or suspended audio remains **sound is off**; the accessible label/title explains the action. Each device has independent **Music** and **SFX / voice** sliders in **Audio levels**. Zero volume is allowed without changing audio readiness. Device volume, silent mode and muted tabs remain outside the game’s control.
 
-The host’s successful **Start battle** transition plays the requested “READY...FIGHT!” effect once on each sound-enabled device. Enable sound before starting. Repeated snapshots, rejected starts, initial/reconnect snapshots and arena/fighter selection never play it; reset then start plays it again. Source/attribution: [audio assets](public/assets/audio/README.md).
+Original 16-second arcade chiptune loops on menu/setup/lobby screens, stopping before battle. Every successful match start enters an authoritative 7.157-second prebattle phase: deep synthetic speech “three, two, one” at one-second beats, followed by the unchanged 4.156375-second “READY...FIGHT!” clip. Then the server opens the first full 15-second turn. Muted clients still display the countdown and cannot vote early. Replays/reset preserve this sequence; late joins/reconnects never replay historical starts. Audio suspension or reset cancels scheduled playback, not a delayed resume.
 
-Votes and the local countdown do not play action sounds: the authoritative resolved move plays once on each enabled device. Muted/suspended/loading results are consumed, never replayed after enabling. Muting stops action and confirmation/win sounds.
+Voice uses the already-installed eSpeak NG 1.51 English male variant with low pitch; it is real formant-synthesized speech, not countdown tones. Its retro/robotic timbre is intentional, not a human announcer recording. Reproduction and exact Ready/Fight attribution: [audio assets](public/assets/audio/README.md).
+
+Votes and the local countdown do not play action sounds: the authoritative resolved move plays once on each enabled device. Muted/suspended/loading results are consumed, never replayed after enabling. Muting stops music, voice, scheduled Ready/Fight, action and confirmation/win sounds.
 
 Optional real Chromium graph/UI regression (uses an existing Playwright installation, no new runtime dependency):
 
@@ -117,3 +119,7 @@ Damage rounds to the nearest whole HP after percentage block, minimum 1 HP, capp
 Original clients creating with an empty body and omitting fighter configuration retain legacy 20/50%/15/30 fallback values. Normal UI setup always configures named fighters. No client may submit stats, HP or damage.
 
 Design context: [PRODUCT.md](PRODUCT.md), [arcade-surface.md](arcade-surface.md), [DESIGN.md](DESIGN.md). Three.js 0.186.1 is pinned and vendored locally; gltf-validator/esbuild are development-only verification/vendor tooling. Vendored runtime assets are supplied directly, so no build step is needed to play. Assets use version tokens and no-store.
+
+### Safe integration of the prebattle update
+
+Developed and verified in an isolated worktree, not the live static directory. Requires engine + frontend integration and an approved backend service restart; restart destroys in-memory rooms. Do not restart automatically. After QA, integrate at a room-free maintenance window, obtain restart approval, restart, then refresh clients. New client tolerates the old server’s immediate running transition (Ready/Fight only; no claimed server countdown). Old clients remain unable to vote in the new countdown phase, but must refresh to display its new UI. Do not advertise the timed intro as deployed until the new engine runs.

@@ -24,9 +24,9 @@ under `/game/assets/audio/`; the generator and this document are not served.
 
 ## Playback contract
 
-Sound starts muted. The existing Sound button unlocks Web Audio via a user gesture
-and preloads/decodes all five files. Its existing turn/enable cue and the win cue
-remain synthesized as before. Muting stops any currently playing action or battle-start effect.
+Sound starts muted. The master button reads sound is off until Web Audio unlocks via a user gesture
+and preloads/decodes all seven files. Its existing turn/enable cue and the win cue
+remain synthesized as before. Muting stops music, voice, scheduled battle-start effects and all action/confirmation sounds.
 
 Only a new authoritative `lastResult` received by `ArenaClient.onState` triggers an
 action cue, after the server resolves the expired turn. Selecting/changing votes
@@ -45,7 +45,7 @@ and optional native Chromium audio graphs on desktop/phone/tablet contexts.
 Native tests cover gesture activation, actual WAV decode/playback, mute and
 suspension; physical speaker output and iOS Safari still need a human check.
 Read-only live verification can check entry/frontend/assets without room mutation;
-no server restart or live-room reset is required for these static-file changes.
+the prebattle engine update described below requires an approved service restart; do not restart or mutate live rooms during verification.
 
 
 ## Requested battle-start sample (third-party)
@@ -72,14 +72,20 @@ no server restart or live-room reset is required for these static-file changes.
 
 The four original procedural action effects above remain unchanged; running
 `generate.mjs` does not regenerate or overwrite this third-party sample.
-`AUDIO_SOUNDS` combines the four move mappings with the dedicated battle-start
-asset. The source credit is also visible in the game’s How to play page.
+`AUDIO_SOUNDS` combines the four move mappings with the battle-start, countdown and lobby assets. The source credit is also visible in the game’s How to play page.
 
-Only an observed authoritative lobby → running transition in the same room/match
+Only an observed authoritative lobby → countdown transition in the same room/match
 plays the sample, once. HTTP response + SSE duplication cannot double-play it.
 A new match’s lobby re-arms it after reset. A newly opened room or re-established
 stream first consumes its snapshot silently, including starts missed offline.
 Muted/loading/suspended starts are consumed and never queued for later. All
 sound-enabled host and player clients use the same hook; the Start button itself
-is not an audio trigger. The shared gain/mute/unlock/control-state behavior and
-existing resolved-action effects remain unchanged.
+is not an audio trigger. The existing resolved-action effects remain unchanged; music and SFX now use independent volume buses.
+
+## Original lobby music and generated countdown (2026-10-17)
+
+- lobby-loop.wav: original eight-bar A-minor 8-bit composition, 120 BPM, 16 seconds, 24 kHz mono PCM16. Pulse melody, arpeggios, triangle bass and seeded noise percussion. No external samples or melody. Reproduce: node public/assets/audio/generate-lobby.mjs. Native BufferSource loop uses exact sample boundaries, with short edge envelopes to avoid clicks.
+- countdown.wav: actual “three / two / one” speech generated locally with the preinstalled Debian eSpeak NG 1.51 shared library and data, en-us+m3 male variant, rate 145, pitch 18, range 25. One-second word slots, 3 seconds total, 22050 Hz mono PCM16. No speech service, paid generation, package install, cloned voice or human recording. Robotic/formant timbre rather than natural cinematic voice; human speaker listening remains required for subjective quality/intelligibility acceptance.
+- Reproduce speech on a system with eSpeak NG shared library/data: python3 public/assets/audio/generate-countdown.py. Uses Python ctypes and wave only. No TTS library is shipped or needed at runtime. eSpeak NG project: https://github.com/espeak-ng/espeak-ng ; program/data GPL-3.0-or-later, generated speech is output rather than bundled program code. This project’s script and the short original utterance are newly authored; no third-party recording is copied.
+
+Seven WAVs now preload. Independent music and SFX/voice buses include enable/win tones. Music runs only before battle. Master mute, suspension, reset, reconnect and leaving battle cancel scheduled voice/start sources. At a live lobby → countdown edge the audio clock schedules the countdown immediately (offset to server elapsed time), then the intact Ready/Fight after the remaining three-second countdown. Sources are stopped when the authoritative running phase arrives, ensuring no stale intro overlaps turn one. Initial/reconnect snapshots never schedule them. A start snapshot arriving after the three spoken beats is consumed silently rather than starting Ready/Fight late. Muting/unmuting never replays missed cues. The earlier Soundees source, conversion details, attribution and SHA-256 above remain exact and unchanged.

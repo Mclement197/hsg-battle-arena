@@ -12,7 +12,7 @@ function fixture(a = 'luca-di-grazia', b = 'free-rider', mode = 'friend') {
   const guest = arena.join(room, { nickname: 'P2' });
   const host = arena.authenticate(room, room.hostToken), viewer = arena.authenticate(room, guest.playerToken);
   arena.configure(room, host, { arenaId: 'library', characterA: a, characterB: b });
-  const start = () => arena.start(room, host, {});
+  const start = () => { arena.start(room, host, {}); now = room.prebattle.deadline; arena.advance(room); };
   const resolve = move => {
     const active = [...room.players.values()].find(p => p.team === room.turn.team);
     arena.vote(room, { role: 'player', player: active }, { turnId: room.turn.id, move });

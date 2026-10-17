@@ -36,3 +36,27 @@ Safe rollback: revert the scoped arcade commit on main (never reset unrelated ed
 - Luca is deliberately advantaged, not competitively balanced. Other archetypes are distinct; rounded bar segments are comparisons, exact adjacent numbers are real game units.
 - Both sides intentionally choosing only non-damaging moves can extend a match; stats do not make healing or guarding invulnerable against attacks, and no sudden death was added.
 - Tested Chromium desktop/touch contexts, not physical projector/speaker output or actual iOS Safari. Original art is placeholder, not final portraits.
+
+## Expanded arcade audio — isolated QA candidate (2026-10-17)
+
+Developed in /tmp/hsg-arcade-audio (detached from c393ef8), not the live static tree. No deployment, push, infrastructure/config edits or service restart. The pre-existing reduced-motion audio-browser test change is preserved.
+
+Implemented exact lowercase master readiness labels, per-device Music and SFX/voice controls, original reproducible 16-second PCM chiptune loop, locally generated genuine eSpeak NG low-pitch male countdown, and authoritative 7.157-second prebattle (3 seconds voice + original full 4.156375-second Ready/Fight) before the first full 15-second turn. Group/Friend/Bot reset/replay retain capabilities, cooldown and turn semantics; countdown votes reject at the engine boundary. Client tolerates the old server but its timed prebattle requires the new engine and approved restart.
+
+Checks use existing Playwright core at /home/mathis/.npm-global/lib/node_modules/openclaw/node_modules/playwright-core/index.mjs and Chromium at /home/mathis/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome. Native graphs use real buffers, decoding, gain buses and scheduling, not a mocked audio implementation. Native host/desktop players and host/touch phone/tablet test gesture readiness, pending-load mute, suspension/failed resume, actual resolved sounds and dedup. Native prebattle test measures 3-second voice then 4.156375-second effect scheduling, visible countdown, blocked moves, full initial turn, reset, mute, suspension, SSE reconnect, reload and bot replay.
+
+Full existing five-screen smoke passed against isolated port 18993: bot victory/replay, real Friend two-player moves/victory/replay/reset, third-seat rejection, Groups vote replacement plus real 15-second resolution/reconnect/reset, all 24 stats, desktop/phone screens with zero pageErrors/failedResponses. Evidence: /tmp/hsg-arcade-audio-evidence; log /tmp/hsg-arcade-ui.log. Separate audio controls layout check: desktop, iPhone 13 and iPad gen 7 all zero horizontal overflow, master/summary/sliders all 44px high; screenshots audio-desktop.png, audio-touch-390.png, audio-touch-810.png in that directory.
+
+Audio source validation: unchanged Ready/Fight SHA-256 ac1753b0c966a04b728a6d76f6650078654049337eeb152fbfc3b2fecc308925. Countdown generated twice identically with installed eSpeak NG 1.51 en-us+m3 (rate 145, pitch 18, range 25), SHA-256 bf73b879881d7edc70a7071323f0549630769430bb48b39d86fe3a5f050ff493. Original music SHA-256 1c20cd6549a7edbd3631a323e23aac6ace120cae7efd2833772fbab28ade8c02; generator test verifies exact reproduction, bounded peak and silent loop boundaries. No paid TTS, package install, cloud speech or fabricated speech tones. Robot/formant timbre; human listening remains necessary for subjective deep-voice/intelligibility approval and physical speakers/iOS Safari. Original Soundees attribution is unchanged.
+
+Safe integration: parent QA this worktree first; merge/cherry-pick only task files, preserving colleagues' changes. Do not copy directly over the live static tree during active rooms. Obtain fresh approval for afp-game.service restart at a room-free maintenance window (in-memory rooms are destroyed). Refresh clients after the new engine starts. No live-room mutation was used for these checks.
+
+Final full native regression command (no AUDIO_LIVE_URL; no live mutations):
+
+    PLAYWRIGHT_MODULE=/home/mathis/.npm-global/lib/node_modules/openclaw/node_modules/playwright-core/index.mjs CHROMIUM_EXECUTABLE=/home/mathis/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome npm test
+
+Full suite log /tmp/hsg-verified-final.log: 80 tests, 79 pass, 0 fail, 1 intentional live-only skip (26.85 seconds). Additional focused audio/prebattle/HTTP run /tmp/hsg-target-final.log: 39/39 pass. git diff --check passed. Fresh full suite after adding corrupt-WAV readiness coverage is recorded separately in /tmp/hsg-verified-complete.log. UI smoke log /tmp/hsg-arcade-ui.log passed as above. During development, parallel full skeletal GPU rendering caused graph-sampling timeouts; final native acceptance runs were serialized after the successful UI smoke. Reset testing now waits for the actual lobby snapshot instead of merely a disabled move button (also disabled during countdown).
+
+Voiced vowel-window autocorrelation estimates are approximately 66–71 Hz (not a human listening/transcription result); all three words fit well inside their one-second slots. Physical listening and native iOS Safari remain unverified.
+
+Fresh complete run including corrupt-WAV readiness check: /tmp/hsg-verified-complete.log — 80 tests, 79 passed, zero failed, one intentional live-only skip, 27.29 seconds. Native countdown peaks 0.370 on all three host/phone/tablet graphs in the prior full run; the complete run also passed native countdown and mixer assertions. No external/live checks were enabled.

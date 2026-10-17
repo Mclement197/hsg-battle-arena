@@ -7,15 +7,16 @@
   <title>HSG Battle Arena</title>
   <link rel="preload" as="image" href="./assets/hsg-learning-center.webp?v=20261016-campus" fetchpriority="high">
   <link rel="icon" type="image/svg+xml" href="./assets/arena-mark.svg">
-  <link rel="stylesheet" href="./styles.css?v=20261017-rigged">
-  <script src="./app.js?v=20261017-battle-start" type="module"></script>
+  <link rel="stylesheet" href="./styles.css?v=20261017-arcade-audio">
+  <script src="./app.js?v=20261017-arcade-audio" type="module"></script>
 </head>
 <body data-screen="menu" data-role="guest">
   <a class="skip-link" href="#main">Skip to game</a>
   <header class="topbar">
     <div class="brand"><img src="./assets/arena-mark.svg" alt="" width="38" height="38"><span>HSG <strong>BATTLE ARENA</strong></span></div>
-    <div class="topbar-actions"><span id="connection" class="connection" role="status" aria-live="polite">Not connected</span><button id="mute" class="quiet-button sound-control" type="button" aria-label="Sound off. Enable sound" aria-pressed="true" title="Tap to enable sound on this device. Each host and player enables sound separately.">Enable sound</button></div>
+    <div class="topbar-actions"><span id="connection" class="connection" role="status" aria-live="polite">Not connected</span><button id="mute" class="quiet-button sound-control" type="button" aria-label="Sound off. Enable sound" aria-pressed="true" title="Tap to enable sound on this device. Each host and player enables sound separately.">sound is off</button><details class="audio-settings"><summary>Audio levels</summary><div><label for="volume-music">Music <output id="volume-music-value">35%</output></label><input id="volume-music" type="range" min="0" max="100" value="35"><label for="volume-sfx">SFX / voice <output id="volume-sfx-value">80%</output></label><input id="volume-sfx" type="range" min="0" max="100" value="80"></div></details></div>
   <button id="main-menu" class="quiet-button" type="button">Main Menu</button></header>
+  <aside id="prebattle" class="prebattle" role="status" aria-live="polite" hidden><span>GET READY</span><strong id="prebattle-label">3</strong><small>Moves unlock after the intro</small></aside>
   <main id="main">
     <section id="menu-screen" class="screen menu-screen" aria-labelledby="menu-title">
       <div class="menu-copy"><h1 id="menu-title">HSG<br> BATTLE <em>ARENA</em></h1><p>The campus is your battleground.<br>Choose a rival. Make your move.</p><div class="menu-actions"><button id="play-friend" class="button mode-button" type="button"><strong>Play with a Friend</strong><small>ONLINE 1V1 · YOU BOTH PLAY</small><span aria-hidden="true">→</span></button><button id="play-bot" class="button mode-button" type="button"><strong>Play with a Bot</strong><small>SOLO · TAKE ON THE CAMPUS</small><span aria-hidden="true">→</span></button><button id="play-groups" class="button mode-button" type="button"><strong>Play in Groups</strong><small>PROJECTOR · TWO VOTING TEAMS</small><span aria-hidden="true">→</span></button></div><button id="join-existing" class="text-button" type="button">Have a room code? Join here</button><button id="how-to" class="text-button" type="button">How to play</button><button id="resume-game" class="text-button" type="button" hidden>Return to your room</button></div>
