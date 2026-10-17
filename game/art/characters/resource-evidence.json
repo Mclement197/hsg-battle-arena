@@ -1,0 +1,41 @@
+{
+  "threads": 3,
+  "sequential": true,
+  "full_build_seconds": 793.18,
+  "full_build_peak_rss_kib": 1995052,
+  "lineup_refinement_peak_rss_kib": 1455424,
+  "files": {
+    "hsg-characters.blend": {
+      "bytes": 1696452,
+      "sha256": "185541213f623e230ed31adcd5c0d3862389a6ff20627f28ff2028d7b8d0021e"
+    },
+    "renders/assessment.png": {
+      "bytes": 3356825,
+      "sha256": "f8c2159a3d2543c75a2bf150d4fa0c627d4f085fecfc51f863d9cafdd75234e8"
+    },
+    "renders/bad-teacher.png": {
+      "bytes": 3438247,
+      "sha256": "302b1bdd13eb47083fad8c3b5d34ec6847dc1a2b89e2c1bf642e7c3b09b4adcb"
+    },
+    "renders/free-rider.png": {
+      "bytes": 3366140,
+      "sha256": "9bf37f54b0a634d2877a66954fcc831b15c8d0321c3a5e917bb32c062f27b340"
+    },
+    "renders/lineup.png": {
+      "bytes": 6876291,
+      "sha256": "ce256a9f49877d47178648e96618e15d84be9d132a06d54f2355ad5d464a3ca9"
+    },
+    "renders/luca.png": {
+      "bytes": 3615281,
+      "sha256": "1eb9b24f8c88c0a08a13de7e500915dcfaa720be9c249a23030db84953cba619"
+    },
+    "renders/trischli-warrior.png": {
+      "bytes": 3433604,
+      "sha256": "2cd63c34b802db627a5514053c23e963ad994699d924d4b4ae797870017c7749"
+    },
+    "renders/tryhard.png": {
+      "bytes": 3478775,
+      "sha256": "6f301af1455de621caf68c1e510a7d06e09370c5c2208c332eb11ba9f40ea62c"
+    }
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "retrieved": "2026-10-17",
+  "workflow": "Original native Blender geometry. No paid tools, downloaded meshes, reference textures or photograph redistribution.",
+  "sources": [
+    {
+      "url": "https://www.lucadigrazia.com/",
+      "role": "primary public personal site",
+      "status": "read via Jina and direct HTML"
+    },
+    {
+      "url": "https://www.lucadigrazia.com/img/More/AboutMe.png",
+      "role": "public portrait",
+      "status": "downloaded privately and personally viewed from original URL",
+      "observed": [
+        "short dark-brown swept-up textured hair and closely cut sides",
+        "dark eyebrows, open brown/hazel-looking eyes",
+        "straight prominent nose, narrow oval face, defined jaw",
+        "short dark stubble and restrained smile",
+        "light checked collared shirt, average/slim visible upper torso"
+      ],
+      "limits": "Single front upper-body portrait. Full-body height, exact proportions, unseen angles and iris color uncertain. Likeness is a stylized interpretation, not a scan."
+    },
+    {
+      "url": "https://www.linkedin.com/in/luca-di-grazia",
+      "role": "supplied secondary link",
+      "status": "anonymous Jina access blocked; no authentication bypass attempted"
+    },
+    {
+      "url": "https://scholar.google.com/citations?user=kT6l6S8AAAAJ&hl=en&oi=ao",
+      "role": "supplied academic link",
+      "status": "403 automated-query restriction; not used for visual appearance"
+    },
+    {
+      "url": "https://hsgshop.ch/en/products/hsg-hoodie?variant=45489637884140",
+      "role": "official hoodie product",
+      "status": "read via Jina"
+    },
+    {
+      "url": "https://hsgshop.ch/cdn/shop/files/HSG_Hoodie_Grun_196_c4340a76-fc68-487c-8526-7b8645954ec5.jpg?v=1722857375&width=1445",
+      "role": "green hoodie product front",
+      "status": "downloaded privately and personally viewed from original URL",
+      "observed": [
+        "forest-green relaxed pullover",
+        "hood and white flat drawstrings with gold-colored tips",
+        "arched outlined collegiate UNIVERSITÄT",
+        "ST. GALLEN below, small EST. 1898 line",
+        "kangaroo pouch, ribbed cuffs and hem"
+      ],
+      "limits": "Letter shapes are original editable serif approximation, not an exact licensed embroidery vector."
+    }
+  ],
+  "invention": [
+    "All five other adult characters are fictional; no person-based intelligence or ethnicity stereotypes.",
+    "Luca gold/ivory divine academic costume, halo and layered wings are fantasy; only head and general upper-body cues use portrait.",
+    "Full-body proportions, shoes, poses, accessories and studio are original stylized invention."
+  ],
+  "private_reference_location": "/tmp/hsg-character-references",
+  "reference_photos_in_delivery": false
+}

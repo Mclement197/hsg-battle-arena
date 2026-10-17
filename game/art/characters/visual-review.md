@@ -1,0 +1,25 @@
+# Actual visual review — 2026-10-17
+
+## References personally viewed before modeling
+
+The public personal-site 640×640 AboutMe.png portrait was retrieved privately and opened from its original public URL with the image viewer. Observed Luca: narrow oval face and defined jaw, short dark-brown hair swept upward, short sides, thick but separated brows, open eyes, straight projecting nose, subtle beard stubble/moustache, restrained closed-mouth smile; checked light shirt and average/slim visible upper torso. Only one front upper-body portrait was available, so full-body fidelity and unseen side/back facial anatomy cannot be certified. LinkedIn and Scholar restricted anonymous access; no bypass or invented portrait claims. Main personal site supplied the actual portrait, so the official-university fallback was unnecessary.
+
+The actual official 1445×1445 green hoodie product photograph was downloaded privately and opened from its original URL. Observed forest green, pullover cut, hood, flat white strings with gold tips, relaxed long sleeves, pouch and ribbed hems. Lettering reads arched UNIVERSITÄT, ST. GALLEN, small EST. 1898; the reference is not a plain oversized HSG logo. These actual words, approximate serif varsity outlines and cut details were modeled as original editable objects, not pasted photo textures.
+
+## Draft inspection and corrections
+
+All six first-draft full-body studio PNGs and initial lineup were actually opened using the image viewer. Discovered: front hair cap ran too low and read like a headband; Luca beard read as beads rather than stubble; shoes had excessively slab-like soles; held props were visually balanced on open hanging hands; green hoodie was too light; generic shared crown made hair silhouettes insufficiently varied; teacher brow curve looked concerned rather than strict; leaning clubgoer foot grounding needed correction.
+
+A second refined draft was rendered sequentially and all six portraits were opened again. Applied corrections: higher fitted hairline and enlarged side cap to close edge gaps; Luca narrower jaw, sparse smaller lighter stubble and distinct short textured upsweep; irregular free-rider crown; copper side-part fringe for Tryhard, short curly fringe for Assessment and loose asymmetric club fringe; broader taller teacher and shorter narrower Assessment body roots; smaller shoe soles; curved prop-gripping fingers, thumb/contact changes and wrist connectors; darker forest green; less harsh tweed check lines; severe upward-outward teacher brows; lowered clubgoer to ground one foot while the other remains tipsily raised. Added real irregular folded scrap meshes and white/green outlined varsity-letter approximation after direct comparison.
+
+## Final review and measured evidence
+
+All six final 1440×1600 full-body PNGs were personally opened, as was the final 3600×1200 lineup. Full wings, halo, stars, shoes and props remain in frame. Final image inspection confirms distinct faces/expressions, Tryhard tucked patterned shirt/high waist, outlined HSG product words and forest-green hoodie, phone distraction, visible gripping fingers, strict teacher red pen/exams, and clubgoer star collection/tilted pose. Lineup labels initially lacked contrast against the floor; six dark editable studio nameplates were added and the lineup actually re-rendered and reopened. Labels are readable at original 3600px width (about 17px lettering), not intended as large mobile text.
+
+Fresh-open Blender 5.0.1 validation: **71/71 passed**. Initial camera tests incorrectly projected rotated bounding-box empty corners and falsely flagged cropping; the checker now measures actual evaluated mesh/curve/text surface vertices, retaining the strict 1.5% margins. Luca horizontal bounds 9.78–93.36%; the highest star is at 94.25% vertical; full surface framing is checked on all six. No missing linked resources or reference images; fonts packed, original procedural materials.
+
+Independent geometry-only regeneration from final generate.py passed semantic fingerprint comparison for all six: coordinates, oriented topology, transforms, parents, curve control points, text, material names. Blender threaded sphere primitives vary polygon list storage order; oriented polygon connectivity is sorted only for comparison. Reproducibility report records the result.
+
+Final cast blend: **1,696,452 bytes (1.62 MiB)**, seven scenes, six character roots. Original meshes per character 76–226; vertices 19,753–55,964. Portraits 3.36–3.62 MB; final lineup 6.88 MB. Three threads strictly sequential; full render wall time 13m13s, peak RSS 1,995,052 KiB (~1.90 GiB), lineup re-render peak 1,455,424 KiB. File hashes and dimensions recorded in resource-evidence.json / validation.json.
+
+Stylization remains intentionally toy-like with separable facial parts/joints. Luca is portrait-informed rather than photoreal; his enormous wings/costume and full-body build are invented. This is not a scan, rig or deformation-ready continuous skin. No gameplay/runtime/arena changes or commit/push.

@@ -1,0 +1,76 @@
+{
+  "independent_geometry_rebuild": true,
+  "final": {
+    "blender": "5.0.1",
+    "characters": [
+      {
+        "collection": "CHARACTER / Assessment",
+        "objects": 138,
+        "sha256": "fee2c8e720239cd94ea74c6996d7f16d2bb886e56cd596ba729df910e95adf18"
+      },
+      {
+        "collection": "CHARACTER / Bad Teacher",
+        "objects": 128,
+        "sha256": "061e96e1e82836e1401d3b229c1340d095cfec4426874389b19a25ff17fdd5b4"
+      },
+      {
+        "collection": "CHARACTER / Free-rider",
+        "objects": 104,
+        "sha256": "d3994620a6a0607d6b78fd3ca71927edcc8ca8459fb90425828a4035a62ad830"
+      },
+      {
+        "collection": "CHARACTER / Luca Di Grazia",
+        "objects": 293,
+        "sha256": "c717544558b51b5d10a792aafd6d141166f6abfab05fa43e347f163e7e0927d0"
+      },
+      {
+        "collection": "CHARACTER / Trischli Warrior",
+        "objects": 111,
+        "sha256": "09a0d3f4549538651d822927ca2c5e649decc027ad30bf6cd9c87db9c7ddd937"
+      },
+      {
+        "collection": "CHARACTER / Tryhard",
+        "objects": 161,
+        "sha256": "c5669e4d0d3b0a45ab082b1acb157f3d70bccfeea1cd0aa0e4b35773e4bc67e5"
+      }
+    ],
+    "sha256": "bfd3ed715f7502b18758aa06b97c2e247e376fc385c10a710a5eb87c98cc17bc"
+  },
+  "rebuild": {
+    "blender": "5.0.1",
+    "characters": [
+      {
+        "collection": "CHARACTER / Assessment",
+        "objects": 138,
+        "sha256": "fee2c8e720239cd94ea74c6996d7f16d2bb886e56cd596ba729df910e95adf18"
+      },
+      {
+        "collection": "CHARACTER / Bad Teacher",
+        "objects": 128,
+        "sha256": "061e96e1e82836e1401d3b229c1340d095cfec4426874389b19a25ff17fdd5b4"
+      },
+      {
+        "collection": "CHARACTER / Free-rider",
+        "objects": 104,
+        "sha256": "d3994620a6a0607d6b78fd3ca71927edcc8ca8459fb90425828a4035a62ad830"
+      },
+      {
+        "collection": "CHARACTER / Luca Di Grazia",
+        "objects": 293,
+        "sha256": "c717544558b51b5d10a792aafd6d141166f6abfab05fa43e347f163e7e0927d0"
+      },
+      {
+        "collection": "CHARACTER / Trischli Warrior",
+        "objects": 111,
+        "sha256": "09a0d3f4549538651d822927ca2c5e649decc027ad30bf6cd9c87db9c7ddd937"
+      },
+      {
+        "collection": "CHARACTER / Tryhard",
+        "objects": 161,
+        "sha256": "c5669e4d0d3b0a45ab082b1acb157f3d70bccfeea1cd0aa0e4b35773e4bc67e5"
+      }
+    ],
+    "sha256": "bfd3ed715f7502b18758aa06b97c2e247e376fc385c10a710a5eb87c98cc17bc"
+  },
+  "note": "Independent final generate.py --render none build matches coordinates, oriented polygon connectivity sorted by face-list storage order, transforms, parents, curve control points, text and materials. Threaded Blender sphere polygon storage order is canonicalized; topology is not ignored."
+}

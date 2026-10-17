@@ -1,0 +1,576 @@
+{
+  "blender": "5.0.1",
+  "blend": "hsg-characters.blend",
+  "checks": [
+    {
+      "name": "seven scenes",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "three fixed render threads",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "luca identity scene collection root",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "luca real editable geometry",
+      "pass": true,
+      "detail": {
+        "mesh_objects": 226,
+        "vertices": 55964,
+        "faces": 58102
+      }
+    },
+    {
+      "name": "luca root parents all parts",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "luca actual face hair hands shoes",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "luca nonempty materials",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "luca finite vertices",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "luca camera includes whole character",
+      "pass": true,
+      "detail": [
+        0.09778913110494614,
+        0.9336152672767639,
+        0.12549170851707458,
+        0.8663697838783264
+      ]
+    },
+    {
+      "name": "free-rider identity scene collection root",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "free-rider real editable geometry",
+      "pass": true,
+      "detail": {
+        "mesh_objects": 82,
+        "vertices": 19753,
+        "faces": 20390
+      }
+    },
+    {
+      "name": "free-rider root parents all parts",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "free-rider actual face hair hands shoes",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "free-rider nonempty materials",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "free-rider finite vertices",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "free-rider camera includes whole character",
+      "pass": true,
+      "detail": [
+        0.2889340817928314,
+        0.60232013463974,
+        0.0726015567779541,
+        0.8493539690971375
+      ]
+    },
+    {
+      "name": "tryhard identity scene collection root",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "tryhard real editable geometry",
+      "pass": true,
+      "detail": {
+        "mesh_objects": 121,
+        "vertices": 21678,
+        "faces": 22434
+      }
+    },
+    {
+      "name": "tryhard root parents all parts",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "tryhard actual face hair hands shoes",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "tryhard nonempty materials",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "tryhard finite vertices",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "tryhard camera includes whole character",
+      "pass": true,
+      "detail": [
+        0.3023097813129425,
+        0.6529243588447571,
+        0.07396487891674042,
+        0.8664935231208801
+      ]
+    },
+    {
+      "name": "assessment identity scene collection root",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "assessment real editable geometry",
+      "pass": true,
+      "detail": {
+        "mesh_objects": 81,
+        "vertices": 23208,
+        "faces": 24124
+      }
+    },
+    {
+      "name": "assessment root parents all parts",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "assessment actual face hair hands shoes",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "assessment nonempty materials",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "assessment finite vertices",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "assessment camera includes whole character",
+      "pass": true,
+      "detail": [
+        0.3502868711948395,
+        0.634975254535675,
+        0.07347150146961212,
+        0.824476420879364
+      ]
+    },
+    {
+      "name": "trischli-warrior identity scene collection root",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "trischli-warrior real editable geometry",
+      "pass": true,
+      "detail": {
+        "mesh_objects": 88,
+        "vertices": 23748,
+        "faces": 24579
+      }
+    },
+    {
+      "name": "trischli-warrior root parents all parts",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "trischli-warrior actual face hair hands shoes",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "trischli-warrior nonempty materials",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "trischli-warrior finite vertices",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "trischli-warrior camera includes whole character",
+      "pass": true,
+      "detail": [
+        0.24543564021587372,
+        0.6034464240074158,
+        0.07451421022415161,
+        0.942509651184082
+      ]
+    },
+    {
+      "name": "bad-teacher identity scene collection root",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "bad-teacher real editable geometry",
+      "pass": true,
+      "detail": {
+        "mesh_objects": 76,
+        "vertices": 19959,
+        "faces": 20691
+      }
+    },
+    {
+      "name": "bad-teacher root parents all parts",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "bad-teacher actual face hair hands shoes",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "bad-teacher nonempty materials",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "bad-teacher finite vertices",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "bad-teacher camera includes whole character",
+      "pass": true,
+      "detail": [
+        0.28181225061416626,
+        0.6743476986885071,
+        0.07201792299747467,
+        0.9105604290962219
+      ]
+    },
+    {
+      "name": "48 separate layered feathers",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "editable dizziness collection",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "five editable stars",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "tryhard high waistband and perfect notes",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "hoodie actual lettering",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "hoodie hood pouch strings",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "free rider phone bag crumpled notes",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "teacher exams and red pen",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "no rig falsely present",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "no linked libraries",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "fonts packed",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "no external image textures",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "all materials node based",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "blend below 25 MiB",
+      "pass": true,
+      "detail": 1696452
+    },
+    {
+      "name": "six linked lineup instances",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "six readable labels",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "luca PNG resolution",
+      "pass": true,
+      "detail": [
+        1440,
+        1600
+      ]
+    },
+    {
+      "name": "free-rider PNG resolution",
+      "pass": true,
+      "detail": [
+        1440,
+        1600
+      ]
+    },
+    {
+      "name": "tryhard PNG resolution",
+      "pass": true,
+      "detail": [
+        1440,
+        1600
+      ]
+    },
+    {
+      "name": "assessment PNG resolution",
+      "pass": true,
+      "detail": [
+        1440,
+        1600
+      ]
+    },
+    {
+      "name": "trischli-warrior PNG resolution",
+      "pass": true,
+      "detail": [
+        1440,
+        1600
+      ]
+    },
+    {
+      "name": "bad-teacher PNG resolution",
+      "pass": true,
+      "detail": [
+        1440,
+        1600
+      ]
+    },
+    {
+      "name": "lineup PNG resolution",
+      "pass": true,
+      "detail": [
+        3600,
+        1200
+      ]
+    },
+    {
+      "name": "generate.py syntax",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "validate.py syntax",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "fingerprint.py syntax",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "manifest valid and photos excluded",
+      "pass": true,
+      "detail": null
+    }
+  ],
+  "passed": 71,
+  "total": 71,
+  "characters": {
+    "luca": {
+      "mesh_objects": 226,
+      "vertices": 55964,
+      "faces": 58102,
+      "curves": 65,
+      "text": 1,
+      "screen_bounds": [
+        0.09778913110494614,
+        0.9336152672767639,
+        0.12549170851707458,
+        0.8663697838783264
+      ]
+    },
+    "free-rider": {
+      "mesh_objects": 82,
+      "vertices": 19753,
+      "faces": 20390,
+      "curves": 20,
+      "text": 1,
+      "screen_bounds": [
+        0.2889340817928314,
+        0.60232013463974,
+        0.0726015567779541,
+        0.8493539690971375
+      ]
+    },
+    "tryhard": {
+      "mesh_objects": 121,
+      "vertices": 21678,
+      "faces": 22434,
+      "curves": 37,
+      "text": 2,
+      "screen_bounds": [
+        0.3023097813129425,
+        0.6529243588447571,
+        0.07396487891674042,
+        0.8664935231208801
+      ]
+    },
+    "assessment": {
+      "mesh_objects": 81,
+      "vertices": 23208,
+      "faces": 24124,
+      "curves": 30,
+      "text": 26,
+      "screen_bounds": [
+        0.3502868711948395,
+        0.634975254535675,
+        0.07347150146961212,
+        0.824476420879364
+      ]
+    },
+    "trischli-warrior": {
+      "mesh_objects": 88,
+      "vertices": 23748,
+      "faces": 24579,
+      "curves": 22,
+      "text": 0,
+      "screen_bounds": [
+        0.24543564021587372,
+        0.6034464240074158,
+        0.07451421022415161,
+        0.942509651184082
+      ]
+    },
+    "bad-teacher": {
+      "mesh_objects": 76,
+      "vertices": 19959,
+      "faces": 20691,
+      "curves": 49,
+      "text": 2,
+      "screen_bounds": [
+        0.28181225061416626,
+        0.6743476986885071,
+        0.07201792299747467,
+        0.9105604290962219
+      ]
+    }
+  },
+  "renders": {
+    "luca": {
+      "dimensions": [
+        1440,
+        1600
+      ],
+      "bytes": 3615281,
+      "sha256": "1eb9b24f8c88c0a08a13de7e500915dcfaa720be9c249a23030db84953cba619"
+    },
+    "free-rider": {
+      "dimensions": [
+        1440,
+        1600
+      ],
+      "bytes": 3366140,
+      "sha256": "9bf37f54b0a634d2877a66954fcc831b15c8d0321c3a5e917bb32c062f27b340"
+    },
+    "tryhard": {
+      "dimensions": [
+        1440,
+        1600
+      ],
+      "bytes": 3478775,
+      "sha256": "6f301af1455de621caf68c1e510a7d06e09370c5c2208c332eb11ba9f40ea62c"
+    },
+    "assessment": {
+      "dimensions": [
+        1440,
+        1600
+      ],
+      "bytes": 3356825,
+      "sha256": "f8c2159a3d2543c75a2bf150d4fa0c627d4f085fecfc51f863d9cafdd75234e8"
+    },
+    "trischli-warrior": {
+      "dimensions": [
+        1440,
+        1600
+      ],
+      "bytes": 3433604,
+      "sha256": "2cd63c34b802db627a5514053c23e963ad994699d924d4b4ae797870017c7749"
+    },
+    "bad-teacher": {
+      "dimensions": [
+        1440,
+        1600
+      ],
+      "bytes": 3438247,
+      "sha256": "302b1bdd13eb47083fad8c3b5d34ec6847dc1a2b89e2c1bf642e7c3b09b4adcb"
+    },
+    "lineup": {
+      "dimensions": [
+        3600,
+        1200
+      ],
+      "bytes": 6876291,
+      "sha256": "ce256a9f49877d47178648e96618e15d84be9d132a06d54f2355ad5d464a3ca9"
+    }
+  }
+}
