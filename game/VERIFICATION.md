@@ -60,3 +60,21 @@ Full suite log /tmp/hsg-verified-final.log: 80 tests, 79 pass, 0 fail, 1 intenti
 Voiced vowel-window autocorrelation estimates are approximately 66–71 Hz (not a human listening/transcription result); all three words fit well inside their one-second slots. Physical listening and native iOS Safari remain unverified.
 
 Fresh complete run including corrupt-WAV readiness check: /tmp/hsg-verified-complete.log — 80 tests, 79 passed, zero failed, one intentional live-only skip, 27.29 seconds. Native countdown peaks 0.370 on all three host/phone/tablet graphs in the prior full run; the complete run also passed native countdown and mixer assertions. No external/live checks were enabled.
+
+## Approved arcade-audio deployment — 2026-10-17 19:10 CEST
+
+Philippe explicitly approved the room-clearing restart. Candidate 155171adf6ae591a15aa3817f415dd6733b32e8f was cherry-picked as a90f2dc3f339d30815884764ffe16044f1cbeb29 onto main and pushed to origin/main without force. Its game tree exactly matches the independently QA-passed candidate. The pre-existing reduced-motion test edit was already present in that candidate and is retained. All other pre-existing tracked diffs were compared byte-for-byte, and all pre-existing untracked file hashes checked unchanged. Preservation snapshot: /tmp/hsg-audio-deploy-preserve-ieUT0G. No stash, bulk overwrite, dashboard change, credential, Gateway or service configuration change.
+
+Only systemctl --user restart afp-game.service ran, at 19:10:10 CEST; active/running, PID 226355, ExecMainStatus=0, NRestarts=0. This intentionally cleared prior memory-only rooms. Refresh existing browsers for the new frontend.
+
+Actual integrated regression commands used the installed Playwright/Chromium paths documented above:
+
+- npm --prefix game test with native browser environment: 80 tests, 79 passed, zero failures, one live-only skip; /tmp/hsg-audio-deploy-full-native.log.
+- Same full suite with AUDIO_LIVE_URL=https://afp.mclement.ch/game/: 80/80 passed, zero skips/failures, 30.40 seconds; /tmp/hsg-audio-deploy-full-live.log. The formerly skipped read-only live check ran on desktop, iPhone 13 and iPad Chromium contexts: seven HTTP 200 WAVs decoded per device, audio running, nonzero real graph peaks (0.0746/0.0608/0.0746), exact sound is off/on readiness labels.
+- Scoped commit and working-tree git diff --check passed.
+
+Additional live acceptance used only one newly created disposable Groups room and two participants created in that room, never inspecting or joining unrelated rooms. Real browser HTTP/SSE and wall-clock timers verified visible 3/2/1/READY… FIGHT!, authoritative 7157 ms prebattle with null turn, then the full first 15000 ms turn (opened 36 ms after the intro deadline; first result 55 ms after the turn deadline). Native sources scheduled the actual 3-second spoken buffer immediately and the unchanged 4.156375-second Ready/Fight exactly three seconds later. Actual 16-second looping lobby source produced graph peak 0.0659 and was stopped at battle/countdown. No browser errors or failed responses. Only this fixture was reset to lobby afterward; contexts closed and normal TTL handles expiry.
+
+Public HTTPS index.html, app.js, styles.css and all seven WAVs returned 200 and byte-matched the integrated checkout; SHA-256 results and timing evidence are in /tmp/hsg-audio-public-acceptance.json and /tmp/hsg-audio-public-acceptance.log. Ready/Fight retains ac1753b0c966a04b728a6d76f6650078654049337eeb152fbfc3b2fecc308925; countdown bf73b879881d7edc70a7071323f0549630769430bb48b39d86fe3a5f050ff493; music 1c20cd6549a7edbd3631a323e23aac6ace120cae7efd2833772fbab28ade8c02. Acceptance harness /tmp/hsg-audio-public-acceptance.mjs uses the existing verified proxy TLS handling and never logs bearer capabilities.
+
+Physical speaker audibility, subjective low-voice/intelligibility approval and actual iOS Safari remain unverified; touch Chromium emulation is not iOS testing. No new paid services, packages or unrelated features were introduced.
