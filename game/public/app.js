@@ -32,6 +32,29 @@ export const ACTION_SOUNDS = Object.freeze({
   special: './assets/audio/special-burst.wav'
 });
 
+export const AUDIO_SOUNDS = Object.freeze({
+  ...ACTION_SOUNDS,
+  'battle-start': './assets/audio/battle-start.wav'
+});
+
+// A live lobby -> running edge, not a click, reload or reconnect snapshot.
+export function createBattleStartCue(play) {
+  let scope = null, phase = null, consumed = false;
+  const consume = state => {
+    const nextScope = state.roomId + ':' + state.match;
+    if (scope !== nextScope) {
+      scope = nextScope; phase = state.phase; consumed = state.phase !== 'lobby';
+      return;
+    }
+    const started = phase === 'lobby' && state.phase === 'running' && !consumed;
+    phase = state.phase;
+    if (state.phase !== 'lobby') consumed = true;
+    if (started) play('battle-start'); // Consume even muted/loading/suspended starts.
+  };
+  consume.reset = () => { scope = null; phase = null; consumed = false; };
+  return consume;
+}
+
 // Consume server snapshots only, never votes or the presentation countdown.
 export function createActionCue(play) {
   let scope = null, seenNumber = 0;
@@ -85,10 +108,10 @@ export class ActionAudio {
     this.buffers = new Map();
     this.active = new Set();
   }
-  get ready() { return Object.keys(ACTION_SOUNDS).every(move => this.buffers.has(move)); }
+  get ready() { return Object.keys(AUDIO_SOUNDS).every(move => this.buffers.has(move)); }
   async load() {
     if (this.loading) return this.loading;
-    this.loading = Promise.all(Object.entries(ACTION_SOUNDS).map(async ([move, url]) => {
+    this.loading = Promise.all(Object.entries(AUDIO_SOUNDS).map(async ([move, url]) => {
       if (this.buffers.has(move)) return;
       try {
         const response = await this.fetcher(url);
@@ -428,13 +451,13 @@ if (typeof document !== 'undefined') (() => {
       'Sound enabled. Mute sound' : loading ? 'Sound loading. Mute sound' : 'Sound off. Enable sound');
     setText('mute', !supported ? 'Sound unavailable' : ready ? 'Mute sound' : loading ? 'Loading sound…' : 'Enable sound');
     $('mute').title = !supported ? 'Web Audio is not supported.' : ready ? 'Sound is on for this device.' :
-      loading ? 'Loading action sounds. Tap to mute.' : 'Tap to enable sound on this device. Each host and player enables sound separately.';
+      loading ? 'Loading game sounds. Tap to mute.' : 'Tap to enable sound on this device. Each host and player enables sound separately.';
   }
   function cue(kind) {
     // Server events are not gestures: never resume or queue sound here.
     if (!soundReady()) return;
     try {
-      if (Object.hasOwn(ACTION_SOUNDS, kind)) { actionAudio?.play(kind); return; }
+      if (Object.hasOwn(AUDIO_SOUNDS, kind)) { actionAudio?.play(kind); return; }
       const patterns = { turn: [360, 480], win: [330, 440, 550, 660] };
       (patterns[kind] || patterns.turn).forEach((frequency, i) => {
         const at = audioContext.currentTime + i * .095;
@@ -558,6 +581,7 @@ if (typeof document !== 'undefined') (() => {
   window.ArenaUI = { render, cue, connected: false };
   $('copy-link').disabled = true;
   const actionCue = createActionCue(cue);
+  const battleStartCue = createBattleStartCue(cue);
   let activeEffect, effectTimer;
   function showActionEffect(effect) {
     characters.play(effect);
@@ -604,6 +628,7 @@ if (typeof document !== 'undefined') (() => {
       if (setupBusy || pendingSetupRoom) return;
       render(present(state, window.ArenaUI.connected, client.secondsLeft()));
       renderIdentity(state);
+      battleStartCue(state);
       actionCue(state);
       visualCue(state);
       const winId = state.phase === 'finished' ? state.roomId + ':' + state.match : null;
@@ -617,6 +642,7 @@ if (typeof document !== 'undefined') (() => {
       }
     },
     onConnection(status) {
+      if (status !== 'connected') battleStartCue.reset();
       render({ connection: status });
       if (client.state && !setupBusy && !pendingSetupRoom) { render(present(client.state, status === 'connected', client.secondsLeft())); renderIdentity(client.state); }
     },
@@ -756,11 +782,14 @@ if (typeof document !== 'undefined') (() => {
         pendingSetupRoom = room.roomId;
       }
       await client.mutate('configure', { arenaId: selectedArena, characterA: selectedCharacters.A, characterB: selectedCharacters.B });
-      if (setupMode === 'bot') await client.mutate('start');
+      if (setupMode === 'bot') {
+        battleStartCue(client.state); // Baseline the confirmed lobby hidden during setup.
+        await client.mutate('start');
+      }
       pendingSetupRoom = null; setupBusy = false;
       render(present(client.state, window.ArenaUI.connected, client.secondsLeft())); renderIdentity(client.state);
       // Baseline setup history even when its SSE snapshots arrived while setupBusy was true.
-      actionCue(client.state); visualCue(client.state);
+      battleStartCue(client.state); actionCue(client.state); visualCue(client.state);
       $('global-error').hidden = true;
     } catch (error) { reportError(error.message); }
     finally { setupBusy = false; $('selection-next').disabled = false; setText('selection-next', setupMode === 'bot' ? 'Start bot battle' : setupMode === 'friend' ? 'Invite your friend' : 'Open group room'); }

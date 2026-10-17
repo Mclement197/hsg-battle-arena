@@ -6,7 +6,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
-import { ACTION_SOUNDS, ActionAudio, createActionCue, ArenaClient } from '../public/app.js';
+import { ACTION_SOUNDS, AUDIO_SOUNDS, ActionAudio, createActionCue, createBattleStartCue, ArenaClient } from '../public/app.js';
 import { buildSound } from '../public/assets/audio/generate.mjs';
 import { Arena, MOVES } from '../src/engine.mjs';
 import { createGameServer } from '../src/server.mjs';
@@ -145,7 +145,7 @@ test('native playback caches all mapped buffers, stops on mute and never queues 
   });
   assert.equal(player.play('attack'), false);
   await player.load(); await player.load();
-  assert.deepEqual(urls, Object.values(ACTION_SOUNDS));
+  assert.deepEqual(urls, Object.values(AUDIO_SOUNDS));
   assert.equal(context.starts.length, 0, 'loading must not replay a skipped action');
   for (const move of MOVES) {
     assert.equal(player.play(move), true);
@@ -180,9 +180,9 @@ async function serve(t, options = {}) {
   });
 }
 
-test('all four mapped audio URLs serve as WAV over HTTP, including HEAD; source/docs stay private', async t => {
+test('all mapped audio URLs serve as WAV over HTTP, including HEAD; source/docs stay private', async t => {
   const get = await serve(t);
-  for (const url of Object.values(ACTION_SOUNDS)) {
+  for (const url of Object.values(AUDIO_SOUNDS)) {
     const route = '/game/' + url.slice(2);
     const response = await get(route);
     assert.equal(response.status, 200);
@@ -291,4 +291,47 @@ test('actual UI hook: selection/local expiry silent, server result once, mute/un
   assert.equal(context.starts.length, 2, 'winning action still sounds');
   assert.equal(context.oscillators.length, 8, 'two enable cues plus the existing four-note win cue');
   await send(); assert.equal(context.starts.length, 2); assert.equal(context.oscillators.length, 8);
+});
+
+
+test('battle start consumes only successful live transitions, including reset/start and reconnect history', () => {
+  const { arena, room, host } = fixture();
+  const played = [];
+  const cue = createBattleStartCue(value => played.push(value));
+  const client = new ArenaClient({ storage: {}, onState: cue });
+  client.room = room.id;
+  const accept = () => client.accept(arena.snapshot(room, host));
+  accept(); accept(); // Lobby/configuration/selection snapshots are silent.
+  assert.deepEqual(played, []);
+  arena.start(room, host, {}); accept(); accept();
+  assert.deepEqual(played, ['battle-start']);
+  assert.throws(() => arena.start(room, host, {}), /Reset before/);
+  accept(); assert.equal(played.length, 1, 'failed/repeated start is silent');
+  cue({ ...arena.snapshot(room, host), phase: 'lobby' });
+  accept(); assert.equal(played.length, 1, 'regressive lobby cannot re-arm the same match');
+  arena.reset(room, host, {}); accept();
+  cue.reset(); // First snapshot of a re-established stream is historical.
+  arena.start(room, host, {}); accept(); accept();
+  assert.equal(played.length, 1, 'start missed while disconnected is not replayed');
+  arena.reset(room, host, {}); accept();
+  arena.start(room, host, {}); accept(); accept();
+  assert.deepEqual(played, ['battle-start', 'battle-start']);
+  const fresh = createBattleStartCue(value => played.push(value));
+  fresh(arena.snapshot(room, host));
+  assert.equal(played.length, 2, 'initial running/reopened room stays silent');
+  const empty = arena.create();
+  const failedCue = createBattleStartCue(value => played.push(value));
+  failedCue(arena.snapshot(empty, host));
+  assert.throws(() => arena.start(empty, host, {}), /At least one player/);
+  failedCue(arena.snapshot(empty, host));
+  assert.equal(played.length, 2, 'rejected insufficient-player start stays silent');
+});
+
+test('battle-start WAV is the attributed full source effect, not a procedural replacement', async () => {
+  const wav = await readFile(new URL('../public/' + AUDIO_SOUNDS['battle-start'], import.meta.url));
+  assert.equal(createHash('sha256').update(wav).digest('hex'),
+    'ac1753b0c966a04b728a6d76f6650078654049337eeb152fbfc3b2fecc308925');
+  assert.equal(wav.readUInt16LE(22), 2);
+  assert.equal(wav.readUInt32LE(24), 48000);
+  assert.equal(wav.readUInt32LE(40) / (48000 * 2 * 2), 4.156375);
 });

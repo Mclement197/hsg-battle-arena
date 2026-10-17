@@ -48,7 +48,9 @@ Proxy must preserve `/game`, use streaming/no buffering for events, support long
 
 ## Sound on the presenter and player devices
 
-Tap **Enable sound** in the top bar on **each** host computer, phone or tablet. Browsers require a gesture on each device; creating/joining a room does not enable sound. The control becomes **Mute sound** only when Web Audio is running and all four action WAVs have decoded. If the browser suspends audio (for example after backgrounding), tap **Enable sound** again. Device volume, silent mode and muted browser tabs are outside the game’s control.
+Tap **Enable sound** in the top bar on **each** host computer, phone or tablet. Browsers require a gesture on each device; creating/joining a room does not enable sound. The control becomes **Mute sound** only when Web Audio is running and all five WAVs (four actions and the battle-start effect) have decoded. If the browser suspends audio (for example after backgrounding), tap **Enable sound** again. Device volume, silent mode and muted browser tabs are outside the game’s control.
+
+The host’s successful **Start battle** transition plays the requested “READY...FIGHT!” effect once on each sound-enabled device. Enable sound before starting. Repeated snapshots, rejected starts, initial/reconnect snapshots and arena/fighter selection never play it; reset then start plays it again. Source/attribution: [audio assets](public/assets/audio/README.md).
 
 Votes and the local countdown do not play action sounds: the authoritative resolved move plays once on each enabled device. Muted/suspended/loading results are consumed, never replayed after enabling. Muting stops action and confirmation/win sounds.
 
