@@ -180,19 +180,20 @@ async function serve(t, options = {}) {
   });
 }
 
-test('all mapped audio URLs serve as WAV over HTTP, including HEAD; source/docs stay private', async t => {
+test('all mapped audio URLs serve with their audio MIME over HTTP, including HEAD; source/docs stay private', async t => {
   const get = await serve(t);
   for (const url of Object.values(AUDIO_SOUNDS)) {
     const route = '/game/' + url.slice(2);
     const response = await get(route);
     assert.equal(response.status, 200);
-    assert.equal(response.headers['content-type'], 'audio/wav');
+    assert.equal(response.headers['content-type'], url.endsWith('.webm') ? 'audio/webm' : 'audio/wav');
     assert.deepEqual(response.body, await readFile(new URL('../public/' + url, import.meta.url)));
     const head = await get(route, 'HEAD');
     assert.equal(head.status, 200); assert.equal(head.body.length, 0);
   }
   for (const route of ['/game/assets/audio/generate.mjs', '/game/assets/audio/README.md', '/game/assets/audio/generate-lobby.mjs', '/game/assets/audio/generate-countdown.py',
-    '/game/assets/audio/nested/attack-impact.wav', '/game/assets/audio/attack-impact.wav.bak',
+    '/game/assets/audio/nested/attack-impact.wav', '/game/assets/audio/nested/battle-loop.webm',
+    '/game/assets/audio/battle-loop.webm.bak', '/game/assets/audio/battle-loop.mp3', '/game/assets/battle-loop.webm', '/game/assets/audio/attack-impact.wav.bak',
     '/game/assets/audio/%2e%2e/app.js', '/game/assets/nested/attack-impact.wav']) {
     assert.equal((await get(route)).status, 404, route);
   }
@@ -253,7 +254,7 @@ test('actual UI hook: selection/local expiry silent, server result once, mute/un
     CustomEvent: class { constructor(type, { detail }) { this.type = type; this.detail = detail; } },
     fetch: async (url, init) => {
       if (url.endsWith('/events')) return { ok: true, headers: { get: () => 'text/event-stream' }, body: { getReader: () => reader } };
-      if (url.endsWith('.wav')) return { ok: true, arrayBuffer: async () => new TextEncoder().encode(url).buffer };
+      if (/\.(wav|webm)$/.test(url)) return { ok: true, arrayBuffer: async () => new TextEncoder().encode(url).buffer };
       if (url.endsWith('/vote')) arena.vote(room, player, JSON.parse(init.body));
       return { ok: true, json: async () => ({ state: arena.snapshot(room, player) }) };
     }
@@ -271,31 +272,31 @@ test('actual UI hook: selection/local expiry silent, server result once, mute/un
   };
   arena.start(room, host, {}); await send(); at(room.prebattle.deadline); arena.advance(room); await send();
   context.starts.length = 0; // This scenario begins after the already-tested live intro/music.
-  assert.equal(context.starts.length, 0, 'history stays silent despite default preference');
+  assert.equal(context.starts.filter(source => !source.loop).length, 0, 'history stays silent despite default preference');
   await flush();
   assert.equal(context.state, 'running', 'user gesture resumes context');
   assert.equal(context.oscillators.length, 0, 'automatic activation has no confirmation cue');
   buttons[0].handlers.click(); await flush();
-  assert.equal(context.starts.length, 0, 'voting has no action audio');
+  assert.equal(context.starts.filter(source => !source.loop).length, 0, 'voting has no action audio');
   at(room.turn.deadline); tick();
-  assert.equal(context.starts.length, 0, 'local expiry has no audio');
+  assert.equal(context.starts.filter(source => !source.loop).length, 0, 'local expiry has no audio');
   arena.advance(room); await send();
-  assert.equal(context.starts.length, 1);
+  assert.equal(context.starts.filter(source => !source.loop).length, 1);
   assert.equal(new TextDecoder().decode(context.starts[0].buffer.bytes), ACTION_SOUNDS.attack);
-  await send(); assert.equal(context.starts.length, 1, 'repeated SSE snapshot cannot replay');
+  await send(); assert.equal(context.starts.filter(source => !source.loop).length, 1, 'repeated SSE snapshot cannot replay');
   element('mute').handlers.click();
   assert.ok(context.starts[0].stopped, 'mute stops an in-flight action');
   at(room.turn.deadline); arena.advance(room); await send();
-  assert.equal(context.starts.length, 1, 'muted resolution remains silent');
+  assert.equal(context.starts.filter(source => !source.loop).length, 1, 'muted resolution remains silent');
   element('mute').handlers.click(); await flush(); await send();
-  assert.equal(context.starts.length, 1, 'unmute does not replay history');
+  assert.equal(context.starts.filter(source => !source.loop).length, 1, 'unmute does not replay history');
   room.teams.B.hp = 10; // Set up a winning attack.
   arena.vote(room, player, { turnId: room.turn.id, move: 'attack' });
   at(room.turn.deadline); arena.advance(room); await send();
   assert.equal(room.phase, 'finished');
-  assert.equal(context.starts.length, 2, 'winning action still sounds');
+  assert.equal(context.starts.filter(source => !source.loop).length, 2, 'winning action still sounds');
   assert.equal(context.oscillators.length, 6, 'explicit enable cue plus existing four-note win cue');
-  await send(); assert.equal(context.starts.length, 2); assert.equal(context.oscillators.length, 6);
+  await send(); assert.equal(context.starts.filter(source => !source.loop).length, 2); assert.equal(context.oscillators.length, 6);
 });
 
 
@@ -339,4 +340,63 @@ test('battle-start WAV is the attributed full source effect, not a procedural re
   assert.equal(wav.readUInt16LE(22), 2);
   assert.equal(wav.readUInt32LE(24), 48000);
   assert.equal(wav.readUInt32LE(40) / (48000 * 2 * 2), 4.156375);
+});
+
+
+test('full battle source identity and music source lifecycle preserve gains and single looping source', async () => {
+  const source = await readFile(new URL('../public/assets/audio/battle-loop.webm', import.meta.url));
+  assert.equal(source.length, 2191564);
+  assert.equal(createHash('sha256').update(source).digest('hex'), '0a1b4014e7d01ebf9a7de30e267e58def9a1f950c5ccd9e9759282f5ec9e7e4b');
+  const context = audioContext();
+  const audio = new ActionAudio(context, async url => ({ ok: true, arrayBuffer: async () => new TextEncoder().encode(url).buffer }));
+  await audio.load();
+  audio.setMusic('lobby'); audio.setMusic('lobby');
+  assert.equal(context.starts.length, 1);
+  audio.setMusic(null); assert.ok(context.starts[0].stopped);
+  audio.setMusic('battle', 'room:0'); audio.setMusic('battle', 'room:0');
+  assert.equal(context.starts.length, 2);
+  assert.equal(context.starts[1].buffer, audio.buffers.get('battle'));
+  assert.equal(context.starts[1].loop, true);
+  audio.setMusic('battle', 'room:1');
+  assert.ok(context.starts[1].stopped);
+  assert.equal(context.starts.length, 3, 'a different match cannot inherit the prior loop');
+  audio.stop(); assert.ok(context.starts.every(source => source.stopped));
+  context.state = 'suspended'; audio.setMusic('battle', 'room:1');
+  assert.equal(context.starts.length, 3, 'suspension never queues music');
+  context.state = 'running'; audio.setMusic('battle', 'room:1');
+  assert.equal(context.starts.length, 4, 'ongoing music can recover without replaying cues');
+});
+
+test('WebM routing keeps the 8 MiB limit and rejects symlinks and deeper directories', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'arena-webm-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const publicDir = path.join(root, 'public');
+  await mkdir(path.join(publicDir, 'assets', 'audio'), { recursive: true });
+  await writeFile(path.join(root, 'secret.webm'), 'private');
+  await symlink(path.join(root, 'secret.webm'), path.join(publicDir, 'assets', 'audio', 'leak.webm'));
+  await writeFile(path.join(publicDir, 'assets', 'audio', 'large.webm'), Buffer.alloc(8 * 1024 * 1024 + 1));
+  const get = await serve(t, { publicDir });
+  for (const file of ['leak.webm', 'large.webm']) assert.equal((await get('/game/assets/audio/' + file)).status, 404);
+  await rm(path.join(publicDir, 'assets', 'audio'), { recursive: true });
+  await symlink(root, path.join(publicDir, 'assets', 'audio'));
+  assert.equal((await get('/game/assets/audio/secret.webm')).status, 404);
+});
+
+
+test('missing optional battle asset cannot disable unchanged lobby or action sounds', async () => {
+  const context = audioContext();
+  const audio = new ActionAudio(context, async url => ({ ok: !url.endsWith('.webm'), arrayBuffer: async () => new TextEncoder().encode(url).buffer }));
+  await audio.load(); assert.equal(audio.ready, true); assert.equal(audio.buffers.has('battle'), false);
+  audio.setMusic('lobby'); assert.equal(context.starts.length, 1);
+  assert.equal(context.starts[0].buffer, audio.buffers.get('lobby'));
+  audio.setMusic('battle', 'room:0'); assert.equal(audio.music, null); assert.ok(context.starts[0].stopped);
+  assert.equal(audio.play('attack'), true);
+  audio.setMusic('lobby'); assert.equal(context.starts.length, 3);
+});
+
+test('reconnect baseline consumes action missed offline without replay and allows next live action', () => {
+  const played = [], cue = createActionCue(move => played.push(move));
+  const state = number => ({ roomId: 'one', match: 0, lastResult: { number, move: 'attack' } });
+  cue(state(0)); cue(state(1)); cue.reset(); cue(state(4)); cue(state(4));
+  assert.deepEqual(played, ['attack']); cue(state(5)); assert.deepEqual(played, ['attack', 'attack']);
 });

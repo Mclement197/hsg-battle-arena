@@ -30,6 +30,9 @@ function observeAudio() {
         requestAnimationFrame(sample);
       };
       sample();
+      probe.tones = [];
+      const createOscillator = this.createOscillator.bind(this);
+      this.createOscillator = () => { const tone = createOscillator(); const start = tone.start.bind(tone); tone.start = (...args) => { probe.tones.push(1); return start(...args); }; return tone; };
       probe.gains ||= [];
       const createGain = this.createGain.bind(this);
       this.createGain = () => {
@@ -37,15 +40,17 @@ function observeAudio() {
         const set = gain.gain.setValueAtTime.bind(gain.gain);
         gain.gain.setValueAtTime = (value, ...rest) => { gain.requestedValue = value; return set(value, ...rest); };
         const connect = gain.connect.bind(gain);
-        gain.connect = (target, ...rest) => connect(target === this.destination ? analyser : target, ...rest);
+        gain.connect = (target, ...rest) => { gain.probeTarget = target; return connect(target === this.destination ? analyser : target, ...rest); };
         return gain;
       };
       const createSource = this.createBufferSource.bind(this);
       this.createBufferSource = () => {
         const source = createSource();
+        const connect = source.connect.bind(source);
+        source.connect = gain => { source.probeGain = gain; return connect(gain); };
         const start = source.start.bind(source);
         source.start = (...params) => {
-          probe.starts.push({ duration: source.buffer.duration, loop: source.loop, state: this.state, when: params[0] ?? this.currentTime, at: this.currentTime, offset: params[1] || 0, stopped: false });
+          probe.starts.push({ duration: source.buffer.duration, loop: source.loop, state: this.state, when: params[0] ?? this.currentTime, at: this.currentTime, offset: params[1] || 0, stopped: false, musicBus: source.probeGain?.probeTarget === probe.gains[0], sfxBus: source.probeGain?.probeTarget === probe.gains[1], loopStart: source.loopStart, loopEnd: source.loopEnd });
           const record = probe.starts.at(-1);
           const stop = source.stop.bind(source);
           source.stop = (...args) => { record.stopped = true; return stop(...args); };
@@ -118,7 +123,7 @@ test('fresh sound preference is ON before any gesture', { skip: !enabled, timeou
     assert.equal(await tab.evaluate(() => audioProbe.resumes.length), resumes, input + ': mute never resumes');
     assert.equal(await tab.evaluate(() => audioProbe.contexts[0].state), 'suspended');
     await (input === 'touch' ? tab.locator('#how-to').tap() : tab.locator('#how-to').click());
-    await tab.waitForFunction(() => audioProbe.decoded === 7);
+    await tab.waitForFunction(() => audioProbe.decoded === 8);
     assert.equal(await tab.locator('#mute').textContent(), 'sound is off');
     assert.equal(await tab.evaluate(() => audioProbe.resumes.length), resumes);
     assert.equal(await tab.evaluate(() => audioProbe.starts.length), 0);
@@ -171,7 +176,7 @@ for (const mobile of [false, true]) {
       // A failed native asset decode must never advertise sound readiness.
       const failedAudio = await page({}, true);
       await failedAudio.locator('#how-to').click();
-      await failedAudio.waitForFunction(() => audioProbe.decoded === 6);
+      await failedAudio.waitForFunction(() => audioProbe.decoded === 7);
       await failedAudio.waitForFunction(() => document.querySelector('#mute').dataset.audioState === 'error');
       assert.equal(await failedAudio.locator('#mute').textContent(), 'sound is on');
       assert.match(await failedAudio.locator('#sound-hint').textContent(), /could not load/);
@@ -182,7 +187,7 @@ for (const mobile of [false, true]) {
       const keyboardContext = await browser.newContext();
       await keyboardContext.addInitScript(observeAudio);
       const keyboard = await keyboardContext.newPage();
-      await keyboard.route('**/*.wav', async route => { await assetsReady; await route.continue(); });
+      await keyboard.route('**/*.{wav,webm}', async route => { await assetsReady; await route.continue(); });
       await keyboard.goto(origin + '/game/');
       assert.equal(await keyboard.locator('#mute').textContent(), 'sound is on');
       assert.match(await keyboard.locator('#sound-hint').textContent(), /Waiting|Loading/);
@@ -197,7 +202,7 @@ for (const mobile of [false, true]) {
       assert.match(await keyboard.locator('#sound-hint').textContent(), /Loading/);
       await keyboard.locator('#mute').click();
       releaseAssets();
-      await keyboard.waitForFunction(() => audioProbe.decoded === 7);
+      await keyboard.waitForFunction(() => audioProbe.decoded === 8);
       await keyboard.locator('#how-to').click();
       assert.equal(await keyboard.locator('#mute').textContent(), 'sound is off', 'ordinary clicks preserve explicit mute');
       assert.equal(await keyboard.evaluate(() => audioProbe.starts.length), 0, 'late load cannot reverse mute');
@@ -230,10 +235,13 @@ for (const mobile of [false, true]) {
       // First ordinary host/player interaction activates audio, without a sound-button detour.
       for (const page of pages) {
         await page.waitForFunction(() => document.querySelector('#mute').dataset.audioState === 'ready');
-        assert.equal(await page.evaluate(() => audioProbe.decoded), 7);
+        assert.equal(await page.evaluate(() => audioProbe.decoded), 8);
         assert.equal(await page.evaluate(() => audioProbe.contexts[0].state), 'running');
         assert.ok(await page.evaluate(() => audioProbe.resumes.some(Boolean)));
         assert.equal(await page.evaluate(() => audioProbe.starts.filter(start => !start.loop).length), 0);
+        await page.bringToFront();
+        await page.waitForFunction(() => audioProbe.peak > .01 && audioProbe.starts.some(s => s.loop && !s.stopped && s.duration < 100 && s.musicBus));
+
         const box = await page.locator('#mute').boundingBox();
         assert.ok(box.x >= 0 && box.x + box.width <= page.viewportSize().width);
       }
@@ -241,7 +249,7 @@ for (const mobile of [false, true]) {
       clock = room.prebattle.deadline; game.tick();
       await players[0].waitForFunction(() => !document.querySelector('[data-move="attack"]').disabled);
       for (const page of pages) {
-        assert.ok(await page.evaluate(() => audioProbe.starts.filter(start => start.loop).every(start => start.stopped)));
+        assert.ok(await page.evaluate(() => audioProbe.starts.filter(start => start.loop && start.duration < 100).every(start => start.stopped)));
         await page.evaluate(() => { audioProbe.starts = []; });
       }
       await players[0].waitForFunction(() => !document.querySelector('[data-move="attack"]').disabled);
@@ -358,7 +366,7 @@ test('live read-only frontend decodes WAVs and enables native audio on desktop/p
       page.on('pageerror', error => errors.push(error.message));
       page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
       page.on('response', response => {
-        if (response.url().endsWith('.wav')) assets.push(response.status());
+        if (/\.(wav|webm)$/.test(response.url())) assets.push(response.status());
       });
       await page.goto(process.env.AUDIO_LIVE_URL);
       assert.equal(await page.locator('#mute').textContent(), 'sound is on');
@@ -366,11 +374,11 @@ test('live read-only frontend decodes WAVs and enables native audio on desktop/p
       await (device ? page.locator('#how-to').tap() : page.locator('#how-to').click());
       await page.waitForFunction(() => document.querySelector('#mute').dataset.audioState === 'ready' && audioProbe.peak > .01);
       assert.equal(await page.evaluate(() => audioProbe.contexts[0].state), 'running');
-      assert.equal(await page.evaluate(() => audioProbe.decoded), 7);
+      assert.equal(await page.evaluate(() => audioProbe.decoded), 8);
       assert.ok(await page.evaluate(() => audioProbe.resumes.some(Boolean)));
-      assert.deepEqual(assets, [200, 200, 200, 200, 200, 200, 200]);
+      assert.deepEqual(assets, [200, 200, 200, 200, 200, 200, 200, 200]);
       assert.deepEqual(errors, []);
-      console.log('LIVE ' + (device || 'desktop') + ': 7 WAVs=200, decoded=7, state=running, graph peak=' +
+      console.log('LIVE ' + (device || 'desktop') + ': 8 audio assets=200, decoded=8, state=running, graph peak=' +
         await page.evaluate(() => audioProbe.peak));
       await context.close();
     }
@@ -465,6 +473,7 @@ test('native battle-start WAV: live host/player edge, dedup, reset, mute and rec
       assert.equal(sequence[0].duration, 3);
       assert.ok(Math.abs((sequence[1].when - sequence[0].when) - (3 - sequence[0].offset)) < .03);
       assert.ok(await page.locator('[data-move="attack"]').isDisabled());
+      assert.equal(await page.evaluate(() => audioProbe.starts.filter(source => source.loop && !source.stopped).length), 0, 'no music during countdown/Ready Fight');
     }
     for (const [elapsed, label] of [[1000,'2'],[2000,'1'],[3000,'READY… FIGHT!']]) {
       clock = room.prebattle.startedAt + elapsed;
@@ -476,6 +485,16 @@ test('native battle-start WAV: live host/player edge, dedup, reset, mute and rec
     clock = room.prebattle.deadline; game.tick();
     for (const page of pages) await page.waitForFunction(() => document.querySelector('#prebattle').hidden);
     assert.equal(room.turn.deadline - room.turn.startedAt, 15000);
+    for (const page of pages) {
+      await page.waitForFunction(() => audioProbe.starts.some(source => source.loop && source.duration > 140));
+      const music = await page.evaluate(() => audioProbe.starts.filter(source => source.loop && !source.stopped));
+      assert.equal(music.length, 1, 'exactly one active music source after complete intro');
+      assert.ok(Math.abs(music[0].duration - 143.081375) < .001);
+      assert.equal(music[0].musicBus, true); assert.equal(music[0].sfxBus, false);
+      assert.equal(music[0].loopStart, 0); assert.equal(music[0].loopEnd, 0, 'native default loops entire decoded track');
+      assert.ok(await page.evaluate(() => audioProbe.starts.filter(source => source.loop && source.duration < 100).every(source => source.stopped)));
+    }
+
 
     for (const page of pages) {
       await page.bringToFront();
@@ -530,4 +549,153 @@ test('native battle-start WAV: live host/player edge, dedup, reset, mute and rec
     await host.waitForFunction(() => audioProbe.starts.filter(start => Math.abs(start.duration - 4.156375) < .001).length === 7);
     assert.deepEqual(errors, []);
     console.log('BATTLE START dedup/reset/mute/suspend/reconnect/reload verified on native host + phone + tablet');
+  });
+
+
+test('battle music native lifecycle on desktop host/player and touch: gain, mute, reconnect, reset, finish, leaving',
+  { skip: !enabled, timeout: 60000 }, async t => {
+    const { chromium, devices } = await import(process.env.PLAYWRIGHT_MODULE);
+    const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_EXECUTABLE,
+      headless: true, args: ['--autoplay-policy=document-user-activation-required'] });
+    let clock = Date.now();
+    const arena = new Arena({ now: () => clock, pick: () => 0 });
+    const reservation = http.createServer();
+    await new Promise(resolve => reservation.listen(0, '127.0.0.1', resolve));
+    const port = reservation.address().port;
+    await new Promise(resolve => reservation.close(resolve));
+    const origin = 'http://127.0.0.1:' + port;
+    const game = createGameServer({ arena, autoTick: false, publicOrigin: origin });
+    await new Promise(resolve => game.server.listen(port, '127.0.0.1', resolve));
+    t.after(async () => { await browser.close(); await game.close(); });
+    const errors = [];
+    async function page(device) {
+      const context = await browser.newContext({ ...(device ? devices[device] : {}), reducedMotion: 'reduce' });
+      await context.addInitScript(observeAudio); context.setDefaultTimeout(10000);
+      const page = await context.newPage(); page.on('pageerror', e => errors.push(e.message));
+      await page.goto(origin + '/game/'); return page;
+    }
+    const host = await page();
+    await host.locator('#play-groups').click(); await host.locator('#create-room').click();
+    await host.locator('#arena-next').click(); await host.locator('#selection-next').click();
+    await host.waitForFunction(() => document.body.dataset.screen === 'lobby');
+    const roomId = await host.locator('#room-code').textContent(), room = arena.rooms.get(roomId);
+    const players = [];
+    for (const [i, device] of [null, 'iPhone 13'].entries()) {
+      const player = await page(device);
+      await (device ? player.locator('#join-existing').tap() : player.locator('#join-existing').click());
+      await player.locator('#join-code').fill(roomId); await player.locator('#nickname').fill('Music ' + i);
+      await player.locator('#join-form button').click();
+      await player.waitForFunction(() => document.querySelector('#connection').textContent === 'Connected'); players.push(player);
+    }
+    const pages = [host, ...players];
+    const waitLoops = async (targets, track) => {
+      for (const page of targets) await page.waitForFunction(track => {
+        const loops = audioProbe.starts.filter(s => s.loop && !s.stopped);
+        return track === null ? loops.length === 0 : loops.length === 1 && (track === 'battle' ? loops[0].duration > 140 : loops[0].duration < 100);
+      }, track);
+    };
+    const emit = () => { for (const stream of room.streams) stream.res.write('event: state\ndata: ' + JSON.stringify(arena.snapshot(room, stream.viewer)) + '\n\n'); };
+    const reset = async () => {
+      host.once('dialog', d => d.accept()); await host.locator('#reset-game').click();
+      await host.waitForFunction(() => document.body.dataset.screen === 'lobby'); await waitLoops(pages, 'lobby');
+    };
+    const running = async () => { await host.locator('#start-game').click(); clock = room.prebattle.deadline; game.tick(); await waitLoops(pages, 'battle'); };
+    for (const page of pages) await page.waitForFunction(() => document.querySelector('#mute').dataset.audioState === 'ready');
+    await waitLoops(pages, 'lobby'); await running();
+    assert.equal(room.turn.deadline - room.turn.startedAt, 15000);
+    const counts = await Promise.all(pages.map(p => p.evaluate(() => audioProbe.starts.length)));
+    emit(); emit(); await host.waitForTimeout(200);
+    for (const [i, page] of pages.entries()) {
+      assert.equal(await page.evaluate(() => audioProbe.starts.length), counts[i], 'SSE duplicates do not restart music');
+      await page.locator('.audio-settings summary').click();
+      await page.locator('#volume-sfx').fill('0'); await page.locator('#volume-sfx').dispatchEvent('input');
+      await page.locator('#volume-music').fill('0'); await page.locator('#volume-music').dispatchEvent('input');
+      await page.evaluate(() => { audioProbe.peak = 0; }); await page.bringToFront(); await page.waitForTimeout(250);
+      await page.evaluate(() => { audioProbe.peak = 0; }); await page.waitForTimeout(150);
+      assert.equal(await page.evaluate(() => audioProbe.peak), 0, 'music zero silences native graph');
+      await page.locator('#volume-music').fill('42'); await page.locator('#volume-music').dispatchEvent('input');
+      await page.waitForFunction(() => audioProbe.peak > .01);
+      assert.equal(await page.evaluate(() => audioProbe.gains[1].requestedValue), 0, 'SFX zero does not silence music');
+      assert.ok(Math.abs(await page.evaluate(() => audioProbe.gains[0].requestedValue) - .42) < .001);
+      const loop = await page.evaluate(() => audioProbe.starts.findLast(s => s.loop && !s.stopped));
+      assert.equal(loop.musicBus, true); assert.equal(loop.sfxBus, false);
+      await page.locator('.audio-settings summary').click();
+      await page.locator('#mute').click(); await waitLoops([page], null);
+      await page.locator('#connection').click(); assert.equal(await page.locator('#mute').textContent(), 'sound is off');
+      await page.locator('#mute').click(); await waitLoops([page], 'battle');
+    }
+    // Hold a real SSE reconnect while an authoritative action is missed.
+    const returning = players[0]; let release;
+    const held = new Promise(resolve => { release = resolve; });
+    await returning.route('**/events', async route => { await held; await route.continue(); });
+    const id = [...room.players.values()].find(p => p.nickname === 'Music 0').id;
+    const historical = await returning.evaluate(() => ({ cues: audioProbe.starts.filter(s => !s.loop).length, tones: audioProbe.tones.length }));
+    for (const stream of room.streams) if (stream.viewer.player?.id === id) stream.res.destroy();
+    await returning.waitForFunction(() => document.querySelector('#connection').textContent === 'Reconnecting…'); await waitLoops([returning], null);
+    clock = room.turn.deadline; game.tick();
+    release(); await returning.waitForFunction(() => document.querySelector('#connection').textContent === 'Connected'); await waitLoops([returning], 'battle');
+    assert.deepEqual(await returning.evaluate(() => ({ cues: audioProbe.starts.filter(s => !s.loop).length, tones: audioProbe.tones.length })), historical, 'reconnect restores only music, no missed action/intro/tones');
+    await returning.unroute('**/events');
+    // Full reload into running state may recover music after activation, not intro or old action.
+    await returning.reload(); await returning.locator('#connection').click();
+    await returning.waitForFunction(() => document.querySelector('#connection').textContent === 'Connected'); await waitLoops([returning], 'battle');
+    assert.equal(await returning.evaluate(() => audioProbe.starts.filter(s => !s.loop).length), 0);
+    assert.equal(await returning.evaluate(() => audioProbe.tones.length), 0);
+    for (const page of pages) {
+      await page.evaluate(async () => { await audioProbe.contexts[0].suspend(); }); await waitLoops([page], null);
+      emit(); assert.equal(await page.evaluate(() => audioProbe.contexts[0].state), 'suspended');
+      await page.locator('#connection').click(); await waitLoops([page], 'battle');
+    }
+    await reset(); await running();
+    // Muted starts consume intro but a later unmute restores the current music only.
+    await reset(); await players[1].locator('#mute').click();
+    await host.locator('#start-game').click(); clock = room.prebattle.deadline; game.tick();
+    await waitLoops([host, players[0]], 'battle'); await waitLoops([players[1]], null);
+    const cues = await players[1].evaluate(() => audioProbe.starts.filter(s => !s.loop).length);
+    await players[1].locator('#mute').click(); await waitLoops([players[1]], 'battle');
+    assert.equal(await players[1].evaluate(() => audioProbe.starts.filter(s => !s.loop).length), cues);
+    // Finish is authoritative; an offline client must not replay its missed win/action.
+    let releaseFinish;
+    const heldFinish = new Promise(resolve => { releaseFinish = resolve; });
+    await returning.route('**/events', async route => { await heldFinish; await route.continue(); });
+    const beforeFinish = await returning.evaluate(() => ({ cues: audioProbe.starts.filter(s => !s.loop).length, tones: audioProbe.tones.length }));
+    for (const stream of room.streams) if (stream.viewer.player?.id === id) stream.res.destroy();
+    await returning.waitForFunction(() => document.querySelector('#connection').textContent === 'Reconnecting…');
+    room.teams.B.hp = 1; clock = room.turn.deadline; game.tick();
+    assert.equal(room.phase, 'finished'); await waitLoops(pages, null);
+    releaseFinish(); await returning.waitForFunction(() => document.querySelector('#connection').textContent === 'Connected');
+    assert.deepEqual(await returning.evaluate(() => ({ cues: audioProbe.starts.filter(s => !s.loop).length, tones: audioProbe.tones.length })), beforeFinish);
+    await host.waitForFunction(() => document.body.dataset.screen === 'victory');
+    await host.locator('#main-menu').click(); await waitLoops([host], 'lobby');
+    assert.deepEqual(errors, []);
+    console.log('BATTLE MUSIC native full-track/bus/zero-gain/mute/SSE/reconnect/reload/suspend/reset/finish/menu verified');
+  });
+
+
+test('optional WebM decode failure preserves actual lobby graph after first ordinary gesture',
+  { skip: !enabled, timeout: 20000 }, async t => {
+    const { chromium, devices } = await import(process.env.PLAYWRIGHT_MODULE);
+    const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_EXECUTABLE,
+      headless: true, args: ['--autoplay-policy=document-user-activation-required'] });
+    const game = createGameServer({ autoTick: false });
+    await new Promise(resolve => game.server.listen(0, '127.0.0.1', resolve));
+    t.after(async () => { await browser.close(); await game.close(); });
+    for (const device of [null, 'iPhone 13', 'iPad (gen 7)']) {
+      const context = await browser.newContext(device ? devices[device] : {});
+      await context.addInitScript(observeAudio);
+      const page = await context.newPage();
+      await page.route('**/battle-loop.webm', route => route.fulfill({ status: 200, contentType: 'audio/webm', body: 'unsupported codec' }));
+      await page.goto('http://127.0.0.1:' + game.server.address().port + '/game/');
+      assert.equal(await page.locator('#mute').textContent(), 'sound is on');
+      await (device ? page.locator('#how-to').tap() : page.locator('#how-to').click());
+      await page.waitForFunction(() => audioProbe.decoded === 7 && audioProbe.peak > .01 && document.querySelector('#mute').dataset.audioState === 'ready');
+      assert.match(await page.locator('#sound-hint').textContent(), /Battle music unavailable.*other game sounds remain enabled/);
+      assert.ok(await page.evaluate(() => audioProbe.starts.some(s => s.loop && !s.stopped && s.musicBus && s.duration < 100)));
+      await page.locator('#mute').click();
+      assert.equal(await page.locator('#mute').textContent(), 'sound is off');
+      assert.ok(await page.evaluate(() => audioProbe.starts.every(s => s.stopped)));
+      await page.locator('#help-back').click();
+      assert.equal(await page.locator('#mute').textContent(), 'sound is off');
+      await context.close();
+    }
   });

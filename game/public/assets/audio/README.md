@@ -19,12 +19,12 @@ The central browser mapping is `ACTION_SOUNDS` at the top of `public/app.js`.
 To replace a sound, update its WAV here and that mapping if its name changes.
 To author a new procedural effect, add its duration/recipe to `generate.mjs` and
 its mapping entry. New gameplay moves also need explicit engine/rules work; this
-folder does not define gameplay. The server permits only flat `*.wav` filenames
+folder does not define gameplay. The server permits only flat `*.wav` and `*.webm` filenames
 under `/game/assets/audio/`; the generator and this document are not served.
 
 ## Playback contract
 
-Sound is enabled by default as a per-page preference. A normal permitted autoplay attempt is made; browser policy may keep the context suspended. The first trusted click, tap or key retries resume synchronously, before create/join/start handlers or asset awaits. The button reads sound is off until the context runs and all seven files decode; a separate visible hint explains waiting/loading. Explicit mute persists across later interactions on that page. Suspension stops sources without changing the preference; a subsequent trusted gesture can recover, never SSE. Its existing turn/enable cue and the win cue
+Sound is enabled by default as a per-page preference. A normal permitted autoplay attempt is made; browser policy may keep the context suspended. The first trusted click, tap or key retries resume synchronously, before create/join/start handlers or asset awaits. The button reads sound is on whenever the selected preference is ON, even before activation or decoding; a separate visible hint explains waiting/loading. Explicit mute persists across later interactions on that page. Suspension stops sources without changing the preference; a subsequent trusted gesture can recover, never SSE. Its existing turn/enable cue and the win cue
 remain synthesized as before. Muting stops music, voice, scheduled battle-start effects and all action/confirmation sounds.
 
 Only a new authoritative `lastResult` received by `ArenaClient.onState` triggers an
@@ -37,8 +37,7 @@ room are historical and silent. Muted outcomes are consumed, not replayed.
 
 Audio is optional: unavailable/failed assets and suspended contexts are silent.
 Actions arriving before preload finishes are skipped rather than queued late;
-enable sound before the battle for reliable first-turn playback. Only the newest
-result is available after a network gap; missed turns are not replayed as a batch.
+enable sound before the battle for reliable first-turn playback. The first snapshot after a network gap is a silent cue baseline; missed action/intro/win cues are not replayed. Current-phase music may recover.
 Tests exercise the UI hook with DOM/Web Audio doubles, local HTTP asset delivery,
 and optional native Chromium audio graphs on desktop/phone/tablet contexts.
 Native tests cover gesture activation, actual WAV decode/playback, mute and
@@ -90,4 +89,18 @@ is not an audio trigger. The existing resolved-action effects remain unchanged; 
 - countdown.wav: actual “three / two / one” speech generated locally with the preinstalled Debian eSpeak NG 1.51 shared library and data, en-us+m3 male variant, rate 145, pitch 18, range 25. One-second word slots, 3 seconds total, 22050 Hz mono PCM16. No speech service, paid generation, package install, cloned voice or human recording. Robotic/formant timbre rather than natural cinematic voice; human speaker listening remains required for subjective quality/intelligibility acceptance.
 - Reproduce speech on a system with eSpeak NG shared library/data: python3 public/assets/audio/generate-countdown.py. Uses Python ctypes and wave only. No TTS library is shipped or needed at runtime. eSpeak NG project: https://github.com/espeak-ng/espeak-ng ; program/data GPL-3.0-or-later, generated speech is output rather than bundled program code. This project’s script and the short original utterance are newly authored; no third-party recording is copied.
 
-Seven WAVs now preload. Independent music and SFX/voice buses include enable/win tones. Music runs only before battle. Master mute, suspension, reset, reconnect and leaving battle cancel scheduled voice/start sources. At a live lobby → countdown edge the audio clock schedules the countdown immediately (offset to server elapsed time), then the intact Ready/Fight after the remaining three-second countdown. Sources are stopped when the authoritative running phase arrives, ensuring no stale intro overlaps turn one. Initial/reconnect snapshots never schedule them. A start snapshot arriving after the three spoken beats is consumed silently rather than starting Ready/Fight late. Muting/unmuting never replays missed cues. The earlier Soundees source, conversion details, attribution and SHA-256 above remain exact and unchanged.
+Seven WAVs and the requested battle WebM/Opus now preload. Independent music and SFX/voice buses include enable/win tones. Lobby music runs before battle; battle music runs only in the authoritative running battle. Master mute, suspension, reset, reconnect and leaving battle cancel scheduled voice/start sources. At a live lobby → countdown edge the audio clock schedules the countdown immediately (offset to server elapsed time), then the intact Ready/Fight after the remaining three-second countdown. Sources are stopped when the authoritative running phase arrives, ensuring no stale intro overlaps turn one. Initial/reconnect snapshots never schedule them. A start snapshot arriving after the three spoken beats is consumed silently rather than starting Ready/Fight late. Muting/unmuting never replays missed cues. The earlier Soundees source, conversion details, attribution and SHA-256 above remain exact and unchanged.
+
+
+## Requested battle music (2026-10-17)
+
+- **Exact source:** https://www.youtube.com/watch?v=g7yNyhLOIa4 (only this video, not the linked playlist).
+- **Title/uploader:** “Xenoblade Chronicles OST - You Will Know Our Names”, uploaded by **Xenoblade Chronicles OST**, published 2015-08-28 per extractor metadata.
+- **Description:** “Music: You Will Know Our Names / Game: Xenoblade Chronicles / Composer & Arranger: ACE+”. These are uploader-supplied credits, not independent ownership verification.
+- **License/rights:** extractor license metadata is absent; description contains no reuse license or redistribution permission. No royalty-free or Creative Commons claim is made. Permission from the relevant rights holder remains unverified; this credit and the user request do not grant rights.
+- **Included file:** `battle-loop.webm` — standard yt-dlp 2026.08.19 bestaudio format 251 WebM/Opus, **2,191,564 bytes**, original download included unchanged. No trim, normalization, resample, transcode, pitch/tempo edit or substitute. Metadata rounds duration to 143 seconds. Chromium 1243 native OfflineAudioContext decode at 48 kHz yields **143.081375 seconds**, 2 channels, 6,867,906 frames.
+- **SHA-256 (download and included file):** `0a1b4014e7d01ebf9a7de30e267e58def9a1f950c5ccd9e9759282f5ec9e7e4b`.
+- **Acquisition:** existing yt-dlp runner, `--compat-options no-certifi --no-playlist -f 251`, honoring the runner CA bundle. No login/cookies, bypass, payments, added project dependencies or rights assertion. Extraction warned about no supported default JS runtime but the requested file downloaded successfully and decoded natively.
+- **Size choice:** full stereo PCM16 at the lobby asset's 22,050 Hz would be 12,619,824 bytes, beyond the existing 8 MiB static limit. Preserve original compressed source instead of trimming/degrading it. The approved minimal server change allows flat WAV/WebM filenames under the existing audio directory and adds `audio/webm` MIME; size/path/symlink protections remain unchanged. No service restart or live publication was performed during implementation.
+- **Playback:** native AudioBufferSource full-buffer loop at Music gain, one scoped music source per room/match. Countdown/Ready Fight remain music-free; first full turn and action cues remain authoritative. Disconnect, reset, finish, mute, suspension and leaving battle stop the loop. Reconnect/unmute/gesture recovery may resume current-phase music from its beginning, but do not replay stale cues. Duplicate state snapshots never restart a running loop. Original beginning/end repeat without any seamless-loop guarantee.
+- **Compatibility:** native desktop and touch-emulated Chromium graphs are the tested engine, not Safari. No Safari/WebKit binary is available here; actual iOS/macOS Safari decode/activation/speaker output remains unverified, particularly on older versions lacking WebM/Opus support. Battle decode failure is nonblocking: the seven base WAVs, unchanged lobby loop and SFX remain playable, while the separate hint says “Battle music unavailable — other game sounds remain enabled”. The selected sound preference remains preserved; no alternate battle format is included.

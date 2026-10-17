@@ -68,11 +68,14 @@ test('music and SFX use independent live gains, loop starts once and mute cancel
     decodeAudioData: async () => ({}), createGain() { const gain = { gain: { setValueAtTime(v) { gain.value = v; } }, connect(target) { gain.target = target; return target; }, disconnect() {} }; gains.push(gain); return gain; },
     createBufferSource() { const source = { connect(gain) { source.gain = gain; return gain; }, start(...args) { source.args = args; }, stop() { source.stopped = true; source.onended?.(); }, disconnect() {} }; sources.push(source); return source; } };
   const audio = new ActionAudio(context, async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(0) }));
-  await audio.load(); audio.setLobby(true); audio.setLobby(true); assert.equal(sources.length, 1); assert.equal(sources[0].loop, true);
+  await audio.load(); audio.setMusic('lobby'); audio.setMusic('lobby'); assert.equal(sources.length, 1); assert.equal(sources[0].loop, true);
   audio.setVolume('music', 0); audio.setVolume('sfx', .7);
   assert.equal(audio.musicGain.value, 0); assert.equal(audio.sfxGain.value, .7);
-  audio.play('battle-start', { delay: 3 }); assert.deepEqual(sources[1].args, [13, 0]);
-  assert.equal(sources[1].gain.target, audio.sfxGain);
+  audio.setMusic('battle', 'room:0'); assert.equal(sources[0].stopped, true);
+  assert.equal(sources[1].gain.target, audio.musicGain);
+  audio.setVolume('music', .21); assert.equal(audio.musicGain.value, .21); assert.equal(audio.sfxGain.value, .7);
+  audio.play('battle-start', { delay: 3 }); assert.deepEqual(sources[2].args, [13, 0]);
+  assert.equal(sources[2].gain.target, audio.sfxGain);
   audio.stop(); assert.ok(sources.every(source => source.stopped)); assert.equal(audio.music, null);
 });
 
