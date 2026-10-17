@@ -188,3 +188,54 @@ Not checked: physical speakers, actual iOS/macOS Safari/WebKit, broad visual smo
 public deployment or live asset hashes. Touch-device contexts are Chromium
 emulation, not Safari. Rights clearance is not established. Graft executable was
 unavailable; relevant source/callers/tests were inspected directly instead.
+
+## Victory-only 2× gain — 2026-10-17 (live static frontend)
+
+- `public/app.js` adds only the victory-specific `2` multiplier: source gain
+  0.45 → 0.9 (+6.02 dB), then the unchanged Music slider (0–1). Battle remains
+  0.45 × 0.5, lobby 0.45, all action SFX/Ready-Fight 0.45, countdown 0.9.
+  Mute still stops sources; unmute never replays a consumed victory. The full
+  recording and hash are unchanged. This is 2× amplitude gain, not a claim of
+  twice perceived loudness.
+- Focused regression first failed against the old source (`0.45 !== 0.9`),
+  then passed. `node --test test/audio.test.mjs`: **18/18 passed**. Tests cover
+  exact victory gain, all other source gains, Music 0/.35/.42/1 composition,
+  independent SFX bus and mute/unmute. Log `/tmp/hsg-victory-unit.tap`.
+- `npm test` without browser opt-in: **93 tests, 84 passed, 0 failed, 9 skipped**;
+  skips are the explicit native-browser/live opt-ins.
+  Log `/tmp/hsg-victory-default-tests.tap`.
+- Complete suite with installed Playwright/Chromium enabled: **93 tests,
+  92 passed, 0 failed, 1 intentional live-read-only skip**, exit 0. Includes
+  desktop/touch audio lifecycle and backend/security/frontend regressions.
+  Log `/tmp/hsg-victory-tests.tap`. The final strengthened peak regression was
+  also verified by the separate focused native run below.
+- Final focused native Chromium 1243 victory test: **1/1 passed**, real host,
+  desktop player and touch-phone contexts; once-only full playback, zero battle
+  overlap, Music source 0.9/bus .42, history/loading/mute/reset/leave behavior,
+  decoded peak below full scale at Music 100%.
+  Log `/tmp/hsg-victory-focused-browser.tap`.
+- Native 48 kHz stereo decode peak: **0.133819580078125**. At gain 0.9 and Music
+  100%, peak **0.1204376220703125**, **18.38 dB** headroom. Offline mixes with
+  each action at SFX 100% remain below full scale; the conservative sum of
+  victory peak plus the largest action peak is **0.4930011749267578**
+  (**6.14 dB** headroom), even allowing arbitrary relative offset. No clipping
+  constraint, normalization, limiter or unrelated gain change was needed.
+  Measurement `/tmp/hsg-victory-headroom.json`.
+- Public `https://afp.mclement.ch/game/app.js`: HTTP **200**, `Cache-Control:
+  no-store`, byte-identical to local source, SHA-256
+  **1418def4422af2689b74fac4b9665a23aee1988f3b4b1ac0a8887cb020c84b8c**.
+  Executing ActionAudio extracted from that fetched module confirms source gain
+  0.9 and Music 0/.35/1 composition/mute without any live room API calls.
+- Opt-in read-only live native-browser test: **1/1 passed**, desktop/phone/tablet
+  contexts each fetched all nine assets with 200, decoded nine buffers and
+  produced nonzero native graph samples. No live rooms created/joined/mutated.
+  Log `/tmp/hsg-victory-live-browser.tap`.
+- Static files are read per request from this authorized checkout; editing the
+  frontend publishes it without build/restart. Game PID **261810**, activation
+  **2026-10-17 20:09:11 CEST**, restart count **0**, unchanged. No server/config
+  edits. Refresh already-open clients. Unrelated dirty/untracked work preserved.
+- Source syntax checks and `git diff --check` passed. No dependencies added.
+
+Not checked: physical speakers, perceived loudness, actual Safari/iOS/WebKit, or
+new broad layout smoke (no layout change). Existing media-rights caveat remains.
+Graft executable is unavailable; scoped source and callers were inspected directly.

@@ -402,7 +402,7 @@ test('reconnect baseline consumes action missed offline without replay and allow
   assert.deepEqual(played, ['attack']); cue(state(5)); assert.deepEqual(played, ['attack', 'attack']);
 });
 
-test('battle-only half gain composes with Music slider and mute without changing lobby, SFX or countdown', async () => {
+test('victory-only doubled gain and battle half gain compose with Music slider and mute without changing other levels', async () => {
   const context = audioContext();
   context.createGain = () => ({ gain: { value: 1, setValueAtTime(value) { this.value = value; } },
     connect(target) { this.target = target; return target; }, disconnect() {} });
@@ -424,12 +424,19 @@ test('battle-only half gain composes with Music slider and mute without changing
     assert.equal(battle.gain.target, audio.musicGain);
     assert.equal(effective(battle), .45 * .5 * volume);
     assert.equal(audio.musicGain.gain.value, volume);
-    for (const [cue, gain] of [['attack', .45], ['countdown', .9], ['battle-start', .45]]) {
+    for (const [cue, gain] of [['attack', .45], ['defend', .45], ['heal', .45], ['special', .45], ['countdown', .9], ['battle-start', .45]]) {
       audio.play(cue);
       assert.equal(audio.lastSource.gain.target, audio.sfxGain);
       assert.equal(audio.lastSource.gain.gain.value, gain);
       assert.equal(effective(audio.lastSource), gain * .8);
     }
+    assert.equal(audio.play('win'), true);
+    const win = audio.victory;
+    assert.equal(battle.stopped, true);
+    assert.equal(win.gain.target, audio.musicGain);
+    assert.equal(win.gain.gain.value, .45 * 2, 'exactly twice the previous victory amplitude gain');
+    assert.equal(effective(win), .45 * 2 * volume);
+    assert.equal(audio.musicGain.gain.value, volume);
     audio.stop(); // The UI's explicit mute path stops every source, not the slider.
     assert.ok(context.starts.every(source => effective(source) === 0));
     assert.equal(audio.musicGain.gain.value, volume);
@@ -473,7 +480,7 @@ test('full victory source identity, Music routing and cancellation leave other s
   assert.equal(battle.stopped, true); assert.equal(audio.music, null);
   assert.equal(win.buffer, audio.buffers.get('win')); assert.equal(win.loop, false);
   assert.equal(win.offset, 0); assert.equal(win.gain.target, audio.musicGain);
-  assert.equal(win.gain.gain.value, .45); assert.equal(audio.musicGain.gain.value, .42);
+  assert.equal(win.gain.gain.value, .45 * 2); assert.equal(audio.musicGain.gain.value, .42);
   audio.stopVictory(); assert.equal(win.stopped, true); assert.equal(audio.victory, null);
   audio.play('win'); audio.stop(); assert.ok(context.starts.every(s => s.stopped));
   for (const failure of ['fetch', 'decode']) {

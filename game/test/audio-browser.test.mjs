@@ -785,9 +785,20 @@ test('exact victory native graph: full source once on host/players, history/load
       await page.waitForFunction(() => audioProbe.starts.some(s => Math.abs(s.duration - 5.4683125) < .001));
       const win = (await wins(page))[0];
       assert.equal(win.loop, false); assert.equal(win.offset, 0); assert.equal(win.activeLoops, 0, 'battle stopped BEFORE victory starts');
-      assert.equal(win.musicBus, true); assert.equal(win.sfxBus, false); assert.equal(win.sourceGain, .45);
+      assert.equal(win.musicBus, true); assert.equal(win.sfxBus, false); assert.equal(win.sourceGain, .45 * 2);
       assert.equal(win.state, 'running'); assert.equal(await page.evaluate(() => audioProbe.gains[1].requestedValue), 0);
       assert.equal(await page.evaluate(() => audioProbe.gains[0].requestedValue), .42);
+      const headroom = await page.evaluate(async () => {
+        const decoder = new OfflineAudioContext(2, 1, 48000);
+        const buffer = await decoder.decodeAudioData(await (await fetch('./assets/audio/victory.webm')).arrayBuffer());
+        let peak = 0;
+        for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+          for (const sample of buffer.getChannelData(channel)) peak = Math.max(peak, Math.abs(sample));
+        }
+        const win = audioProbe.starts.find(s => Math.abs(s.duration - 5.4683125) < .001);
+        return { peak, output: peak * win.sourceGain }; // Music slider maximum is 1.
+      });
+      assert.ok(headroom.peak > 0); assert.ok(headroom.output < 1, 'decoded victory has headroom at Music 100%');
       assert.equal(await page.evaluate(() => audioProbe.tones.length), tones[i], 'no synthetic win');
       await page.bringToFront();
       await page.evaluate(() => { audioProbe.peak = 0; });
@@ -828,7 +839,7 @@ test('exact victory native graph: full source once on host/players, history/load
     await host.locator('#victory-menu').click(); assert.equal((await wins(host)).at(-1).stopped, true);
     await players[1].locator('#victory-menu').click(); assert.equal((await wins(players[1])).at(-1).stopped, true);
     assert.deepEqual(errors, []);
-    console.log('VICTORY exact source 5.4683125s, natural full end, Music bus .45*.42, host/desktop/touch, no synthetic overlap/history/late load; mute/reset/leave verified');
+    console.log('VICTORY exact source 5.4683125s, natural full end, Music bus .9*.42 (2x previous victory gain), host/desktop/touch, no synthetic overlap/history/late load; mute/reset/leave verified');
   });
 
 test('optional victory codec failure preserves native lobby/action graph and ON labels',
