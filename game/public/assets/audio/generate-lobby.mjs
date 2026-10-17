@@ -40,4 +40,4 @@ export function buildLobby() {
   return wav;
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
-  await writeFile(new URL('./lobby-loop.wav', import.meta.url), buildLobby());
+  await writeFile(new URL('./original-lobby-loop.wav', import.meta.url), buildLobby()); // Never overwrite the requested recording.

@@ -24,8 +24,7 @@ under `/game/assets/audio/`; the generator and this document are not served.
 
 ## Playback contract
 
-Sound starts muted. The master button reads sound is off until Web Audio unlocks via a user gesture
-and preloads/decodes all seven files. Its existing turn/enable cue and the win cue
+Sound is enabled by default as a per-page preference. A normal permitted autoplay attempt is made; browser policy may keep the context suspended. The first trusted click, tap or key retries resume synchronously, before create/join/start handlers or asset awaits. The button reads sound is off until the context runs and all seven files decode; a separate visible hint explains waiting/loading. Explicit mute persists across later interactions on that page. Suspension stops sources without changing the preference; a subsequent trusted gesture can recover, never SSE. Its existing turn/enable cue and the win cue
 remain synthesized as before. Muting stops music, voice, scheduled battle-start effects and all action/confirmation sounds.
 
 Only a new authoritative `lastResult` received by `ArenaClient.onState` triggers an
@@ -82,9 +81,12 @@ Muted/loading/suspended starts are consumed and never queued for later. All
 sound-enabled host and player clients use the same hook; the Start button itself
 is not an audio trigger. The existing resolved-action effects remain unchanged; music and SFX now use independent volume buses.
 
-## Original lobby music and generated countdown (2026-10-17)
+## Requested lobby music and generated countdown (2026-10-17)
 
-- lobby-loop.wav: original eight-bar A-minor 8-bit composition, 120 BPM, 16 seconds, 24 kHz mono PCM16. Pulse melody, arpeggios, triangle bass and seeded noise percussion. No external samples or melody. Reproduce: node public/assets/audio/generate-lobby.mjs. Native BufferSource loop uses exact sample boundaries, with short edge envelopes to avoid clicks.
+- `lobby-loop.wav`: **Wii Music - Gaming Background Music (HD)**, uploaded by **Gaming Sound FX**, published 2017-12-25. Exact source: https://www.youtube.com/watch?v=x2NzoLMWAwQ ; channel https://www.youtube.com/channel/UCi-xN4ZB6e-0JcXzvBEomlw . Metadata duration 87 seconds; full decoded audio 86.796208333 s, output 86.796235828 s (one resampling-frame rounding). Whole recording retained, no arbitrary trim, normalization, pitch or tempo edit. Standard yt-dlp 2026.08.19 bestaudio WebM/Opus, honoring runner CA via `--compat-options no-certifi`; no login, cookies, access bypass, paid service or added dependency. Native Chromium 1243 OfflineAudioContext decodes at 48 kHz then resamples stereo to 22,050 Hz PCM16 so the 7,655,472-byte WAV stays under the existing 8 MiB static limit without backend edits/restarts. Native buffer loop repeats the whole track, including its original beginning/end (not promised seamless). The old `generate-lobby.mjs` creates the superseded original tune, **not** this recording; it now writes `original-lobby-loop.wav` instead, never overwriting this recording.
+- **Rights uncertainty:** extractor license metadata is absent. Uploader description explicitly says they do not own these sounds, provides no track-specific download/reuse permission, and says use without a download link is at the user’s own risk. Neither attribution nor this explicit user request establishes redistribution rights. Do not represent this as Creative Commons or royalty-free; permission from the relevant rights holder remains unverified.
+- Downloaded WebM SHA-256: `6af05a7d8b358410c8b12a51c13f74facfcf3b397629cb54f3c41ca3ee660941`.
+- Included WAV SHA-256: `393273797bd9c6bc198bd5fd1d84f22686986701423d1b2f24772dbb0a864ec4`.
 - countdown.wav: actual “three / two / one” speech generated locally with the preinstalled Debian eSpeak NG 1.51 shared library and data, en-us+m3 male variant, rate 145, pitch 18, range 25. One-second word slots, 3 seconds total, 22050 Hz mono PCM16. No speech service, paid generation, package install, cloned voice or human recording. Robotic/formant timbre rather than natural cinematic voice; human speaker listening remains required for subjective quality/intelligibility acceptance.
 - Reproduce speech on a system with eSpeak NG shared library/data: python3 public/assets/audio/generate-countdown.py. Uses Python ctypes and wave only. No TTS library is shipped or needed at runtime. eSpeak NG project: https://github.com/espeak-ng/espeak-ng ; program/data GPL-3.0-or-later, generated speech is output rather than bundled program code. This project’s script and the short original utterance are newly authored; no third-party recording is copied.
 

@@ -45,7 +45,10 @@ function observeAudio() {
         const source = createSource();
         const start = source.start.bind(source);
         source.start = (...params) => {
-          probe.starts.push({ duration: source.buffer.duration, loop: source.loop, state: this.state, when: params[0] ?? this.currentTime, at: this.currentTime, offset: params[1] || 0 });
+          probe.starts.push({ duration: source.buffer.duration, loop: source.loop, state: this.state, when: params[0] ?? this.currentTime, at: this.currentTime, offset: params[1] || 0, stopped: false });
+          const record = probe.starts.at(-1);
+          const stop = source.stop.bind(source);
+          source.stop = (...args) => { record.stopped = true; return stop(...args); };
           return start(...params);
         };
         return source;
@@ -64,10 +67,10 @@ function observeAudio() {
 
 for (const mobile of [false, true]) {
   test('native UI audio on host and ' + (mobile ? 'touch phone/tablet' : 'desktop players'),
-    { skip: !enabled, timeout: 30000 }, async t => {
+    { skip: !enabled, timeout: 60000 }, async t => {
       const { chromium, devices } = await import(process.env.PLAYWRIGHT_MODULE);
       const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_EXECUTABLE,
-        headless: true, args: ['--autoplay-policy=user-gesture-required'] });
+        headless: true, args: ['--autoplay-policy=document-user-activation-required'] });
       let clock = Date.now();
       const arena = new Arena({ now: () => clock, pick: () => 0 });
       const reservation = http.createServer();
@@ -79,7 +82,7 @@ for (const mobile of [false, true]) {
       await new Promise(resolve => game.server.listen(port, '127.0.0.1', resolve));
       t.after(async () => { await browser.close(); await game.close(); });
       const errors = [];
-      async function page(options = {}) {
+      async function page(options = {}, failDecode = false) {
         // Audio graph isolation: full skeletal playback has its own native-browser suite.
         const context = await browser.newContext({ ...options, reducedMotion: 'reduce' });
         await context.addInitScript(observeAudio);
@@ -87,16 +90,40 @@ for (const mobile of [false, true]) {
         context.setDefaultTimeout(10000);
         page.on('pageerror', error => errors.push(error.message));
         page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+        if (failDecode) await page.route('**/countdown.wav', route => route.fulfill({ status: 200, contentType: 'audio/wav', body: 'not a WAV' }));
         await page.goto(origin + '/game/');
         return page;
       }
       // A failed native asset decode must never advertise sound readiness.
-      const failedAudio = await page();
-      await failedAudio.route('**/countdown.wav', route => route.fulfill({ status: 200, contentType: 'audio/wav', body: 'not a WAV' }));
-      await failedAudio.locator('#mute').click();
+      const failedAudio = await page({}, true);
+      await failedAudio.locator('#how-to').click();
       await failedAudio.waitForFunction(() => audioProbe.decoded === 6);
       assert.equal(await failedAudio.locator('#mute').textContent(), 'sound is off');
       await failedAudio.context().close();
+      // Hold real requests: normal keyboard activation resumes before loading, and mute wins.
+      let releaseAssets;
+      const assetsReady = new Promise(resolve => { releaseAssets = resolve; });
+      const keyboardContext = await browser.newContext();
+      await keyboardContext.addInitScript(observeAudio);
+      const keyboard = await keyboardContext.newPage();
+      await keyboard.route('**/*.wav', async route => { await assetsReady; await route.continue(); });
+      await keyboard.goto(origin + '/game/');
+      assert.equal(await keyboard.locator('#mute').textContent(), 'sound is off');
+      assert.match(await keyboard.locator('#sound-hint').textContent(), /Waiting|Loading/);
+      const beforeGesture = await keyboard.evaluate(() => ({state:audioProbe.contexts[0].state, starts:audioProbe.starts.length, resumes:audioProbe.resumes}));
+      assert.equal(beforeGesture.state, 'suspended');
+      assert.equal(beforeGesture.starts, 0);
+      assert.ok(beforeGesture.resumes.includes(false), 'ordinary permitted autoplay attempted without spoofing activation');
+      await keyboard.keyboard.press('Tab');
+      await keyboard.waitForFunction(() => audioProbe.contexts[0].state === 'running');
+      assert.equal(await keyboard.locator('#mute').textContent(), 'sound is off', 'loading is not ready');
+      await keyboard.locator('#mute').click();
+      releaseAssets();
+      await keyboard.waitForFunction(() => audioProbe.decoded === 7);
+      await keyboard.locator('#how-to').click();
+      assert.equal(await keyboard.locator('#mute').textContent(), 'sound is off', 'ordinary clicks preserve explicit mute');
+      assert.equal(await keyboard.evaluate(() => audioProbe.starts.length), 0, 'late load cannot reverse mute');
+      await keyboardContext.close();
       const host = await page();
       await host.locator('#play-groups').click();
       await host.locator('#create-room').click();
@@ -107,7 +134,7 @@ for (const mobile of [false, true]) {
       const players = [];
       for (const [i, device] of (mobile ? ['iPhone 13', 'iPad (gen 7)'] : [null, null]).entries()) {
         const player = await page(device ? devices[device] : {});
-        await player.locator('#join-existing').click();
+        await (mobile ? player.locator('#join-existing').tap() : player.locator('#join-existing').click());
         await player.locator('#join-code').fill(roomId);
         await player.locator('#nickname').fill('Audio test ' + i);
         await player.locator('#join-form button').click();
@@ -122,47 +149,25 @@ for (const mobile of [false, true]) {
         await Promise.all(pages.map(page => page.waitForFunction(n =>
           document.querySelector('#round-label').textContent === 'TURN ' + n, room.turn.number)));
       };
-      // Ordinary create/join/start/vote flow is silent until THIS device enables sound.
+      // First ordinary host/player interaction activates audio, without a sound-button detour.
+      for (const page of pages) {
+        await page.waitForFunction(() => document.querySelector('#mute').textContent === 'sound is on');
+        assert.equal(await page.evaluate(() => audioProbe.decoded), 7);
+        assert.equal(await page.evaluate(() => audioProbe.contexts[0].state), 'running');
+        assert.ok(await page.evaluate(() => audioProbe.resumes.some(Boolean)));
+        assert.equal(await page.evaluate(() => audioProbe.starts.filter(start => !start.loop).length), 0);
+        const box = await page.locator('#mute').boundingBox();
+        assert.ok(box.x >= 0 && box.x + box.width <= page.viewportSize().width);
+      }
       await host.locator('#start-game').click();
       clock = room.prebattle.deadline; game.tick();
       await players[0].waitForFunction(() => !document.querySelector('[data-move="attack"]').disabled);
+      for (const page of pages) {
+        assert.ok(await page.evaluate(() => audioProbe.starts.filter(start => start.loop).every(start => start.stopped)));
+        await page.evaluate(() => { audioProbe.starts = []; });
+      }
+      await players[0].waitForFunction(() => !document.querySelector('[data-move="attack"]').disabled);
       await players[0].locator('[data-move="attack"]').click();
-      await advance();
-      for (const page of pages) {
-        assert.equal(await page.evaluate(() => audioProbe.contexts.length), 0);
-        assert.equal(await page.evaluate(() => audioProbe.peak), 0);
-      }
-      // Delay actual WAV requests, never replace their bytes or native decoder.
-      let releaseAssets;
-      const assetsReady = new Promise(resolve => { releaseAssets = resolve; });
-      await host.route('**/*.wav', async route => { await assetsReady; await route.continue(); });
-      for (const page of pages) {
-        assert.equal(await page.locator('#mute').textContent(), 'sound is off',
-          'fresh host/player must offer an explicit gesture to fix default silence');
-        assert.equal(await page.locator('#mute').isVisible(), true);
-        const box = await page.locator('#mute').boundingBox();
-        assert.ok(box.x >= 0 && box.x + box.width <= page.viewportSize().width,
-          'sound control must fit on phone/tablet as well as desktop');
-        assert.equal(await page.evaluate(() => audioProbe.starts.filter(start => !start.loop).length), 0);
-        await page.bringToFront();
-      await (mobile && page !== host ? page.locator('#mute').tap() : page.locator('#mute').click());
-        if (page === host) {
-          await page.waitForFunction(() => document.querySelector('#mute').dataset.audioState === 'loading');
-          assert.equal(await page.locator('#mute').getAttribute('aria-pressed'), 'true', 'not enabled before decoding');
-          assert.equal(await page.evaluate(() => audioProbe.contexts[0].state), 'running', 'resume precedes asset loading');
-          await page.locator('#mute').click(); // Mute while requests/decode are pending.
-          releaseAssets();
-          await page.waitForFunction(() => audioProbe.decoded === 7);
-          assert.equal(await page.locator('#mute').textContent(), 'sound is off', 'late load completion respects mute');
-          await page.locator('#mute').click();
-        }
-        await page.waitForFunction(() => document.querySelector('#mute').textContent === 'sound is on');
-        assert.equal(await page.evaluate(() => audioProbe.decoded), 7, 'all native WAV decodes finished');
-        assert.equal(await page.evaluate(() => audioProbe.contexts[0].state), 'running');
-        assert.ok(await page.evaluate(() => audioProbe.resumes.every(Boolean)), 'resume invoked inside the user gesture');
-      }
-      await players[1].waitForFunction(() => !document.querySelector('[data-move="attack"]').disabled);
-      await players[1].locator('[data-move="attack"]').click();
       for (const page of pages) assert.equal(await page.evaluate(() => audioProbe.starts.filter(start => !start.loop).length), 0, 'vote stays silent');
       await Promise.all(pages.map(page => page.evaluate(() => { audioProbe.peak = 0; })));
       await advance();
@@ -179,8 +184,13 @@ for (const mobile of [false, true]) {
       await host.waitForTimeout(150);
       for (const page of pages) assert.equal(await page.evaluate(() => audioProbe.starts.filter(start => !start.loop).length), 1);
       for (const page of pages) await page.locator('#mute').click();
+      await host.locator('#mute').focus();
+      await host.keyboard.press('Tab'); // Later ordinary gestures must not undo a deliberate mute.
       await advance();
-      for (const page of pages) assert.equal(await page.evaluate(() => audioProbe.starts.filter(start => !start.loop).length), 1, 'mute suppresses new actions');
+      for (const page of pages) {
+        assert.equal(await page.locator('#mute').textContent(), 'sound is off');
+        assert.equal(await page.evaluate(() => audioProbe.starts.filter(start => !start.loop).length), 1, 'mute suppresses new actions');
+      }
       const resumeCounts = new Map();
       for (const page of pages) {
         await page.locator('#mute').click();
@@ -228,7 +238,7 @@ test('live read-only frontend decodes WAVs and enables native audio on desktop/p
     // Honor the runner's authenticated outbound proxy; never print its credentials.
     const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
     const proxy = proxyUrl ? new URL(proxyUrl) : null;
-    const args = ['--autoplay-policy=user-gesture-required'];
+    const args = ['--autoplay-policy=document-user-activation-required'];
     if (proxy && process.env.NODE_EXTRA_CA_CERTS) {
       const bundle = await readFile(process.env.NODE_EXTRA_CA_CERTS, 'utf8');
       // Verify the proxy-issued leaf with Node TLS before pinning it in Chromium.
@@ -271,11 +281,11 @@ test('live read-only frontend decodes WAVs and enables native audio on desktop/p
       await page.goto(process.env.AUDIO_LIVE_URL);
       assert.equal(await page.locator('#mute').textContent(), 'sound is off');
       assert.equal(await page.locator('#mute').isVisible(), true);
-      await (device ? page.locator('#mute').tap() : page.locator('#mute').click());
+      await (device ? page.locator('#how-to').tap() : page.locator('#how-to').click());
       await page.waitForFunction(() => document.querySelector('#mute').textContent === 'sound is on' && audioProbe.peak > .01);
       assert.equal(await page.evaluate(() => audioProbe.contexts[0].state), 'running');
       assert.equal(await page.evaluate(() => audioProbe.decoded), 7);
-      assert.ok(await page.evaluate(() => audioProbe.resumes.every(Boolean)));
+      assert.ok(await page.evaluate(() => audioProbe.resumes.some(Boolean)));
       assert.deepEqual(assets, [200, 200, 200, 200, 200, 200, 200]);
       assert.deepEqual(errors, []);
       console.log('LIVE ' + (device || 'desktop') + ': 7 WAVs=200, decoded=7, state=running, graph peak=' +
@@ -286,10 +296,10 @@ test('live read-only frontend decodes WAVs and enables native audio on desktop/p
 
 
 test('native battle-start WAV: live host/player edge, dedup, reset, mute and reconnect',
-  { skip: !enabled, timeout: 45000 }, async t => {
+  { skip: !enabled, timeout: 60000 }, async t => {
     const { chromium, devices } = await import(process.env.PLAYWRIGHT_MODULE);
     const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_EXECUTABLE,
-      headless: true, args: ['--autoplay-policy=user-gesture-required'] });
+      headless: true, args: ['--autoplay-policy=document-user-activation-required'] });
     let clock = Date.now();
     const arena = new Arena({ now: () => clock, pick: () => 0 });
     const reservation = http.createServer();
@@ -308,8 +318,9 @@ test('native battle-start WAV: live host/player edge, dedup, reset, mute and rec
       const page = await context.newPage();
       page.on('pageerror', error => errors.push(error.message));
       await page.goto(origin + '/game/');
-      await page.locator('#mute').click();
+      await page.locator('#how-to').click();
       await page.waitForFunction(() => document.querySelector('#mute').textContent === 'sound is on');
+      await page.locator('#help-back').click();
       return page;
     }
     const host = await page();
@@ -363,7 +374,7 @@ test('native battle-start WAV: live host/player edge, dedup, reset, mute and rec
       await page.locator('#volume-music').fill('35');
       await page.locator('.audio-settings summary').click();
     }
-    assert.ok(await host.evaluate(() => audioProbe.starts.some(source => source.loop && source.duration === 16)));
+    assert.ok(await host.evaluate(() => audioProbe.starts.some(source => source.loop && Math.abs(source.duration - 86.7962358) < .001)));
     await start([1, 1, 1]);
     for (const page of pages) {
       assert.match(await page.locator('#prebattle-label').textContent(), /^[123]$/);

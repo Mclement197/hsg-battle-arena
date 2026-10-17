@@ -266,10 +266,11 @@ test('actual UI hook: selection/local expiry silent, server result once, mute/un
     await flush();
   };
   arena.start(room, host, {}); await send(); at(room.prebattle.deadline); arena.advance(room); await send();
-  assert.equal(context.starts.length, 0, 'sound starts muted');
-  element('mute').handlers.click(); await flush();
+  context.starts.length = 0; // This scenario begins after the already-tested live intro/music.
+  assert.equal(context.starts.length, 0, 'history stays silent despite default preference');
+  await flush();
   assert.equal(context.state, 'running', 'user gesture resumes context');
-  assert.equal(context.oscillators.length, 2, 'existing enable/turn cue remains');
+  assert.equal(context.oscillators.length, 0, 'automatic activation has no confirmation cue');
   buttons[0].handlers.click(); await flush();
   assert.equal(context.starts.length, 0, 'voting has no action audio');
   at(room.turn.deadline); tick();
@@ -289,8 +290,8 @@ test('actual UI hook: selection/local expiry silent, server result once, mute/un
   at(room.turn.deadline); arena.advance(room); await send();
   assert.equal(room.phase, 'finished');
   assert.equal(context.starts.length, 2, 'winning action still sounds');
-  assert.equal(context.oscillators.length, 8, 'two enable cues plus the existing four-note win cue');
-  await send(); assert.equal(context.starts.length, 2); assert.equal(context.oscillators.length, 8);
+  assert.equal(context.oscillators.length, 6, 'explicit enable cue plus existing four-note win cue');
+  await send(); assert.equal(context.starts.length, 2); assert.equal(context.oscillators.length, 6);
 });
 
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { Arena, PREBATTLE_MS } from '../src/engine.mjs';
 import { createBattleStartCue, prebattleLabel, present, ActionAudio } from '../public/app.js';
-import { buildLobby } from '../public/assets/audio/generate-lobby.mjs';
+import { createHash } from 'node:crypto';
 
 for (const mode of ['online', 'bot', 'friend']) test(mode + ': authoritative full intro, no early votes, delayed tick, replay', () => {
   let now = 1000;
@@ -46,12 +46,13 @@ test('start cues schedule voice then full Ready/Fight once; reconnect/late join 
   cue({ ...countdown, match: 2, phase: 'running', prebattle: null }); assert.ok(stops.length > 2);
 });
 
-test('original lobby loop is reproducible and quiet at exact 16-second boundaries; voice has three real beats', async () => {
+test('requested full lobby source is intact PCM; voice has three real beats', async () => {
   const music = await readFile(new URL('../public/assets/audio/lobby-loop.wav', import.meta.url));
-  assert.deepEqual(music, buildLobby()); assert.equal((music.length - 44) / 48000, 16);
-  assert.equal(music.readInt16LE(44), 0); assert.equal(music.readInt16LE(music.length - 2), 0);
-  let peak = 0; for (let i = 44; i < music.length; i += 2) peak = Math.max(peak, Math.abs(music.readInt16LE(i)));
-  assert.ok(peak > 5000 && peak < 32767);
+  assert.equal(createHash('sha256').update(music).digest('hex'), '393273797bd9c6bc198bd5fd1d84f22686986701423d1b2f24772dbb0a864ec4');
+  assert.equal(music.readUInt32LE(24), 22050);
+  assert.equal(music.readUInt16LE(22), 2);
+  assert.ok(Math.abs((music.length - 44) / 88200 - 86.79621) < .001);
+  assert.ok(music.length < 8 * 1024 * 1024, 'existing static server needs no restart');
   const voice = await readFile(new URL('../public/assets/audio/countdown.wav', import.meta.url));
   assert.equal(voice.readUInt32LE(24), 22050); assert.equal(voice.length, 44 + 22050 * 3 * 2);
   for (let beat = 0; beat < 3; beat++) {
