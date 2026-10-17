@@ -12,7 +12,7 @@ export const LIMITS = Object.freeze({ bodyBytes: 2048, requestsPerMinute: 3000, 
 const MINUTE = 60000;
 const CONTENT_TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp',
-  '.jpg': 'image/jpeg', '.ico': 'image/x-icon', '.ttf': 'font/ttf', '.woff2': 'font/woff2', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.glb': 'model/gltf-binary' };
+  '.jpg': 'image/jpeg', '.ico': 'image/x-icon', '.ttf': 'font/ttf', '.woff2': 'font/woff2', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.webm': 'audio/webm', '.glb': 'model/gltf-binary' };
 const publicDirectory = fileURLToPath(new URL('../public', import.meta.url));
 
 function canonicalOrigin(value) {
@@ -85,7 +85,7 @@ function consume(bucket, key, limit, now) {
 function publicStaticPath(pathname) {
   return ['/game/', '/game/index.html', '/game/app.js', '/game/styles.css', '/game/fighter-data.js', '/game/characters.js'].includes(pathname) ||
     /^\/game\/assets\/[A-Za-z0-9_-]+\.(svg|png|webp|jpg|ico|woff2|ttf|mp3|wav|ogg)$/.test(pathname) ||
-    /^\/game\/assets\/audio\/[A-Za-z0-9_-]+\.wav$/.test(pathname) ||
+    /^\/game\/assets\/audio\/[A-Za-z0-9_-]+\.(wav|webm)$/.test(pathname) ||
     /^\/game\/assets\/characters\/(luca-di-grazia|free-rider|tryhard|assessment-hoodie|trischli-warrior|bad-teacher)\.(glb|webp)$/.test(pathname) ||
     /^\/game\/vendor\/(three\.(module|core)|GLTFLoader|BufferGeometryUtils|SkeletonUtils)\.js$/.test(pathname);
 }
