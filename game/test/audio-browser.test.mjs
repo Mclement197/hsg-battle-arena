@@ -50,7 +50,7 @@ function observeAudio() {
         source.connect = gain => { source.probeGain = gain; return connect(gain); };
         const start = source.start.bind(source);
         source.start = (...params) => {
-          probe.starts.push({ duration: source.buffer.duration, loop: source.loop, state: this.state, when: params[0] ?? this.currentTime, at: this.currentTime, offset: params[1] || 0, stopped: false, musicBus: source.probeGain?.probeTarget === probe.gains[0], sfxBus: source.probeGain?.probeTarget === probe.gains[1], loopStart: source.loopStart, loopEnd: source.loopEnd });
+          probe.starts.push({ duration: source.buffer.duration, loop: source.loop, state: this.state, when: params[0] ?? this.currentTime, at: this.currentTime, offset: params[1] || 0, stopped: false, sourceGain: source.probeGain?.requestedValue, musicBus: source.probeGain?.probeTarget === probe.gains[0], sfxBus: source.probeGain?.probeTarget === probe.gains[1], loopStart: source.loopStart, loopEnd: source.loopEnd });
           const record = probe.starts.at(-1);
           const stop = source.stop.bind(source);
           source.stop = (...args) => { record.stopped = true; return stop(...args); };
@@ -594,6 +594,17 @@ test('battle music native lifecycle on desktop host/player and touch: gain, mute
         return track === null ? loops.length === 0 : loops.length === 1 && (track === 'battle' ? loops[0].duration > 140 : loops[0].duration < 100);
       }, track);
     };
+    const checkMusicGain = async (page, track, volume) => {
+      const graph = await page.evaluate(() => {
+        const loop = audioProbe.starts.findLast(s => s.loop && !s.stopped);
+        return { source: loop.sourceGain, bus: audioProbe.gains[0].gain.value, music: loop.musicBus, sfx: loop.sfxBus };
+      });
+      const source = track === 'battle' ? .45 * .5 : .45;
+      assert.ok(Math.abs(graph.source - source) < 1e-7, track + ': track-only gain');
+      assert.ok(Math.abs(graph.bus - volume) < 1e-7, track + ': Music slider stays independent');
+      assert.ok(Math.abs(graph.source * graph.bus - source * volume) < 1e-7, track + ': composed gain');
+      assert.equal(graph.music, true); assert.equal(graph.sfx, false);
+    };
     const emit = () => { for (const stream of room.streams) stream.res.write('event: state\ndata: ' + JSON.stringify(arena.snapshot(room, stream.viewer)) + '\n\n'); };
     const reset = async () => {
       host.once('dialog', d => d.accept()); await host.locator('#reset-game').click();
@@ -601,7 +612,12 @@ test('battle music native lifecycle on desktop host/player and touch: gain, mute
     };
     const running = async () => { await host.locator('#start-game').click(); clock = room.prebattle.deadline; game.tick(); await waitLoops(pages, 'battle'); };
     for (const page of pages) await page.waitForFunction(() => document.querySelector('#mute').dataset.audioState === 'ready');
-    await waitLoops(pages, 'lobby'); await running();
+    await waitLoops(pages, 'lobby');
+    for (const page of pages) await checkMusicGain(page, 'lobby', .35);
+    await running();
+    for (const page of pages) {
+      await checkMusicGain(page, 'battle', .35);
+    }
     assert.equal(room.turn.deadline - room.turn.startedAt, 15000);
     const counts = await Promise.all(pages.map(p => p.evaluate(() => audioProbe.starts.length)));
     emit(); emit(); await host.waitForTimeout(200);
@@ -613,16 +629,19 @@ test('battle music native lifecycle on desktop host/player and touch: gain, mute
       await page.evaluate(() => { audioProbe.peak = 0; }); await page.bringToFront(); await page.waitForTimeout(250);
       await page.evaluate(() => { audioProbe.peak = 0; }); await page.waitForTimeout(150);
       assert.equal(await page.evaluate(() => audioProbe.peak), 0, 'music zero silences native graph');
+      await checkMusicGain(page, 'battle', 0);
       await page.locator('#volume-music').fill('42'); await page.locator('#volume-music').dispatchEvent('input');
       await page.waitForFunction(() => audioProbe.peak > .01);
       assert.equal(await page.evaluate(() => audioProbe.gains[1].requestedValue), 0, 'SFX zero does not silence music');
       assert.ok(Math.abs(await page.evaluate(() => audioProbe.gains[0].requestedValue) - .42) < .001);
+      await checkMusicGain(page, 'battle', .42);
       const loop = await page.evaluate(() => audioProbe.starts.findLast(s => s.loop && !s.stopped));
       assert.equal(loop.musicBus, true); assert.equal(loop.sfxBus, false);
       await page.locator('.audio-settings summary').click();
       await page.locator('#mute').click(); await waitLoops([page], null);
       await page.locator('#connection').click(); assert.equal(await page.locator('#mute').textContent(), 'sound is off');
       await page.locator('#mute').click(); await waitLoops([page], 'battle');
+      await checkMusicGain(page, 'battle', .42);
     }
     // Hold a real SSE reconnect while an authoritative action is missed.
     const returning = players[0]; let release;
@@ -646,7 +665,12 @@ test('battle music native lifecycle on desktop host/player and touch: gain, mute
       emit(); assert.equal(await page.evaluate(() => audioProbe.contexts[0].state), 'suspended');
       await page.locator('#connection').click(); await waitLoops([page], 'battle');
     }
-    await reset(); await running();
+    await reset();
+    for (const page of pages) {
+      const volume = Number(await page.locator('#volume-music').inputValue()) / 100;
+      await checkMusicGain(page, 'lobby', volume);
+    }
+    await running();
     // Muted starts consume intro but a later unmute restores the current music only.
     await reset(); await players[1].locator('#mute').click();
     await host.locator('#start-game').click(); clock = room.prebattle.deadline; game.tick();

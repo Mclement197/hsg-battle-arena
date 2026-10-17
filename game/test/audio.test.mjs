@@ -400,3 +400,40 @@ test('reconnect baseline consumes action missed offline without replay and allow
   cue(state(0)); cue(state(1)); cue.reset(); cue(state(4)); cue(state(4));
   assert.deepEqual(played, ['attack']); cue(state(5)); assert.deepEqual(played, ['attack', 'attack']);
 });
+
+test('battle-only half gain composes with Music slider and mute without changing lobby, SFX or countdown', async () => {
+  const context = audioContext();
+  context.createGain = () => ({ gain: { value: 1, setValueAtTime(value) { this.value = value; } },
+    connect(target) { this.target = target; return target; }, disconnect() {} });
+  context.createBufferSource = () => ({ connect(gain) { this.gain = gain; return gain; }, disconnect() {},
+    start() { context.starts.push(this); }, stop() { this.stopped = true; this.onended?.(); } });
+  const audio = new ActionAudio(context, async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(0) }));
+  await audio.load();
+  const effective = source => source.stopped ? 0 : source.gain.gain.value * source.gain.target.gain.value;
+  for (const volume of [.35, 0, .42, 1]) {
+    audio.setVolume('music', volume);
+    audio.setMusic('lobby');
+    const lobby = audio.music;
+    assert.equal(lobby.gain.gain.value, .45);
+    assert.equal(effective(lobby), .45 * volume);
+    audio.setMusic('battle', 'room:0');
+    const battle = audio.music;
+    assert.equal(lobby.stopped, true);
+    assert.equal(battle.gain.gain.value, .45 * .5);
+    assert.equal(battle.gain.target, audio.musicGain);
+    assert.equal(effective(battle), .45 * .5 * volume);
+    assert.equal(audio.musicGain.gain.value, volume);
+    for (const [cue, gain] of [['attack', .45], ['countdown', .9], ['battle-start', .45]]) {
+      audio.play(cue);
+      assert.equal(audio.lastSource.gain.target, audio.sfxGain);
+      assert.equal(audio.lastSource.gain.gain.value, gain);
+      assert.equal(effective(audio.lastSource), gain * .8);
+    }
+    audio.stop(); // The UI's explicit mute path stops every source, not the slider.
+    assert.ok(context.starts.every(source => effective(source) === 0));
+    assert.equal(audio.musicGain.gain.value, volume);
+    audio.setMusic('battle', 'room:0'); // Unmute restores music at the same composed level.
+    assert.equal(effective(audio.music), .45 * .5 * volume);
+    audio.stop();
+  }
+});

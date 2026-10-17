@@ -173,7 +173,7 @@ export class ActionAudio {
     const source = this.context.createBufferSource();
     const gain = this.context.createGain();
     source.buffer = buffer; source.loop = loop; this.lastSource = source;
-    gain.gain.setValueAtTime(move === 'countdown' ? .9 : .45, this.context.currentTime);
+    gain.gain.setValueAtTime((move === 'countdown' ? .9 : .45) * (move === 'battle' ? .5 : 1), this.context.currentTime);
     source.connect(gain).connect(['lobby', 'battle'].includes(move) ? this.musicGain : this.sfxGain);
     this.active.add(source);
     if (['countdown', 'battle-start'].includes(move)) this.prebattle.add(source);
