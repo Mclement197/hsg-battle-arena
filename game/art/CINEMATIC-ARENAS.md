@@ -1,6 +1,6 @@
 # Shared modeled battle worlds
 
-Local implementation for parent review; **not deployed or committed**.
+Local implementation and verification. The phone follow-up has **not restarted or redeployed** the running service.
 
 ## Architecture
 
@@ -61,3 +61,18 @@ Parent should independently review owned paths from evidence `owned-paths.txt`, 
 Targeted actual-game defeat continuation also passed: 5 checks (four Luca commands plus legal attack/defend turns through authoritative zero-HP and delayed victory), zero page errors; `browser-defeat-checks.json` / `browser-defeat.log`. Node tests additionally sample all six GLBs through idle/attack/defend/heal/special/hit/defeat, verify floor bounds and adult scale, and assert the camera corridor stays inside both venues.
 
 Evidence caveat: software Chromium screenshot calls can finish after the 2.2-second action returns to overview. In-frame captures and recorded canvas playback are the evidence for cinematic poses/camera angles; ordinary full-page `*-impact.png` screenshots alone are not claimed to capture the exact impact beat. The full four-move recordings include idle gaps between real HTTP actions.
+
+## Phone follow-up (local checkout only)
+
+Use an isolated loopback test room, never the running public service:
+
+~~~sh
+cd game
+PHONE_MATRIX=1 ARENAS_ONLY=1 TEST_PORT=19002 EVIDENCE_DIR=/path/to/evidence \
+  PLAYWRIGHT_MODULE=/path/to/playwright-core/index.mjs \
+  CHROMIUM_EXECUTABLE=/path/to/chrome node test/battle-world-browser.mjs
+~~~
+
+The optional matrix emulates touch/mobile DPR 2 with normal motion on both host and guest; checks 320, 360, 390, 430 portrait and 640, 740, 844 landscape widths, touch moves by both actors, responsive controls, horizontal overflow, bounded canvas pixels, reconnect, reset, and simulated WebGL context loss/recovery. It records viewport screenshots and software-renderer render-cost samples. The original default mode remains the reduced-motion phone check. Chromium emulation is not an iPhone/Safari or hardware GPU certification; verify a physical phone before claiming sustained frame rate or notch behavior on a particular device. Controls/health remain outside WebGL if context recovery fails.
+
+For the real UI journey on a phone-size host (menu → arena → character → room → battle → victory → replay/reset), run PHONE_FLOW=1 with the same Playwright/Chromium paths and node test/five-screen-smoke.mjs. The guest also joins on a separate touch-emulated 390×844 context. This test uses the real turn timer rather than the matrix's frozen browser clock.

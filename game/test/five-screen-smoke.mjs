@@ -40,7 +40,7 @@ const proxyUrl = process.env.LIVE_URL && (process.env.HTTPS_PROXY || process.env
       ...(proxy ? { proxy: { server: proxy.protocol + '//' + proxy.host,
         username: decodeURIComponent(proxy.username), password: decodeURIComponent(proxy.password) } } : {}) });
 const errors = [], failed = [], checks = [];
-const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+const ctx = await browser.newContext(process.env.PHONE_FLOW ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } : { viewport: { width: 1440, height: 1000 } });
 const mobileCtx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 const otherCtx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
 function monitor(page) { page.on('pageerror', e => errors.push(e.message)); page.on('response', r => { if (r.status() >= 400 && !r.url().endsWith('/events')) failed.push([r.status(), new URL(r.url()).pathname]); }); }
@@ -75,6 +75,7 @@ try {
   await shot(host, 'desktop-menu'); await shot(mobile, 'mobile-menu');
   checks.push('user-supplied building photo on desktop/phone main menu, background-only green tint, all three mode buttons in viewport');
   await host.locator('#how-to').click(); await screen(host, 'help'); await host.locator('#help-back').click();
+  if (!process.env.PHONE_FLOW) {
   await select(host, 'bot'); await screen(host, 'battle');
   await host.waitForFunction(() => !document.querySelector('[data-solo-move="attack"]').disabled);
   assert.equal(await host.locator('.ace-fighter .health span').textContent(), 'Tryhard');
@@ -93,7 +94,7 @@ try {
   await host.locator('#replay-game').click(); await screen(host, 'battle');
   await host.waitForFunction(() => document.querySelector('#ace-hp').value === 100 && document.querySelector('#dynamo-hp').value === 100);
   checks.push('bot setup, all four controls, real damage, cooldown, completed match, game over and replay');
-  await host.locator('#main-menu').click(); await screen(host, 'menu');
+  await host.locator('#main-menu').click(); await screen(host, 'menu'); }
   await select(host, 'friend'); await screen(host, 'lobby');
   const friendRoom = (await host.locator('#room-code').textContent()).trim();
   await mobile.goto(url + '?room=' + friendRoom); await mobile.locator('#nickname').fill('Real friend');
@@ -122,6 +123,7 @@ try {
   await mobile.reload(); await screen(mobile, 'player');
   await host.waitForFunction(() => document.querySelector('#dynamo-count').textContent === '1 player');
   checks.push('real friend 1v1: host P1 + isolated P2, third seat rejected, both players deal authoritative damage, guest reload/reconnect, victory, synchronized replay and reset');
+  if (!process.env.PHONE_FLOW) {
   await host.locator('#main-menu').click();
   await select(host, 'groups'); await screen(host, 'lobby');
   const room = (await host.locator('#room-code').textContent()).trim();
@@ -161,6 +163,7 @@ try {
   }
   await screen(mobile, 'victory'); await shot(mobile, 'mobile-game-over');
   checks.push('desktop/mobile all five screens, all 24 displayed stats match engine source, no horizontal overflow');
+  }
   assert.deepEqual(errors, []); assert.deepEqual(failed, []);
   console.log(JSON.stringify({ url, checks, pageErrors: errors, failedResponses: failed, evidence: dir }, null, 2));
 } catch (e) {

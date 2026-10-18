@@ -101,7 +101,7 @@ export class BattleWorld {
    this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.autoUpdate=false;this.renderer.shadowMap.needsUpdate=true;this.renderer.shadowMap.type=THREE.PCFShadowMap;this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;
    this.camera=new THREE.PerspectiveCamera(49,1,.08,80);this.look=v(world.look);this.overview(true);
    this.canvas=this.renderer.domElement;this.canvas.className='battle-world-canvas';this.canvas.setAttribute('aria-hidden','true');
-   this.canvas.addEventListener('webglcontextlost',event=>{if(generation!==this.generation)return;event.preventDefault();this.disconnect();this.container.dataset.worldStatus='error';});this.container.prepend(this.canvas);
+   this.canvas.addEventListener('webglcontextlost',event=>{if(generation!==this.generation)return;event.preventDefault();cancelAnimationFrame(this.raf);this.disconnect();this.container.dataset.worldStatus='error';});this.canvas.addEventListener('webglcontextrestored',()=>{if(generation!==this.generation)return;const current=this.state;this.clear();if(current)this.sync(current);});this.container.prepend(this.canvas);
    this.badge=document.createElement('span');this.badge.className='world-action-label';this.badge.setAttribute('aria-hidden','true');this.container.append(this.badge);
    this.observer=new ResizeObserver(()=>this.layout());this.observer.observe(this.container);this.layout();
    this.container.dataset.worldStatus='ready';this.container.dataset.worldArena=state.arenaId;

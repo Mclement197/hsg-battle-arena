@@ -90,3 +90,15 @@ img.model-ready{opacity:0;filter:none;transform:none;animation:none}
 .fight-stage{height:clamp(360px,51vh,620px);min-height:360px;display:flex;justify-content:space-between;align-items:flex-start;padding:12px;gap:2rem;background:#14271e!important;overflow:hidden}
 .fight-stage::before,.fight-stage .fighter-visual,.fight-stage .stage-center{display:none}.fight-stage .fighter{position:relative;z-index:2;width:40%;height:auto;pointer-events:none}.fight-stage .health{transform:none;background:#001c16dd}.fight-stage .fighter-caption{align-self:flex-start}.battle-world-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0;pointer-events:none}.world-action-label{position:absolute;z-index:3;bottom:14px;left:50%;transform:translateX(-50%);padding:.4rem .8rem;background:#031910de;color:#fff;font:italic 800 1.4rem/1.2 'Barlow Condensed',sans-serif;white-space:nowrap}.world-action-label:empty{display:none}.player-world{position:relative;height:255px;background:#14271e;overflow:hidden;margin-bottom:.6rem}.player-preview img{display:none}.player-preview{padding:.5rem;margin-bottom:.5rem}.player-preview>div{gap:.25rem}.fight-stage[data-world-status=loading]::after,.player-world[data-world-status=loading]::after{content:'Loading 3D arena…';position:absolute;left:1rem;bottom:1rem}.fight-stage[data-world-status=error]::after,.player-world[data-world-status=error]::after{content:'3D unavailable — health & commands still work';position:absolute;left:1rem;bottom:1rem}.fight-stage[data-world-status=unavailable]::after,.player-world[data-world-status=unavailable]::after{content:'Mensa B · 3D environment not modeled';position:absolute;left:1rem;bottom:1rem}
 @media(max-width:760px){.fight-stage{height:350px;min-height:350px;gap:.6rem;padding:8px}.fight-stage .fighter{width:48%}.fight-stage .health{padding:.5rem}.fight-stage .health>div{font-size:.75rem}.player-world{height:240px}.world-action-label{font-size:1.05rem}}
+/* Phone browser chrome and notches: keep controls scrollable and out of unsafe edges. */
+@media (max-width:760px){
+ .topbar{padding-left:max(1rem,env(safe-area-inset-left));padding-right:max(1rem,env(safe-area-inset-right));padding-top:max(.65rem,env(safe-area-inset-top))}
+ .screen{padding-left:max(1.2rem,env(safe-area-inset-left));padding-right:max(1.2rem,env(safe-area-inset-right));padding-bottom:max(1.2rem,env(safe-area-inset-bottom));min-height:calc(100dvh - 68px)}
+ .player-world{height:clamp(190px,30dvh,240px)}
+}
+@media (max-width:760px) and (orientation:landscape) and (max-height:430px){
+ .player-head h1{font-size:2rem;margin:.2rem 0}.player-head p{margin-bottom:.3rem}
+ .player-world{height:190px}.player-preview img{height:70px}
+ .move{min-height:90px}.move strong{font-size:1.35rem}.move-icon{font-size:1rem}
+ .fight-stage{height:260px;min-height:260px}
+}
