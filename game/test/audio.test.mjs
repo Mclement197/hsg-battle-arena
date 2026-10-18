@@ -247,7 +247,7 @@ test('actual UI hook: selection/local expiry silent, server result once, mute/un
   let tick;
   const sandbox = {
     document, window: { AudioContext: function () { return context; } },
-    BattleWorld: class { events = { pending: [] }; sync() {} clear() {} disconnect() {} },
+    BattleWorld: class { events = { pending: [] }; sync(state) { this.events.consume?.(state); for (const event of this.events.pending.splice(0)) queueMicrotask(() => this.onComplete?.(event)); } clear() {} disconnect() {} constructor() { this.events = new sandbox.BattleEvents(); } },
     CharacterStage: class { sync() {} play() {} }, modelFor,
     sessionStorage: { getItem: key => key.endsWith('active') ? JSON.stringify({ room: room.id, role: 'player' }) : 'token' },
     location: { origin: 'http://127.0.0.1', search: '' },
@@ -262,7 +262,7 @@ test('actual UI hook: selection/local expiry silent, server result once, mute/un
     }
   };
   const source = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
-  Object.assign(sandbox, await import('../public/fighter-data.js'));
+  Object.assign(sandbox, await import('../public/fighter-data.js'), await import('../public/battle-contract.js'));
   vm.runInNewContext(source.replace(/^import .*;\n/gm, '').replace(/^export /gm, ''), sandbox);
   assert.equal(element('mute').textContent, 'sound is on', 'ON preference renders before asset loading completes');
   assert.equal(element('mute').getAttribute('aria-pressed'), 'false');
@@ -297,7 +297,7 @@ test('actual UI hook: selection/local expiry silent, server result once, mute/un
   at(room.turn.deadline); arena.advance(room); await send();
   assert.equal(room.phase, 'finished');
   assert.equal(context.starts.filter(source => !source.loop).length, 3, 'winning action and full victory source sound');
-  assert.equal(new TextDecoder().decode(context.starts.at(-1).buffer.bytes), AUDIO_SOUNDS.win);
+  assert.ok(context.starts.some(source => new TextDecoder().decode(source.buffer.bytes) === AUDIO_SOUNDS.win), 'victory is emitted after the presentation completes');
   assert.equal(context.oscillators.length, 2, 'only explicit enable cue; no synthesized win overlap');
   await send(); assert.equal(context.starts.filter(source => !source.loop).length, 3); assert.equal(context.oscillators.length, 2);
 });

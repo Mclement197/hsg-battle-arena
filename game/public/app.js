@@ -1,15 +1,12 @@
-import { BattleWorld } from './battle-world.js?v=20261018-action-camera';
+import { BattleWorld } from './battle-world.js?v=20261018-move-presentation';
 import { CharacterStage, modelFor } from './characters.js?v=20261018-previews';
 import { FIGHTER_PROFILES, STAT_META, fighterStats, moveDescription } from './fighter-data.js?v=20261016-arcade';
+import { ABILITIES, BattlePresentation, moveLabel } from './battle-contract.js?v=20261018-move-presentation';
 // Presentation identities use the authoritative team characterId, never nickname or team order.
-export const CHARACTER_THEMES = Object.freeze({
-  'luca-di-grazia': { name: 'Luca Di Grazia', motif: 'chalk', labels: { attack: 'GOLDEN CHALK', defend: 'OPEN BOOK', heal: 'GOOD WORK', special: 'FULL MARKS' } },
-  'free-rider': { name: 'Free rider in group project', motif: 'notes', labels: { attack: 'COPY / PASTE', defend: 'PAPER DECOY', heal: 'GROUP CREDIT', special: 'ALL MY WORK' } },
-  'tryhard': { name: 'Tryhard', motif: 'formula', labels: { attack: 'FORMULA', defend: 'TEXTBOOK', heal: 'EXTRA CREDIT', special: 'A+' } },
-  'assessment-hoodie': { name: 'Assessment student', motif: 'cloud', labels: { attack: 'BAD LUCK', defend: 'HOOD UP', heal: 'ONE MORE TRY', special: 'BROKEN CHARM' } },
-  'trischli-warrior': { name: 'Trischli warrior', motif: 'disco', labels: { attack: 'DANCE OFF', defend: 'WRISTBAND', heal: 'SECOND WIND', special: 'DANCE FLOOR' } },
-  'bad-teacher': { name: 'Bad teacher', motif: 'redpen', labels: { attack: 'RED PEN', defend: 'EXAM SHIELD', heal: 'LATE CREDIT', special: 'FAILED' } }
-});
+export const CHARACTER_THEMES = Object.freeze(Object.fromEntries(Object.entries({
+ 'luca-di-grazia': 'Luca Di Grazia', 'free-rider': 'Free rider in group project', 'tryhard': 'Tryhard',
+ 'assessment-hoodie': 'Assessment student', 'trischli-warrior': 'Trischli warrior', 'bad-teacher': 'Bad teacher'
+}).map(([id, name]) => [id, { name, motif: ABILITIES[id].attack.motif, labels: Object.fromEntries(Object.entries(ABILITIES[id]).map(([move, ability]) => [move, ability.label])) }])));
 
 // Drawn vector motifs, not platform-dependent emoji. Each action retains its own motion grammar.
 const MOTIFS = Object.freeze({
@@ -400,7 +397,7 @@ export function present(state, connected, secondsLeft, origin = globalThis.locat
   const teamName = team => characterTheme(state.teams[team]?.characterId)?.name || (team === 'A' ? 'Ace' : 'Dynamo');
   const names = team => state.players.filter(player => player.team === team).map(player => player.nickname);
   const result = state.lastResult;
-  const last = result ? 'Team ' + teamName(result.team) + ' used ' + result.move + (result.damage ? ' for ' + result.damage + ' damage.' : result.healed ? ' and restored ' + result.healed + ' HP.' : '.') : 'The arena is ready.';
+  const last = result ? 'Team ' + teamName(result.team) + ' used ' + moveLabel(result.actorCharacterId || state.teams[result.team].characterId, result.move) + (result.damage ? ' for ' + result.damage + ' damage.' : result.healed ? ' and restored ' + result.healed + ' HP.' : '.') : 'The arena is ready.';
   const winner = state.winner === 'A' ? 'ace' : 'dynamo';
   const ownTeam = state.teams[own];
   return {
@@ -416,7 +413,7 @@ export function present(state, connected, secondsLeft, origin = globalThis.locat
     secondsLeft, message: last, voteCount: state.turn?.totalVotes || 0, tally: state.turn?.voteCounts || { attack: 0, defend: 0, heal: 0, special: 0 },
     playerTeam: own === 'A' ? 'ace' : own === 'B' ? 'dynamo' : null,
     playerState: state.phase === 'countdown' ? 'Get ready — voting opens after the intro.' : state.phase === 'lobby' ? 'Waiting for the presenter to start.' : state.phase === 'finished' ? 'Match complete.' : !connected ? 'Reconnecting. Voting is paused.' : active ? secondsLeft ? 'Your team is choosing now.' : 'Time is up. Waiting for the server.' : 'Other team is choosing. Watch the projector.',
-    voteFeedback: state.you.vote ? 'Vote confirmed: ' + state.you.vote + '. You can change it before the timer ends.' : 'You can change your vote until the timer ends.',
+    voteFeedback: state.you.vote ? 'Vote confirmed: ' + moveLabel(ownTeam?.characterId, state.you.vote) + '. You can change it before the timer ends.' : 'You can change your vote until the timer ends.',
     votedMove: state.you.vote || null, canVote: voting, specialReady: !!state.turn?.availableMoves.includes('special'),
     specialInfo: ownTeam?.specialCooldownRemaining ? 'Ready in ' + ownTeam.specialCooldownRemaining + ' own turn(s)' : '30 damage · 3-turn cooldown',
     winner, victoryMessage: 'Well played, everyone. Ready for another round?'
@@ -437,7 +434,7 @@ if (typeof document !== 'undefined') (() => {
     if (animated && asset) { image.dataset.model = id; image.dataset.modelTeam = team; }
     else { delete image.dataset.model; delete image.dataset.modelTeam; }
   };
-  let victoryTimer;
+  const presentation = new BattlePresentation();
   const screens = ['menu', 'arena', 'character', 'help', 'entry', 'lobby', 'battle', 'player', 'victory'];
   let setupBusy = false;
   const moves = ['attack', 'defend', 'heal', 'special'];
@@ -451,12 +448,7 @@ if (typeof document !== 'undefined') (() => {
   const activeTones = new Set();
   let currentJoinUrl = '';
   const setText = (id, value) => { if (value !== undefined && value !== null) $(id).textContent = String(value); };
-  function show(screen, immediate = false) {
-    if (screen === 'victory' && !immediate && ['battle', 'player'].includes(document.body.dataset.screen)) {
-      victoryTimer ||= setTimeout(() => { victoryTimer = null; show('victory', true); }, Math.min(20000, Math.max(3400, (battleWorld.events.pending.length + (battleWorld.active ? 1 : 0) + 1) * 2200 + 900)));
-      return; // Let the authoritative final hit and defeat finish; game state is already final.
-    }
-    clearTimeout(victoryTimer); victoryTimer = null;
+  function show(screen) {
     if (!screens.includes(screen) || document.body.dataset.screen === screen) return;
     screens.forEach((name) => { $(name + '-screen').hidden = name !== screen; });
     document.body.dataset.screen = screen;
@@ -631,7 +623,7 @@ if (typeof document !== 'undefined') (() => {
   function syncMusic() {
     if (!actionAudio) return;
     const screen = document.body.dataset.screen;
-    const state = window.ArenaUI?.connected ? client.state : null;
+    const state = window.ArenaUI?.connected && client.state ? presentation.view(client.state) : null;
     if (state?.phase !== 'finished' || !['battle', 'player', 'victory'].includes(screen)) actionAudio.stopVictory();
     const battle = ['battle', 'player'].includes(screen) && state?.phase === 'running';
     const lobby = ['menu', 'entry', 'arena', 'character', 'lobby', 'help'].includes(screen) ||
@@ -770,12 +762,10 @@ if (typeof document !== 'undefined') (() => {
   const client = new ArenaClient({
     onState(state) {
       if (setupBusy || pendingSetupRoom) return;
-      render(present(state, window.ArenaUI.connected, client.secondsLeft()));
-      renderIdentity(state);
+      presentation.consume(state);
+      paintState();
       battleStartCue(state);
       actionCue(state);
-      visualCue(state);
-      victoryCue(state);
       if (state.you.role === 'host' && $('qr-container').querySelector('img')?.src !== location.origin + '/game/api/rooms/' + state.roomId + '/qr.svg') {
         const qr = document.createElement('img');
         qr.src = '/game/api/rooms/' + state.roomId + '/qr.svg';
@@ -784,9 +774,9 @@ if (typeof document !== 'undefined') (() => {
       }
     },
     onConnection(status) {
-      if (status !== 'connected') { battleStartCue.reset(); actionCue.reset(); victoryCue.reset(); battleWorld.disconnect(); }
+      if (status !== 'connected') { battleStartCue.reset(); actionCue.reset(); victoryCue.reset(); battleWorld.disconnect(); presentation.reset(); }
       render({ connection: status });
-      if (client.state && !setupBusy && !pendingSetupRoom) { render(present(client.state, status === 'connected', client.secondsLeft())); renderIdentity(client.state); }
+      if (client.state && !setupBusy && !pendingSetupRoom) { presentation.consume(client.state); paintState(); }
     },
     onError(error) {
       reportError(error.message);
@@ -797,6 +787,24 @@ if (typeof document !== 'undefined') (() => {
       if (error.status === 401 || error.status === 404) show('entry');
     }
   });
+  function paintState() {
+    if (!client.state || setupBusy || pendingSetupRoom) return;
+    const state = presentation.view(client.state);
+    const view = present(state, window.ArenaUI.connected, client.secondsLeft());
+    if (presentation.busy) {
+      view.canVote = false; view.turnLabel = 'Resolving move… · next turn clock is live';
+      view.playerState = 'Resolving move… The server’s next-turn clock continues.';
+    }
+    render(view); renderIdentity(state);
+    // The world consumes authoritative results, never the staged result/phase.
+    battleWorld.sync(client.state);
+    if (!presentation.busy) { visualCue(state); victoryCue(state); }
+  }
+  battleWorld.onComplete = event => { if (presentation.complete(event.id)) paintState(); };
+  battleWorld.onSkip = () => {
+    presentation.reset();
+    if (client.state) { presentation.consume(client.state); paintState(); }
+  };
   async function handleIntent({ type, code, nickname, move }) {
     try {
       if (type === 'join') {
@@ -804,7 +812,7 @@ if (typeof document !== 'undefined') (() => {
         await client.join(code, nickname);
         $('join-form').querySelector('button[type="submit"]').disabled = false;
       } else if (type === 'vote') {
-        if (!client.state?.turn || !window.ArenaUI.connected) return;
+        if (presentation.busy || !client.state?.turn || !window.ArenaUI.connected) return;
         await client.mutate('vote', { turnId: client.state.turn.id, move });
       } else if ((type === 'start' || type === 'reset' || type === 'replay') && client.role === 'host') {
         const state = await client.mutate(type === 'start' ? 'start' : 'reset');
@@ -931,7 +939,7 @@ if (typeof document !== 'undefined') (() => {
         await client.mutate('start');
       }
       pendingSetupRoom = null; setupBusy = false;
-      render(present(client.state, window.ArenaUI.connected, client.secondsLeft())); renderIdentity(client.state);
+      presentation.consume(client.state); paintState();
       // Baseline setup history even when its SSE snapshots arrived while setupBusy was true.
       battleStartCue(client.state); actionCue(client.state); visualCue(client.state);
       $('global-error').hidden = true;
@@ -940,7 +948,7 @@ if (typeof document !== 'undefined') (() => {
   });
   let soloPending = false;
   document.querySelectorAll('[data-solo-move]').forEach(button => button.addEventListener('click', async () => {
-    if (soloPending || !client.state?.turn) return;
+    if (presentation.busy || soloPending || !client.state?.turn) return;
     soloPending = true; updateSolo(client.state);
     try { await client.mutate('play', { turnId: client.state.turn.id, move: button.dataset.soloMove }); }
     catch (error) { reportError(error.message); }
@@ -949,10 +957,11 @@ if (typeof document !== 'undefined') (() => {
   function updateSolo(state) {
     const solo = ['bot', 'friend'].includes(state.mode); $('solo-controls').hidden = !solo;
     const choosing = state.phase === 'running' && state.turn?.team === 'A' && client.secondsLeft() > 0;
-    setText('solo-status', state.phase === 'countdown' ? 'Get ready — moves open after the intro.' : !window.ArenaUI.connected ? 'Reconnecting. Moves paused.' : choosing ? 'Your turn. Choose a move.' : state.mode === 'friend' ? 'Your friend is choosing…' : 'Campus Bot is choosing…');
+    setText('solo-status', presentation.busy ? 'Resolving move… Next-turn clock continues.' : state.phase === 'countdown' ? 'Get ready — moves open after the intro.' : !window.ArenaUI.connected ? 'Reconnecting. Moves paused.' : choosing ? 'Your turn. Choose a move.' : state.mode === 'friend' ? 'Your friend is choosing…' : 'Campus Bot is choosing…');
     document.querySelectorAll('[data-solo-move]').forEach(button => {
-      button.disabled = !solo || !choosing || !window.ArenaUI.connected || soloPending || !state.turn?.availableMoves.includes(button.dataset.soloMove);
+      button.disabled = presentation.busy || !solo || !choosing || !window.ArenaUI.connected || soloPending || !state.turn?.availableMoves.includes(button.dataset.soloMove);
       const move = button.dataset.soloMove;
+      button.querySelector('strong').textContent = moveLabel(state.teams.A.characterId, move);
       button.querySelector('small').textContent = move === 'special' && state.teams.A.specialCooldownRemaining ? 'Recharging: ' + state.teams.A.specialCooldownRemaining + ' own turns' : moveDescription(state.teams.A.stats || fighterStats(state.teams.A.characterId), move);
     });
   }
@@ -985,7 +994,7 @@ if (typeof document !== 'undefined') (() => {
     if (friend && state.phase === 'lobby') setText('lobby-status', state.teams.B.playerCount ? 'Your friend is ready. Start the duel.' : 'Waiting for one friend to join as Player 2.');
     if (state.you.role === 'player') {
       const stats = state.teams[state.you.team].stats || fighterStats(state.teams[state.you.team].characterId);
-      document.querySelectorAll('button[data-move]').forEach(button => { const move = button.dataset.move; button.querySelector('small').textContent = move === 'special' && state.teams[state.you.team].specialCooldownRemaining ? 'Recharging: ' + state.teams[state.you.team].specialCooldownRemaining + ' own turns' : moveDescription(stats, move); });
+      document.querySelectorAll('button[data-move]').forEach(button => { const move = button.dataset.move; button.querySelector('strong').textContent = moveLabel(state.teams[state.you.team].characterId, move); button.querySelector('small').textContent = move === 'special' && state.teams[state.you.team].specialCooldownRemaining ? 'Recharging: ' + state.teams[state.you.team].specialCooldownRemaining + ' own turns' : moveDescription(stats, move); });
       if (friend) { setText('player-title', state.phase === 'lobby' ? 'Your duel is ready.' : 'Make your move.'); setText('player-state', !window.ArenaUI.connected ? 'Reconnecting. Moves paused.' : state.phase === 'lobby' ? 'Player 2 connected. Waiting for Player 1 to start.' : state.turn?.team === state.you.team ? 'Your turn. Pick one move.' : 'Player 1 is choosing…'); setText('vote-feedback', state.phase === 'running' ? 'Each choice resolves immediately. 15 seconds per turn.' : 'Stay here — the match starts automatically on your screen.'); }
       setText('player-team', 'TEAM ' + state.you.team + ' · ' + identities[state.you.team].name);
       for (const team of ['A', 'B']) {
@@ -999,8 +1008,8 @@ if (typeof document !== 'undefined') (() => {
       }
     }
     if (state.phase === 'finished') { setFighterArt($('winner-art'), identities[state.winner].id, identities[state.winner].name, true); setText('victory-title', identities[state.winner].name + ' wins!'); }
+    if (presentation.busy) setText('player-state', 'Resolving move… Next-turn clock continues.');
     renderPrebattle(state);
-    battleWorld.sync(state);
     characters.sync();
     updateSolo(state);
   }
@@ -1033,8 +1042,9 @@ if (typeof document !== 'undefined') (() => {
     setText('countdown', seconds); setText('player-countdown', seconds);
     $('countdown').setAttribute('aria-label', seconds + ' seconds left');
     const active = client.state.turn?.team === client.state.you.team;
-    const canVote = window.ArenaUI.connected && active && seconds > 0;
-    if (active && !seconds && window.ArenaUI.connected) setText('player-state', 'Time is up. Waiting for the server.');
+    const canVote = !presentation.busy && window.ArenaUI.connected && active && seconds > 0;
+    if (presentation.busy) { setText('player-state', 'Resolving move… Next-turn clock continues.'); setText('turn-label', 'Resolving move… · next turn clock is live'); }
+    if (!presentation.busy && active && !seconds && window.ArenaUI.connected) setText('player-state', 'Time is up. Waiting for the server.');
     moves.forEach(move => document.querySelector('button[data-move="' + move + '"]').disabled = !canVote || !client.state.turn?.availableMoves.includes(move));
   }, 250);
 })();

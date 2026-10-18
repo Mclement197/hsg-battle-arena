@@ -1,6 +1,6 @@
 import * as THREE from './vendor/three.module.js';
 import { loadModel, modelFor, release } from './characters.js?v=20261018-previews';
-import { ARENA_WORLDS, BattleEvents } from './battle-contract.js';
+import { ARENA_WORLDS, BattleEvents } from './battle-contract.js?v=20261018-move-presentation';
 const v = a => new THREE.Vector3(...a);
 const ease = t => { t = THREE.MathUtils.clamp(t,0,1); return t*t*(3-2*t); };
 
@@ -24,6 +24,16 @@ export function actionCamera(config, event, progress, aspect = 1) {
  // All shots remain in the open central aisle, below Trischli's low fixtures.
  position.x=THREE.MathUtils.clamp(position.x,-1.3,1.3);
  return {position,look,phase:t<launch?'anticipation':t<impact?'launch':t<.72?'impact':'recovery'};
+}
+
+// Held opposing three-quarter shots, not a continuous orbit. Main action choreography stays unchanged.
+export function selectionCamera(config, team = 'A') {
+ const side = team === 'A' ? -1 : 1;
+ const position = v(config.overview);
+ position.x = side * (config === ARENA_WORLDS.library ? 3.3 : 1.6);
+ position.z -= config === ARENA_WORLDS.library ? 2.0 : 1.8;
+ position.y -= .35;
+ return { position, look: v(config.look), phase: 'selection-' + team };
 }
 
 // Fit the *animated* cast (including wings, raised hands and props), not just the bind pose.
@@ -90,8 +100,8 @@ function motifShape(motif, color, special, move) {
 export class BattleWorld {
  constructor() {
   this.events = new BattleEvents();this.motion=matchMedia('(prefers-reduced-motion: reduce)');this.fighters={};this.generation=0;
-  this.onMotion=()=>{this.cancel();if(this.state)this.events.consume(this.state);this.overview(true);};this.motion.addEventListener('change',this.onMotion);
-  this.onHide=()=>{if(document.hidden)this.cancel();else if(this.state){this.events.consume(this.state);this.sync(this.state);}};document.addEventListener('visibilitychange',this.onHide);
+  this.onMotion=()=>{this.selection=null;if(this.active&&this.camera)this.direct((performance.now()-this.active.startedAt)/this.active.ability.duration);else this.idleCamera(performance.now());};this.motion.addEventListener('change',this.onMotion);
+  this.onHide=()=>{if(document.hidden){this.disconnect();this.onSkip?.();}else if(this.state)this.sync(this.state);};document.addEventListener('visibilitychange',this.onHide);
   this.onPage=()=>this.dispose();window.addEventListener('pagehide',this.onPage);
  }
  sync(state) {
@@ -99,17 +109,18 @@ export class BattleWorld {
   const screen=document.body.dataset.screen;
   const host=screen==='battle',phone=screen==='player' && state.phase!=='lobby';
   if(!host&&!phone){this.clear();return;}
-  if(document.hidden){this.events.reset();this.events.consume(state);return;}
+  if(document.hidden){this.events.reset();this.events.consume(state);if(this.events.scope+':'+this.events.number!==this.hiddenNumber){this.hiddenNumber=this.events.scope+':'+this.events.number;queueMicrotask(()=>this.onSkip?.());}return;}
   const container=host?document.querySelector('.fight-stage'):document.querySelector('#player-world');
   const scope=[state.roomId,state.match,state.arenaId,state.teams.A.characterId,state.teams.B.characterId].join(':');
   if(this.scope!==scope||this.container!==container){this.clear();this.scope=scope;this.container=container;this.events.consume(state);this.ready=this.load(state);}
   else this.events.consume(state);
   if(state.phase==='lobby')this.cancel();
+  else if(this.fallback)this.pumpFallback();
  }
  async load(state) {
   const generation=this.generation;
   const world=ARENA_WORLDS[state.arenaId];
-  if(!world){this.container.dataset.worldStatus='unavailable';this.container.setAttribute('aria-label','Mensa B: 3D environment not modeled');return;}
+  if(!world){this.fallback=true;this.container.dataset.worldStatus='unavailable';this.container.setAttribute('aria-label','Mensa B: 3D environment not modeled');return;}
   this.config=world;this.container.dataset.worldStatus='loading';this.container.setAttribute('aria-label',state.arenaId==='library'?'Library: both fighters in the modeled 3D arena':'Trischli: both fighters in the modeled 3D arena');
   const roots=[];
   try {
@@ -147,21 +158,21 @@ export class BattleWorld {
    this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.autoUpdate=false;this.renderer.shadowMap.needsUpdate=true;this.renderer.shadowMap.type=THREE.PCFShadowMap;this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;
    this.camera=new THREE.PerspectiveCamera(49,1,.08,80);this.look=v(world.look);this.overview(true);
    this.canvas=this.renderer.domElement;this.canvas.className='battle-world-canvas';this.canvas.setAttribute('aria-hidden','true');
-   this.canvas.addEventListener('webglcontextlost',event=>{if(generation!==this.generation)return;event.preventDefault();cancelAnimationFrame(this.raf);this.disconnect();this.container.dataset.worldStatus='error';});this.canvas.addEventListener('webglcontextrestored',()=>{if(generation!==this.generation)return;const current=this.state;this.clear();if(current)this.sync(current);});this.container.prepend(this.canvas);
+   this.canvas.addEventListener('webglcontextlost',event=>{if(generation!==this.generation)return;event.preventDefault();cancelAnimationFrame(this.raf);this.cancel();this.fallback=true;this.events.consume(this.state);this.container.dataset.worldStatus='error';this.onSkip?.();});this.canvas.addEventListener('webglcontextrestored',()=>{if(generation!==this.generation)return;const current=this.state;this.clear();if(current)this.sync(current);});this.container.prepend(this.canvas);
    this.badge=document.createElement('span');this.badge.className='world-action-label';this.badge.setAttribute('aria-hidden','true');this.container.append(this.badge);
    this.observer=new ResizeObserver(()=>this.layout());this.observer.observe(this.container);this.layout();
    this.container.dataset.worldStatus='ready';this.container.dataset.worldArena=state.arenaId;
-   this.events.pending=this.events.pending.filter(e=>(this.state.serverNow-e.resolvedAt)<15000);
+   this.fallback=false;
    let last=performance.now();const tick=now=>{if(generation!==this.generation)return;this.raf=requestAnimationFrame(tick);if(document.hidden||now-last<1000/30)return;const dt=Math.min((now-last)/1000,.25);last=now;
     if(!this.active&&this.events.pending.length)this.begin(this.events.pending.shift(),now);
-    if(this.active)this.animate(now);
+    if(this.active)this.animate(now);else this.idleCamera(now);
     for(const f of Object.values(this.fighters))if(!this.motion.matches)f.mixer.update(dt);
     if(this.active&&!this.motion.matches)this.renderer.shadowMap.needsUpdate=true;
-    this.renderer.render(this.scene,this.camera);
+    if(this.renderer&&this.scene)this.renderer.render(this.scene,this.camera);
    };this.raf=requestAnimationFrame(tick);
   } catch(error) {
    for(const g of roots)release(g.scene);if(generation!==this.generation)return;
-   this.clear();this.container.dataset.worldStatus='error';this.container.setAttribute('aria-label','3D arena unavailable. Health and commands still work.');
+   const scope=this.scope;this.clear();this.scope=scope;this.fallback=true;this.events.consume(this.state);this.container.dataset.worldStatus='error';queueMicrotask(()=>this.onSkip?.());this.container.setAttribute('aria-label','3D arena unavailable. Health and commands still work.');
    console.warn('Arena load failed',error);
   }
  }
@@ -170,7 +181,7 @@ export class BattleWorld {
   this.renderer.setSize(w,h);this.camera.aspect=w/h;
   const cards=[...this.container.querySelectorAll('.fighter')];
   this.frameTop=cards.length?Math.min(.55,1-2*(Math.max(...cards.map(card=>card.offsetTop+card.offsetHeight))+12)/h):.84;
-  if(this.active)this.direct((performance.now()-this.active.startedAt)/this.active.ability.duration);else this.overview(true);
+  if(this.active&&this.camera)this.direct((performance.now()-this.active.startedAt)/this.active.ability.duration);else this.idleCamera(performance.now());
  }
  play(team,clip){const f=this.fighters[team],a=f?.actions.get(clip);if(!a)return;if(clip==='idle'&&f.clip==='idle')return;const old=f.current;a.reset().setLoop(clip==='idle'?THREE.LoopRepeat:THREE.LoopOnce,clip==='idle'?Infinity:1);a.clampWhenFinished=clip!=='idle';a.play();if(old&&old!==a)a.crossFadeFrom(old,.1,false);f.current=a;f.clip=clip;}
  overview(snap=false){if(!this.camera||!this.config)return;this.goal=v(this.config.overview);this.goalLook=v(this.config.look);if(snap)this.frame(this.goal,this.goalLook);}
@@ -202,9 +213,26 @@ export class BattleWorld {
   if(this.motion.matches){this.overview(true);return;}
   const shot=actionCamera(this.config,this.active,t,this.camera.aspect);
   this.goal=shot.position;this.goalLook=shot.look;this.canvas.dataset.camera=shot.phase;
+  if(this.active.returnFrom&&t<this.active.ability.launch){const blend=ease(t/this.active.ability.launch);shot.position.lerp(this.active.returnFrom,1-blend);}
   this.frame(shot.position,shot.look);
  }
- begin(event,now){this.active={...event,startedAt:now,hit:false};this.play(event.actor,event.move);this.badge.textContent=event.ability.label;this.canvas.dataset.action=event.id;this.canvas.dataset.worldMove=event.move;this.canvas.dataset.actor=event.actor;
+ idleCamera(now){
+  if(!this.camera||!this.config)return;
+  if(this.motion.matches||this.state?.phase!=='running'){this.overview(true);return;}
+  const team=this.state.turn?.team||'A', key=this.state.turn?.id;
+  if(!this.selection||this.selection.key!==key)this.selection={key,startedAt:now,from:this.camera.position.clone(),look:this.look.clone()};
+  const shot=selectionCamera(this.config,team),t=ease((now-this.selection.startedAt)/650);
+  this.frame(this.selection.from.clone().lerp(shot.position,t),this.selection.look.clone().lerp(shot.look,t));
+  this.canvas.dataset.camera=shot.phase;
+ }
+ pumpFallback(){
+  if(this.active||!this.events.pending.length)return;
+  const event=this.events.pending.shift();this.active=event;
+  if(this.container){this.fallbackLabel=document.createElement('span');this.fallbackLabel.className='world-action-label';this.fallbackLabel.textContent=event.ability.label;this.container.append(this.fallbackLabel);}
+  // Same completion contract and ability duration without a WebGL renderer.
+  this.fallbackTimer=setTimeout(()=>{this.finish();this.onComplete?.(event);this.pumpFallback();},event.ability.duration);
+ }
+ begin(event,now){const returnFrom=this.selection?this.camera.position.clone():null;this.selection=null;this.active={...event,startedAt:now,hit:false,returnFrom};this.play(event.actor,event.move);this.badge.textContent=event.ability.label;this.canvas.dataset.action=event.id;this.canvas.dataset.worldMove=event.move;this.canvas.dataset.actor=event.actor;
   this.fx=motifShape(event.ability.motif,event.ability.color,event.move==='special',event.move);this.scene.add(this.fx);this.fx.visible=false;
   // Stretch bone anticipation so the hand gesture launches at the world-space projectile beat.
   this.fighters[event.actor].current.setDuration(1.45);
@@ -223,14 +251,14 @@ export class BattleWorld {
   if(e.ability.motif==='notes'&&moving)this.fx.rotateZ(Math.sin(t*8)*.22);
   if(e.ability.motif==='disco'&&moving)this.fx.rotateZ(t*3);
   if(!this.motion.matches&&t<.94){actor.current.time=Math.min(t*e.ability.duration/1000*actor.current.timeScale,actor.current.getClip().duration-.001);actor.mixer.update(0);}
-  if(t>=impact&&!e.hit){e.hit=true;if(e.actor!==e.target){this.play(e.target,e.defeated?'defeat':'hit');if(this.motion.matches)target.mixer.update(e.defeated?1.5:.35);}}
+  if(t>=impact&&!e.hit){e.hit=true;if(e.actor!==e.target){this.play(e.target,e.defeated?'defeat':'hit');if(e.defeated)target.current?.setDuration(e.ability.duration*(1-impact)/1000);if(this.motion.matches)target.mixer.update(e.defeated?1.5:.35);}}
   if(t>.94){for(const [team,f] of Object.entries(this.fighters))if(f.clip!=='idle'&&f.clip!=='defeat')this.play(team,'idle');}
   this.direct(t);
-  if(t>=1){this.finish();}
+  if(t>=1){if(e.defeated&&target.current){target.current.time=target.current.getClip().duration;target.mixer.update(0);}this.finish();this.onComplete?.(e);}
  }
- finish(){if(this.fx){this.scene?.remove(this.fx);release(this.fx);this.fx=null;}this.active=null;if(this.badge)this.badge.textContent='';if(this.canvas){this.canvas.dataset.camera='overview';delete this.canvas.dataset.action;}this.overview(true);if(this.renderer)this.renderer.shadowMap.needsUpdate=true;}
+ finish(){clearTimeout(this.fallbackTimer);this.fallbackLabel?.remove();this.fallbackLabel=null;this.selection=null;if(this.fx){this.scene?.remove(this.fx);release(this.fx);this.fx=null;}this.active=null;if(this.badge)this.badge.textContent='';if(this.canvas){this.canvas.dataset.camera='overview';delete this.canvas.dataset.action;}this.overview(true);if(this.renderer)this.renderer.shadowMap.needsUpdate=true;}
  cancel(){this.events.reset();this.finish();for(const [t,f] of Object.entries(this.fighters))this.play(t,this.state?.teams[t].hp===0?'defeat':'idle');}
  disconnect(){this.cancel();if(this.state)this.events.consume(this.state);}
- clear(){this.generation++;cancelAnimationFrame(this.raf);this.cancel();this.observer?.disconnect();for(const f of Object.values(this.fighters)){f.mixer.stopAllAction();f.mixer.uncacheRoot(f.root);}release(this.scene);this.renderer?.dispose();this.renderer?.forceContextLoss();this.canvas?.remove();this.badge?.remove();if(this.container)delete this.container.dataset.worldStatus;this.renderer=null;this.scene=null;this.fighters={};this.scope=null;this.camera=null;}
+ clear(){this.fallback=false;this.generation++;cancelAnimationFrame(this.raf);this.cancel();this.observer?.disconnect();for(const f of Object.values(this.fighters)){f.mixer.stopAllAction();f.mixer.uncacheRoot(f.root);}release(this.scene);this.renderer?.dispose();this.renderer?.forceContextLoss();this.canvas?.remove();this.badge?.remove();if(this.container)delete this.container.dataset.worldStatus;this.renderer=null;this.scene=null;this.fighters={};this.scope=null;this.camera=null;}
  dispose(){this.clear();this.motion.removeEventListener('change',this.onMotion);document.removeEventListener('visibilitychange',this.onHide);window.removeEventListener('pagehide',this.onPage);}
 }

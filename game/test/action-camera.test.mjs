@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import * as THREE from '../public/vendor/three.module.js';
 import {GLTFLoader} from '../public/vendor/GLTFLoader.js';
-import {BattleWorld,actionCamera,fighterEnvelope} from '../public/battle-world.js';
+import {BattleWorld,actionCamera,fighterEnvelope,selectionCamera} from '../public/battle-world.js';
 import {ARENA_WORLDS,ABILITIES} from '../public/battle-contract.js';
 
 const moves=['attack','defend','heal','special'];
@@ -38,6 +38,7 @@ for(const id of Object.keys(ABILITIES))test(id+' true animated bounds keep wings
   const w=Object.create(BattleWorld.prototype);Object.assign(w,{config,motion:{matches:false},camera:new THREE.PerspectiveCamera(),look:new THREE.Vector3(),fighters:{[actor]:f},canvas:{dataset:{}}});
   for(const host of [true,false])for(const aspect of [2.7,1,.85]){
    w.container={classList:{contains:()=>host}};w.camera.aspect=aspect;
+   for(const team of ['A','B']){const shot=selectionCamera(config,team);w.frame(shot.position,shot.look);for(const point of f.framePoints){const p=point.clone().project(w.camera);assert.ok(Math.abs(p.x)<=.881,id+' selection horizontal');assert.ok(p.y<=(host?.431:.841)&&p.y>=-.781,id+' selection vertical');}}
    for(const move of moves){w.active=event(actor,move);for(const t of [0,.16,.32,.46,.59,.72,.88,1]){
     w.direct(t);assert.ok(w.camera.fov<100,JSON.stringify({id,actor,move,t,aspect,fov:w.camera.fov,arena:config.model}));
     for(const point of f.framePoints){

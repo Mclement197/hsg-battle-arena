@@ -115,3 +115,9 @@ body[data-screen=player] .player-preview img{display:block;height:60px;width:60p
 .arena-option img{object-fit:cover;object-position:center;filter:brightness(.9)}
 .arena-unmodeled{display:grid;place-items:center;width:100%;height:clamp(190px,28vw,330px);background:#14271e;color:#bed4c5;font-size:.9rem;text-align:center;padding:1rem}
 @media(max-width:760px){.arena-unmodeled{height:138px;grid-row:span 2}.fight-stage:not([data-world-status=ready]) .fighter-art{height:170px}}
+
+/* Real named moves wrap, including COPY / PASTE and narrow touch controls. */
+.solo-moves strong,.move strong{font-size:clamp(1.05rem,1.8vw,1.45rem);line-height:1.2;overflow-wrap:anywhere;white-space:normal}
+.solo-moves button,.move{height:auto;min-height:100px;min-width:0}
+.move strong{max-width:100%}
+@media(max-width:760px){.solo-moves strong,.move strong{font-size:1.08rem}.solo-moves button,.move{min-height:110px}}

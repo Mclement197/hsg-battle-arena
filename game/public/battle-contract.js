@@ -28,9 +28,44 @@ export class BattleEvents {
   const actor = state.teams?.[r.team], characterId = r.actorCharacterId || actor?.characterId, ability = ABILITIES[characterId]?.[r.move];
   if (!ability || !['running','finished'].includes(state.phase)) continue;
   const target = r.targetTeam || (ability.target === 'actor' ? r.team : r.team === 'A' ? 'B' : 'A');
-  this.pending.push({ id: scope + ':' + r.turnId, actor: r.team, target, characterId, move: r.move, ability, defeated: (r.targetHp ?? state.teams[target].hp) === 0, resolvedAt: r.resolvedAt });
-  // Bound catch-up. A disconnected client's history is not a cinematic backlog.
-  if (this.pending.length > 8) this.pending.shift();
+  this.pending.push({ id: scope + ':' + r.turnId, actor: r.team, target, characterId, move: r.move, ability, defeated: (r.targetHp ?? state.teams[target].hp) === 0, resolvedAt: r.resolvedAt, result: r });
+  // Connected rapid updates must finish in order; only a reconnect discards history.
   }
+ }
+}
+
+export function moveLabel(characterId, move) {
+ const type = move[0].toUpperCase() + move.slice(1);
+ const name = ABILITIES[characterId]?.[move]?.label;
+ return name ? type + ' · ' + name : type;
+}
+
+// A separate view of HP/results, never passed to transport or used to resolve combat.
+export class BattlePresentation {
+ constructor() { this.reset(); }
+ reset() { this.events = new BattleEvents(); this.scope = null; this.pending = []; this.hp = null; this.result = null; }
+ consume(state) {
+  const scope = state.roomId + ':' + state.match;
+  if (scope !== this.scope || state.phase === 'lobby' || !this.hp) {
+   this.reset(); this.scope = scope; this.hp = { A: state.teams.A.hp, B: state.teams.B.hp }; this.result = state.lastResult;
+  }
+  this.events.consume(state);
+  this.pending.push(...this.events.pending.splice(0));
+  if (!this.pending.length) { this.hp = { A: state.teams.A.hp, B: state.teams.B.hp }; this.result = state.lastResult; }
+ }
+ complete(id) {
+  const event = this.pending[0];
+  if (!event || event.id !== id) return false;
+  this.pending.shift();
+  const r = event.result;
+  this.hp[event.target] = Number.isFinite(r.targetHp) ? r.targetHp : Math.max(0, Math.min(100, this.hp[event.target] - (r.damage || 0) + (r.healed || 0)));
+  this.result = r;
+  return true;
+ }
+ get busy() { return this.pending.length > 0; }
+ view(state) {
+  if (!this.hp) return state;
+  return { ...state, phase: this.busy && state.phase === 'finished' ? 'running' : state.phase, winner: this.busy ? null : state.winner,
+   lastResult: this.result, teams: { A: { ...state.teams.A, hp: this.hp.A }, B: { ...state.teams.B, hp: this.hp.B } } };
  }
 }

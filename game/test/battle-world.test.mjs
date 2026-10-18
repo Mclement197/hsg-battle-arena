@@ -63,7 +63,7 @@ for(const arenaId of Object.keys(ARENA_WORLDS))test(arenaId+' camera corridor is
 });
 
 test('battle presentation uses only shared scene, selection retains separate previews',async()=>{
- const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8'),characters=await readFile(new URL('../public/characters.js',import.meta.url),'utf8'),css=await readFile(new URL('../public/styles.css',import.meta.url),'utf8');assert.ok(app.includes('battleWorld.sync(state)'));assert.ok(characters.includes("image.closest('#battle-screen, #player-screen')"));assert.ok(css.includes('.battle-world-canvas{position:absolute'));assert.ok(css.includes('.fight-stage .fighter-visual'));
+ const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8'),characters=await readFile(new URL('../public/characters.js',import.meta.url),'utf8'),css=await readFile(new URL('../public/styles.css',import.meta.url),'utf8');assert.ok(app.includes('battleWorld.sync(client.state)'));assert.ok(characters.includes("image.closest('#battle-screen, #player-screen')"));assert.ok(css.includes('.battle-world-canvas{position:absolute'));assert.ok(css.includes('.fight-stage .fighter-visual'));
 });
 
 test('world diagnostic attributes cannot impersonate command buttons',async()=>{const source=await readFile(new URL('../public/battle-world.js',import.meta.url),'utf8');assert.ok(!source.includes('canvas.dataset.move='));const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');assert.ok(app.includes("querySelectorAll('button[data-move]')"));});
