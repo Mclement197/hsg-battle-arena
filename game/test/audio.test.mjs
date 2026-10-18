@@ -238,7 +238,7 @@ test('actual UI hook: selection/local expiry silent, server result once, mute/un
     body: { dataset: { screen: 'entry' } },
     getElementById: element,
     querySelector: selector => buttons.find(button => selector.includes('"' + button.dataset.move + '"')) || element(selector),
-    querySelectorAll: selector => selector === '[data-move]' ? buttons : [],
+    querySelectorAll: selector => selector === 'button[data-move]' ? buttons : [],
     createElement: id => element('new-' + id), createTextNode: text => ({ textContent: text }),
     addEventListener: (type, handler) => { handlers[type] = handler; },
     dispatchEvent: event => handlers[event.type]?.(event)
@@ -246,6 +246,7 @@ test('actual UI hook: selection/local expiry silent, server result once, mute/un
   let tick;
   const sandbox = {
     document, window: { AudioContext: function () { return context; } },
+    BattleWorld: class { events = { pending: [] }; sync() {} clear() {} disconnect() {} },
     CharacterStage: class { sync() {} play() {} }, modelFor: () => null,
     sessionStorage: { getItem: key => key.endsWith('active') ? JSON.stringify({ room: room.id, role: 'player' }) : 'token' },
     location: { origin: 'http://127.0.0.1', search: '' },

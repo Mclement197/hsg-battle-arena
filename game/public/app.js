@@ -1,3 +1,4 @@
+import { BattleWorld } from './battle-world.js?v=20261018-world';
 import { CharacterStage, modelFor } from './characters.js?v=20261017-rigged';
 import { FIGHTER_PROFILES, STAT_META, fighterStats, moveDescription } from './fighter-data.js?v=20261016-arcade';
 // Presentation identities use the authoritative team characterId, never nickname or team order.
@@ -427,6 +428,7 @@ if (typeof document !== 'undefined') (() => {
   'use strict';
   const $ = (id) => document.getElementById(id);
   const characters = new CharacterStage();
+  const battleWorld = new BattleWorld();
   const setFighterArt = (image, id, name, animated = false, team = '') => {
     const asset = modelFor(id);
     const url = asset?.portrait || './assets/' + id + '.svg';
@@ -451,14 +453,14 @@ if (typeof document !== 'undefined') (() => {
   const setText = (id, value) => { if (value !== undefined && value !== null) $(id).textContent = String(value); };
   function show(screen, immediate = false) {
     if (screen === 'victory' && !immediate && ['battle', 'player'].includes(document.body.dataset.screen)) {
-      victoryTimer ||= setTimeout(() => { victoryTimer = null; show('victory', true); }, 1600);
+      victoryTimer ||= setTimeout(() => { victoryTimer = null; show('victory', true); }, Math.min(20000, Math.max(3400, (battleWorld.events.pending.length + (battleWorld.active ? 1 : 0) + 1) * 2200 + 900)));
       return; // Let the authoritative final hit and defeat finish; game state is already final.
     }
     clearTimeout(victoryTimer); victoryTimer = null;
     if (!screens.includes(screen) || document.body.dataset.screen === screen) return;
     screens.forEach((name) => { $(name + '-screen').hidden = name !== screen; });
     document.body.dataset.screen = screen;
-    if (!['battle', 'player'].includes(screen)) { actionAudio?.stopPrebattle(); $('prebattle').hidden = true; }
+    if (!['battle', 'player'].includes(screen)) { battleWorld.clear(); actionAudio?.stopPrebattle(); $('prebattle').hidden = true; }
     syncMusic();
     characters.sync();
     const heading = $(screen + '-screen').querySelector('h1');
@@ -503,7 +505,7 @@ if (typeof document !== 'undefined') (() => {
     try { await navigator.clipboard.writeText(currentJoinUrl); setText('copy-link', 'Link copied'); }
     catch { setText('copy-link', 'Copy unavailable'); }
   });
-  document.querySelectorAll('[data-move]').forEach((button) => button.addEventListener('click', () => {
+  document.querySelectorAll('button[data-move]').forEach((button) => button.addEventListener('click', () => {
     if (button.disabled) return;
     // Do not show a confirmed vote until the server acknowledges it.
     intent('vote', { move: button.dataset.move });
@@ -708,8 +710,8 @@ if (typeof document !== 'undefined') (() => {
     if (view.playerTeam !== undefined) setText('player-team', view.playerTeam === 'ace' ? 'TEAM ACE' : view.playerTeam === 'dynamo' ? 'TEAM DYNAMO' : 'SPECTATOR');
     if (view.playerState !== undefined) setText('player-state', view.playerState);
     if (view.voteFeedback !== undefined) setText('vote-feedback', view.voteFeedback);
-    if (view.votedMove !== undefined) moves.forEach((move) => document.querySelector('[data-move="' + move + '"]').setAttribute('aria-pressed', String(view.votedMove === move)));
-    if (view.canVote !== undefined) moves.forEach((move) => document.querySelector('[data-move="' + move + '"]').disabled = !view.canVote || (move === 'special' && !view.specialReady));
+    if (view.votedMove !== undefined) moves.forEach((move) => document.querySelector('button[data-move="' + move + '"]').setAttribute('aria-pressed', String(view.votedMove === move)));
+    if (view.canVote !== undefined) moves.forEach((move) => document.querySelector('button[data-move="' + move + '"]').disabled = !view.canVote || (move === 'special' && !view.specialReady));
     if (view.specialInfo !== undefined) setText('special-info', view.specialInfo);
     if (view.winner !== undefined) {
       const ace = view.winner === 'ace';
@@ -724,6 +726,8 @@ if (typeof document !== 'undefined') (() => {
   const battleStartCue = createBattleStartCue(cue, () => actionAudio?.stopPrebattle());
   let activeEffect, effectTimer;
   function showActionEffect(effect) {
+    // Shared scene owns physical choreography. Non-battle screens retain compact status stamps.
+    if (['battle', 'player'].includes(document.body.dataset.screen)) return;
     characters.play(effect);
     clearTimeout(effectTimer);
     activeEffect?.remove?.();
@@ -780,7 +784,7 @@ if (typeof document !== 'undefined') (() => {
       }
     },
     onConnection(status) {
-      if (status !== 'connected') { battleStartCue.reset(); actionCue.reset(); victoryCue.reset(); }
+      if (status !== 'connected') { battleStartCue.reset(); actionCue.reset(); victoryCue.reset(); battleWorld.disconnect(); }
       render({ connection: status });
       if (client.state && !setupBusy && !pendingSetupRoom) { render(present(client.state, status === 'connected', client.secondsLeft())); renderIdentity(client.state); }
     },
@@ -979,7 +983,7 @@ if (typeof document !== 'undefined') (() => {
     if (friend && state.phase === 'lobby') setText('lobby-status', state.teams.B.playerCount ? 'Your friend is ready. Start the duel.' : 'Waiting for one friend to join as Player 2.');
     if (state.you.role === 'player') {
       const stats = state.teams[state.you.team].stats || fighterStats(state.teams[state.you.team].characterId);
-      document.querySelectorAll('[data-move]').forEach(button => { const move = button.dataset.move; button.querySelector('small').textContent = move === 'special' && state.teams[state.you.team].specialCooldownRemaining ? 'Recharging: ' + state.teams[state.you.team].specialCooldownRemaining + ' own turns' : moveDescription(stats, move); });
+      document.querySelectorAll('button[data-move]').forEach(button => { const move = button.dataset.move; button.querySelector('small').textContent = move === 'special' && state.teams[state.you.team].specialCooldownRemaining ? 'Recharging: ' + state.teams[state.you.team].specialCooldownRemaining + ' own turns' : moveDescription(stats, move); });
       if (friend) { setText('player-title', state.phase === 'lobby' ? 'Your duel is ready.' : 'Make your move.'); setText('player-state', !window.ArenaUI.connected ? 'Reconnecting. Moves paused.' : state.phase === 'lobby' ? 'Player 2 connected. Waiting for Player 1 to start.' : state.turn?.team === state.you.team ? 'Your turn. Pick one move.' : 'Player 1 is choosing…'); setText('vote-feedback', state.phase === 'running' ? 'Each choice resolves immediately. 15 seconds per turn.' : 'Stay here — the match starts automatically on your screen.'); }
       setText('player-team', 'TEAM ' + state.you.team + ' · ' + identities[state.you.team].name);
       for (const team of ['A', 'B']) {
@@ -994,6 +998,7 @@ if (typeof document !== 'undefined') (() => {
     }
     if (state.phase === 'finished') { setFighterArt($('winner-art'), identities[state.winner].id, identities[state.winner].name, true); setText('victory-title', identities[state.winner].name + ' wins!'); }
     renderPrebattle(state);
+    battleWorld.sync(state);
     characters.sync();
     updateSolo(state);
   }
@@ -1028,6 +1033,6 @@ if (typeof document !== 'undefined') (() => {
     const active = client.state.turn?.team === client.state.you.team;
     const canVote = window.ArenaUI.connected && active && seconds > 0;
     if (active && !seconds && window.ArenaUI.connected) setText('player-state', 'Time is up. Waiting for the server.');
-    moves.forEach(move => document.querySelector('[data-move="' + move + '"]').disabled = !canVote || !client.state.turn?.availableMoves.includes(move));
+    moves.forEach(move => document.querySelector('button[data-move="' + move + '"]').disabled = !canVote || !client.state.turn?.availableMoves.includes(move));
   }, 250);
 })();

@@ -8,14 +8,16 @@ export const CHARACTER_MODELS = Object.freeze(Object.fromEntries([
 export const modelFor = id => Object.hasOwn(CHARACTER_MODELS, id) ? CHARACTER_MODELS[id] : null;
 export const REQUIRED_CLIPS = Object.freeze(['idle', 'attack', 'hit', 'defeat', 'defend', 'heal', 'special']);
 const bytes = new Map();
-async function loadModel(url) {
+export async function loadModel(url) {
   if (!bytes.has(url)) bytes.set(url, fetch(url).then(r => { if (!r.ok) throw Error('Model unavailable'); return r.arrayBuffer(); }).catch(e => { bytes.delete(url); throw e; }));
   return new GLTFLoader().parseAsync(await bytes.get(url), new URL('./assets/characters/', location.href).href);
 }
-function release(root) {
-  const geometries = new Set(), materials = new Set(), skeletons = new Set();
+export function release(root) {
+  const geometries = new Set(), materials = new Set(), skeletons = new Set(), textures = new Set();
   root?.traverse(o => { if (o.geometry) geometries.add(o.geometry); if (o.skeleton) skeletons.add(o.skeleton); for (const m of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) materials.add(m); });
-  for (const x of [...geometries, ...materials, ...skeletons]) x.dispose();
+  for (const material of materials) for (const value of Object.values(material)) if (value?.isTexture) textures.add(value);
+  root?.traverse(o => { if (o.shadow?.map) o.shadow.map.dispose(); });
+  for (const x of [...geometries, ...materials, ...skeletons, ...textures]) x.dispose();
 }
 
 class CharacterView {
@@ -114,7 +116,7 @@ export class CharacterStage {
     const active = new Set();
     if (!document.hidden) for (const image of document.querySelectorAll('img[data-model]')) {
       const id = image.dataset.model;
-      if (!modelFor(id) || image.closest('section')?.hidden || !image.clientWidth) continue;
+      if (!modelFor(id) || image.closest('section')?.hidden || image.closest('#battle-screen, #player-screen') || !image.clientWidth) continue;
       active.add(image);
       const view = this.views.get(image);
       if (view?.id === id) {

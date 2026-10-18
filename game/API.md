@@ -66,3 +66,7 @@ Existing empty-body create/join/start/reset/vote/SSE contracts remain valid as l
 ## Prebattle phase
 
 New starts in all modes return phase countdown, turn: null and prebattle: {startedAt, readyAt, deadline} (epoch ms). readyAt = startedAt + 3000; deadline = startedAt + 7157. Votes/direct moves are rejected with 409 invalid_phase throughout. The authoritative tick opens Team A turn 1 only at/after deadline, using the tick time as startedAt and a full 15000 ms deadline; a delayed tick never skips or shortens turn one. Reset clears prebattle. Other phases expose prebattle: null. Clients display 3/2/1 then READY… FIGHT! from server-clock offset, independent of mute. No new endpoint or client-controlled timing fields.
+
+### Cinematic presentation history
+
+Snapshots additionally include `recentResults`, the latest eight authoritative results in turn-number order (cleared on reset). Each result includes `actorCharacterId`, `targetTeam` and `targetHp` at resolution, alongside the existing result fields. This is bounded presentation history, not new mechanics or persisted replay storage. Clients baseline their first/reconnected snapshot, deduplicate by room/match/turn, and queue only subsequently unseen results. `arenaId` remains the authoritative room-selected venue shared by all participants.

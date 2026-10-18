@@ -31,7 +31,7 @@ export class Arena {
     const createdAt = this.now();
     const room = { id: id(), hostToken: token(), createdAt, touchedAt: createdAt, revision: 0,
       mode: 'online', arenaId: 'library', phase: 'lobby', match: 0, winner: null, teams: { A: teamState(), B: teamState() },
-      players: new Map(), credentials: new Map(), turn: null, lastResult: null, streams: new Set(), mutationRates: new Map() };
+      players: new Map(), credentials: new Map(), turn: null, lastResult: null, recentResults: [], streams: new Set(), mutationRates: new Map() };
     this.rooms.set(room.id, room);
     return room;
   }
@@ -113,7 +113,7 @@ export class Arena {
   reset(room, viewer, body) {
     fields(body, []); this.requireRole(viewer, 'host');
     room.prebattle = null;
-    room.match++; room.phase = 'lobby'; room.winner = null; room.turn = null; room.lastResult = null;
+    room.match++; room.phase = 'lobby'; room.winner = null; room.turn = null; room.lastResult = null; room.recentResults = [];
     room.teams = { A: { ...teamState(), ...(room.teams.A.characterId ? { characterId: room.teams.A.characterId } : {}) }, B: { ...teamState(), ...(room.teams.B.characterId ? { characterId: room.teams.B.characterId } : {}) } }; this.touch(room); room.revision++;
   }
   vote(room, viewer, body) {
@@ -160,7 +160,10 @@ export class Arena {
     } else if (move === 'defend') active.shield = true;
     else { healed = Math.min(fighterStats(active.characterId).heal, RULES.maxHp - active.hp); active.hp += healed; }
     room.lastResult = { turnId: turn.id, number: turn.number, team: turn.team, move,
-      voteCounts, totalVotes, tiedMoves, damage, healed, resolvedAt: this.now() };
+      voteCounts, totalVotes, tiedMoves, damage, healed, resolvedAt: this.now(),
+      actorCharacterId: active.characterId, targetTeam: ['attack', 'special'].includes(move) ? otherTeam : turn.team, targetHp: ['attack', 'special'].includes(move) ? target.hp : active.hp };
+    room.recentResults.push(room.lastResult);
+    if (room.recentResults.length > 8) room.recentResults.shift();
     if (target.hp === 0) { room.phase = 'finished'; room.winner = turn.team; room.turn = null; }
     else this.openTurn(room, otherTeam, turn.number + 1);
     room.revision++;
@@ -177,7 +180,7 @@ export class Arena {
     return { roomId: room.id, revision: room.revision, serverNow: this.now(), phase: room.phase,
       mode: room.mode, arenaId: room.arenaId, match: room.match, winner: room.winner, rules: RULES, teams,
       players: players.map(({ id, nickname, team, connections }) => ({ id, nickname, team, connected: connections > 0 })),
-      turn, prebattle: room.prebattle || null, lastResult: room.lastResult,
+      turn, prebattle: room.prebattle || null, lastResult: room.lastResult, recentResults: [...room.recentResults],
       you: viewer.role === 'host' ? { role: 'host', ...(room.hostPlayer ? { playerId: room.hostPlayer.id, team: 'A', vote: room.turn?.votes.get(room.hostPlayer.id) ?? null } : {}) } : { role: 'player', playerId: viewer.player.id,
         team: viewer.player.team, vote: room.turn?.votes.get(viewer.player.id) ?? null } };
   }

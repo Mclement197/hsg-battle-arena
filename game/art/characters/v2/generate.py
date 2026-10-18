@@ -230,6 +230,7 @@ def make_rig(sc,col,root):
  root['static_model']=False;root['character_id']=engineids[CURRENT];root['generation']='v2 deforming skin';body['original_geometry']=True
  return rig,body
 
+exec((BASE/'ability-poses.py').read_text(),globals())
 def clips(rig):
  rig.animation_data_create()
  for clip,duration in [('idle',48),('attack',24),('hit',18),('defeat',36),('defend',24),('heal',36),('special',36)]:
@@ -258,6 +259,7 @@ def clips(rig):
    elif clip=='special':
     for side in ['left','right']:rig.pose.bones[side+'.upperarm'].rotation_euler.z=(1 if side=='left' else -1)*.45*wave
     rig.pose.bones['chest'].rotation_euler.x=-.12*wave
+   ability_pose(rig,CURRENT,clip,wave)
    for side in ['left','right']:
     for digit in ['index','middle','ring','little']:
      for k in [1,2,3]:rig.pose.bones[side+'.'+digit+'.'+str(k)].rotation_euler.x=(.025*pulse if clip=='idle' else .23*wave)

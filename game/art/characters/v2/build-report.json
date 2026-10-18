@@ -4,41 +4,41 @@
     "bones": 52,
     "vertices": 34548,
     "file": "luca-di-grazia.glb",
-    "bytes": 2303944
+    "bytes": 2302328
   },
   {
     "id": "free-rider",
     "bones": 48,
     "vertices": 14640,
     "file": "free-rider.glb",
-    "bytes": 1181892
+    "bytes": 1186248
   },
   {
     "id": "tryhard",
     "bones": 48,
     "vertices": 21640,
     "file": "tryhard.glb",
-    "bytes": 1863148
+    "bytes": 1868532
   },
   {
     "id": "assessment-hoodie",
     "bones": 48,
     "vertices": 23392,
     "file": "assessment-hoodie.glb",
-    "bytes": 1639964
+    "bytes": 1646152
   },
   {
     "id": "trischli-warrior",
     "bones": 48,
     "vertices": 14688,
     "file": "trischli-warrior.glb",
-    "bytes": 1261180
+    "bytes": 1257660
   },
   {
     "id": "bad-teacher",
     "bones": 48,
     "vertices": 16045,
     "file": "bad-teacher.glb",
-    "bytes": 1249368
+    "bytes": 1243388
   }
 ]

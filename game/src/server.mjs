@@ -83,9 +83,10 @@ function consume(bucket, key, limit, now) {
   entry.count++;
 }
 function publicStaticPath(pathname) {
-  return ['/game/', '/game/index.html', '/game/app.js', '/game/styles.css', '/game/fighter-data.js', '/game/characters.js'].includes(pathname) ||
+  return ['/game/', '/game/index.html', '/game/app.js', '/game/styles.css', '/game/fighter-data.js', '/game/characters.js', '/game/battle-world.js', '/game/battle-contract.js'].includes(pathname) ||
     /^\/game\/assets\/[A-Za-z0-9_-]+\.(svg|png|webp|jpg|ico|woff2|ttf|mp3|wav|ogg)$/.test(pathname) ||
     /^\/game\/assets\/audio\/[A-Za-z0-9_-]+\.(wav|webm)$/.test(pathname) ||
+    /^\/game\/assets\/arenas\/(library|trischli)\.glb$/.test(pathname) ||
     /^\/game\/assets\/characters\/(luca-di-grazia|free-rider|tryhard|assessment-hoodie|trischli-warrior|bad-teacher)\.(glb|webp)$/.test(pathname) ||
     /^\/game\/vendor\/(three\.(module|core)|GLTFLoader|BufferGeometryUtils|SkeletonUtils)\.js$/.test(pathname);
 }
