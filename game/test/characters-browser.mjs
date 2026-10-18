@@ -27,7 +27,7 @@ async function setup(page, a, b, { all = true } = {}) {
   await page.goto('http://127.0.0.1:18994/game/');
   // Test-only probe of the actual production stage. No production debug globals or synthetic animation events.
   await page.evaluate(async () => {
-    const { CharacterStage } = await import('./characters.js?v=20261017-rigged');
+    const { CharacterStage } = await import('./characters.js?v=20261018-previews');
     const sync = CharacterStage.prototype.sync, play = CharacterStage.prototype.play;
     window.__modelCues = [];
     CharacterStage.prototype.sync = function () { window.__testStage = this; return sync.call(this); };

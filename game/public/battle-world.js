@@ -1,5 +1,5 @@
 import * as THREE from './vendor/three.module.js';
-import { loadModel, modelFor, release } from './characters.js?v=20261017-rigged';
+import { loadModel, modelFor, release } from './characters.js?v=20261018-previews';
 import { ARENA_WORLDS, BattleEvents } from './battle-contract.js';
 const v = a => new THREE.Vector3(...a);
 const ease = t => { t = THREE.MathUtils.clamp(t,0,1); return t*t*(3-2*t); };

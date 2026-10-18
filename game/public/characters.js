@@ -4,7 +4,7 @@ import { GLTFLoader } from './vendor/GLTFLoader.js';
 // One stable mapping shared by selection, runtime and asset tests; never derive filenames from nicknames.
 export const CHARACTER_MODELS = Object.freeze(Object.fromEntries([
   'luca-di-grazia', 'free-rider', 'tryhard', 'assessment-hoodie', 'trischli-warrior', 'bad-teacher'
-].map(id => [id, Object.freeze({ model: './assets/characters/' + id + '.glb', portrait: './assets/characters/' + id + '.webp' })])));
+].map(id => [id, Object.freeze({ model: './assets/characters/' + id + '.glb', portrait: './assets/characters/' + id + '.webp?v=96f7431-previews1' })])));
 export const modelFor = id => Object.hasOwn(CHARACTER_MODELS, id) ? CHARACTER_MODELS[id] : null;
 export const REQUIRED_CLIPS = Object.freeze(['idle', 'attack', 'hit', 'defeat', 'defend', 'heal', 'special']);
 const bytes = new Map();

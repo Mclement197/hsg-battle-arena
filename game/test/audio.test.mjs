@@ -6,6 +6,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
+import {modelFor} from '../public/characters.js';
 import { ACTION_SOUNDS, AUDIO_SOUNDS, ActionAudio, createActionCue, createBattleStartCue, createVictoryCue, ArenaClient } from '../public/app.js';
 import { buildSound } from '../public/assets/audio/generate.mjs';
 import { Arena, MOVES } from '../src/engine.mjs';
@@ -247,7 +248,7 @@ test('actual UI hook: selection/local expiry silent, server result once, mute/un
   const sandbox = {
     document, window: { AudioContext: function () { return context; } },
     BattleWorld: class { events = { pending: [] }; sync() {} clear() {} disconnect() {} },
-    CharacterStage: class { sync() {} play() {} }, modelFor: () => null,
+    CharacterStage: class { sync() {} play() {} }, modelFor,
     sessionStorage: { getItem: key => key.endsWith('active') ? JSON.stringify({ room: room.id, role: 'player' }) : 'token' },
     location: { origin: 'http://127.0.0.1', search: '' },
     URLSearchParams, AbortController, TextDecoder, TextEncoder,

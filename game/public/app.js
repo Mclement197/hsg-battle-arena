@@ -1,5 +1,5 @@
-import { BattleWorld } from './battle-world.js?v=20261018-world';
-import { CharacterStage, modelFor } from './characters.js?v=20261017-rigged';
+import { BattleWorld } from './battle-world.js?v=20261018-previews';
+import { CharacterStage, modelFor } from './characters.js?v=20261018-previews';
 import { FIGHTER_PROFILES, STAT_META, fighterStats, moveDescription } from './fighter-data.js?v=20261016-arcade';
 // Presentation identities use the authoritative team characterId, never nickname or team order.
 export const CHARACTER_THEMES = Object.freeze({
@@ -431,7 +431,7 @@ if (typeof document !== 'undefined') (() => {
   const battleWorld = new BattleWorld();
   const setFighterArt = (image, id, name, animated = false, team = '') => {
     const asset = modelFor(id);
-    const url = asset?.portrait || './assets/' + id + '.svg';
+    const url = (asset || modelFor('assessment-hoodie')).portrait;
     if (image.getAttribute('src') !== url) image.src = url;
     image.alt = name;
     if (animated && asset) { image.dataset.model = id; image.dataset.modelTeam = team; }
@@ -715,7 +715,7 @@ if (typeof document !== 'undefined') (() => {
     if (view.specialInfo !== undefined) setText('special-info', view.specialInfo);
     if (view.winner !== undefined) {
       const ace = view.winner === 'ace';
-      if (!$('winner-art').dataset.model) $('winner-art').src = ace ? './assets/assessment-ace.svg' : './assets/deadline-dynamo.svg';
+      if (!$('winner-art').dataset.model) $('winner-art').src = modelFor(ace ? 'assessment-hoodie' : 'tryhard').portrait;
       setText('victory-title', ace ? 'Team Ace wins!' : 'Team Dynamo wins!');
     }
     if (view.victoryMessage !== undefined) setText('victory-message', view.victoryMessage);
@@ -824,7 +824,7 @@ if (typeof document !== 'undefined') (() => {
     }
   }
   const arenaNames = { library: 'Library', trischli: 'Trischli', 'mensa-b': 'Mensa B' };
-  const arenaDescriptions = { library: 'Quiet zone. Loud rivalry.', trischli: 'Last dance. Last fighter standing.', 'mensa-b': 'Today’s special: a campus showdown.' };
+  const arenaDescriptions = { library: 'Quiet zone. Loud rivalry.', trischli: 'Last dance. Last fighter standing.', 'mensa-b': 'No 3D environment yet. Health and commands only.' };
   let setupMode = 'groups', selectedArena = 'library', selectedTeam = 'A';
   const selectedCharacters = { A: 'luca-di-grazia', B: 'free-rider' };
   function reportError(message) { setText('global-error', message); $('global-error').hidden = false; }
@@ -862,7 +862,9 @@ if (typeof document !== 'undefined') (() => {
       const button = document.createElement('button');
       button.type = 'button'; button.className = 'arena-option'; button.dataset.arena = id;
       button.setAttribute('aria-pressed', String(selectedArena === id));
-      const image = document.createElement('img'); image.src = './assets/arena-' + id + '.svg'; image.alt = '';
+      const image = document.createElement(id === 'mensa-b' ? 'span' : 'img');
+      if (id === 'mensa-b') { image.className = 'arena-unmodeled'; image.textContent = '3D arena not modeled'; }
+      else { image.src = './assets/arena-' + id + '.webp?v=96f7431-previews1'; image.alt = name + ' — actual 3D battle arena'; }
       const title = document.createElement('strong'); title.textContent = name;
       const description = document.createElement('small'); description.textContent = arenaDescriptions[id];
       button.append(image, title, description);
@@ -961,7 +963,7 @@ if (typeof document !== 'undefined') (() => {
     for (const [team, key] of [['A', 'ace'], ['B', 'dynamo']]) {
       const theme = characterTheme(state.teams[team].characterId);
       const name = theme?.name || (team === 'A' ? 'Assessment Ace' : 'Deadline Dynamo');
-      const id = theme ? state.teams[team].characterId : team === 'A' ? 'assessment-ace' : 'deadline-dynamo';
+      const id = theme ? state.teams[team].characterId : team === 'A' ? 'assessment-hoodie' : 'tryhard';
       identities[team] = { name, id };
       for (const image of document.querySelectorAll('.' + key + '-fighter .fighter-art, .' + key + '-roster > img')) {
         setFighterArt(image, id, name, image.classList.contains('fighter-art'), team);

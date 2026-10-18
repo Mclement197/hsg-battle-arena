@@ -16,7 +16,7 @@ async function attach(page,room,role,token){
  await page.addInitScript(({room,role,token})=>{sessionStorage.setItem('hsg-arena:v1:'+role+':'+room,token);sessionStorage.setItem('hsg-arena:v1:active',JSON.stringify({room,role}));},{room,role,token});
  await page.goto(base+'/game/',{waitUntil:'domcontentloaded'});
  await page.evaluate(async()=>{
-  const {BattleWorld}=await import('./battle-world.js?v=20261018-world');
+  const {BattleWorld}=await import('./battle-world.js?v=20261018-previews');
   const sync=BattleWorld.prototype.sync;BattleWorld.prototype.sync=function(s){window.__world=this;return sync.call(this,s);};
   const animate=BattleWorld.prototype.animate;
   BattleWorld.prototype.animate=function(now){const e=this.active,t=(now-e.startedAt)/e.ability.duration;const out=animate.call(this,now);
