@@ -1,4 +1,4 @@
-import { BattleWorld } from './battle-world.js?v=20261018-previews';
+import { BattleWorld } from './battle-world.js?v=20261018-action-camera';
 import { CharacterStage, modelFor } from './characters.js?v=20261018-previews';
 import { FIGHTER_PROFILES, STAT_META, fighterStats, moveDescription } from './fighter-data.js?v=20261016-arcade';
 // Presentation identities use the authoritative team characterId, never nickname or team order.

@@ -4,6 +4,51 @@ import { ARENA_WORLDS, BattleEvents } from './battle-contract.js';
 const v = a => new THREE.Vector3(...a);
 const ease = t => { t = THREE.MathUtils.clamp(t,0,1); return t*t*(3-2*t); };
 
+// Analytic timeline (not accumulated lerps): identical framing at 15/30/60 Hz and zero cut on return.
+export function actionCamera(config, event, progress, aspect = 1) {
+ const t=THREE.MathUtils.clamp(progress,0,1),launch=event.ability.launch,impact=event.ability.impact;
+ const enter=ease(t/launch),travel=ease((t-launch)/(impact-launch));
+ const release=1-ease((t-Math.max(impact,.72))/(1-Math.max(impact,.72)));
+ const weight=enter*release,side=event.actor==='A'?1:-1;
+ const portrait=.35+.65*ease((aspect-.9)/.8);
+ const shots={attack:[.70,-.42,-1.05,-.40],defend:[.82,.98,-.65,-.32],heal:[.38,.48,-.85,.12],special:[1.05,-.85,-1.35,-.18]};
+ const [from,to,push,lift]=shots[event.move]||shots.attack;
+ const position=v(config.overview);
+ position.x+=side*THREE.MathUtils.lerp(from,to,travel)*weight*portrait;
+ position.z+=push*weight*portrait;position.y+=lift*weight;
+ const actor=v(config.fighters[event.actor==='A'?0:1]);
+ const target=v(config.fighters[event.target==='A'?0:1]);
+ const focus=actor.lerp(target,event.actor===event.target?0:travel*.68);
+ const look=v(config.look);look.x+=focus.x*.17*weight*portrait;
+ look.y+=(event.move==='heal'?.10:-.06)*weight;
+ // All shots remain in the open central aisle, below Trischli's low fixtures.
+ position.x=THREE.MathUtils.clamp(position.x,-1.3,1.3);
+ return {position,look,phase:t<launch?'anticipation':t<impact?'launch':t<.72?'impact':'recovery'};
+}
+
+// Fit the *animated* cast (including wings, raised hands and props), not just the bind pose.
+export function fighterEnvelope(fighter) {
+ const bounds=new THREE.Box3(),holder=fighter.holder;
+ const position=holder.position.clone(),rotation=holder.quaternion.clone();
+ holder.updateMatrixWorld(true);const transform=holder.matrixWorld.clone();
+ // Keep the envelope oriented with the fighter: world-axis boxes invent huge empty wing corners.
+ holder.position.set(0,0,0);holder.quaternion.identity();holder.updateMatrixWorld(true);
+ for(const action of fighter.actions.values()) {
+  fighter.mixer.stopAllAction();action.reset().setLoop(THREE.LoopOnce,1);action.clampWhenFinished=true;action.play();
+  for(const fraction of [0,.25,.5,.75,1]) {
+   fighter.mixer.setTime(action.getClip().duration*fraction);
+   fighter.holder.updateMatrixWorld(true);bounds.union(new THREE.Box3().setFromObject(fighter.holder,true));
+  }
+ }
+ fighter.mixer.stopAllAction();fighter.clip=null;
+ // Small allowance for cross-fades, idle sway and the floating ability cue.
+ bounds.expandByScalar(.10);
+ fighter.framePoints=[];
+ for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z])fighter.framePoints.push(new THREE.Vector3(x,y,z).applyMatrix4(transform));
+ holder.position.copy(position);holder.quaternion.copy(rotation);holder.updateMatrixWorld(true);
+ return bounds.applyMatrix4(transform);
+}
+
 // Each motif is modeled in world space. Books/paper/pen are solids; writing and dance rays are lines.
 function motifShape(motif, color, special, move) {
  const group = new THREE.Group();
@@ -94,6 +139,7 @@ export class BattleWorld {
     root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=false;o.frustumCulled=false;}});
     this.scene.add(holder);const mixer=new THREE.AnimationMixer(root),actions=new Map(gltf.animations.map(c=>[c.name,mixer.clipAction(c)]));
     this.fighters[team]={root,holder,mixer,actions,clip:null};
+    this.fighters[team].envelope=fighterEnvelope(this.fighters[team]);
     this.play(team,state.teams[team].hp===0?'defeat':'idle');
     if(state.teams[team].hp===0)mixer.update(1.5);
    }
@@ -119,10 +165,46 @@ export class BattleWorld {
    console.warn('Arena load failed',error);
   }
  }
- layout(){if(!this.renderer)return;const w=this.container.clientWidth,h=this.container.clientHeight;this.renderer.setSize(w,h);this.camera.aspect=w/Math.max(h,1);this.camera.fov=w/h<1.1?64:49;this.camera.updateProjectionMatrix();this.overview(!this.active);}
+ layout(){
+  if(!this.renderer)return;const w=this.container.clientWidth,h=Math.max(this.container.clientHeight,1);
+  this.renderer.setSize(w,h);this.camera.aspect=w/h;
+  const cards=[...this.container.querySelectorAll('.fighter')];
+  this.frameTop=cards.length?Math.min(.55,1-2*(Math.max(...cards.map(card=>card.offsetTop+card.offsetHeight))+12)/h):.84;
+  if(this.active)this.direct((performance.now()-this.active.startedAt)/this.active.ability.duration);else this.overview(true);
+ }
  play(team,clip){const f=this.fighters[team],a=f?.actions.get(clip);if(!a)return;if(clip==='idle'&&f.clip==='idle')return;const old=f.current;a.reset().setLoop(clip==='idle'?THREE.LoopRepeat:THREE.LoopOnce,clip==='idle'?Infinity:1);a.clampWhenFinished=clip!=='idle';a.play();if(old&&old!==a)a.crossFadeFrom(old,.1,false);f.current=a;f.clip=clip;}
- overview(snap=false){if(!this.camera||!this.config)return;this.goal=v(this.config.overview);this.goalLook=v(this.config.look);if(snap){this.camera.fov=this.camera.aspect<1.1?64:49;this.camera.updateProjectionMatrix();this.camera.position.copy(this.goal);this.look.copy(this.goalLook);this.camera.lookAt(this.look);}}
- begin(event,now){this.active={...event,startedAt:now,hit:false};this.lastCameraTime=now;this.play(event.actor,event.move);this.badge.textContent=event.ability.label;this.canvas.dataset.action=event.id;this.canvas.dataset.worldMove=event.move;this.canvas.dataset.actor=event.actor;
+ overview(snap=false){if(!this.camera||!this.config)return;this.goal=v(this.config.overview);this.goalLook=v(this.config.look);if(snap)this.frame(this.goal,this.goalLook);}
+ frame(position,look){
+  this.camera.position.copy(position);this.look.copy(look);
+  // Host health cards occupy the upper quarter; all framing stays below them.
+  const host=this.container?.classList.contains('fight-stage');
+  this.camera.lookAt(this.look);this.camera.updateMatrixWorld(true);
+  const inverse=this.camera.matrixWorldInverse,top=this.frameTop??(host?.43:.84),bottom=-.78;
+  let tangent=Math.tan(THREE.MathUtils.degToRad(24/2)),minY=Infinity,maxY=-Infinity;
+  for(const f of Object.values(this.fighters)){
+   const box=f.envelope||new THREE.Box3().setFromObject(f.holder);
+   if(box.isEmpty())continue;
+   const points=f.framePoints||[box.min,box.max];
+   for(const point of points){
+    const p=point.clone().applyMatrix4(inverse),depth=Math.max(.1,-p.z);
+    tangent=Math.max(tangent,Math.abs(p.x)/(depth*this.camera.aspect*.88));
+    minY=Math.min(minY,p.y/depth);maxY=Math.max(maxY,p.y/depth);
+   }
+  }
+  const hasBounds=Number.isFinite(minY);
+  if(hasBounds)tangent=Math.max(tangent,(maxY-minY)/(top-bottom));
+  this.camera.fov=THREE.MathUtils.radToDeg(2*Math.atan(tangent));
+  // Off-axis framing uses the space below health cards without tilting down onto heads or cropping feet.
+  const shift=hasBounds?(top+bottom)/2-(minY+maxY)/(2*tangent):0;
+  this.camera.setViewOffset(this.camera.aspect,1,0,shift/2,this.camera.aspect,1);
+ }
+ direct(t){
+  if(this.motion.matches){this.overview(true);return;}
+  const shot=actionCamera(this.config,this.active,t,this.camera.aspect);
+  this.goal=shot.position;this.goalLook=shot.look;this.canvas.dataset.camera=shot.phase;
+  this.frame(shot.position,shot.look);
+ }
+ begin(event,now){this.active={...event,startedAt:now,hit:false};this.play(event.actor,event.move);this.badge.textContent=event.ability.label;this.canvas.dataset.action=event.id;this.canvas.dataset.worldMove=event.move;this.canvas.dataset.actor=event.actor;
   this.fx=motifShape(event.ability.motif,event.ability.color,event.move==='special',event.move);this.scene.add(this.fx);this.fx.visible=false;
   // Stretch bone anticipation so the hand gesture launches at the world-space projectile beat.
   this.fighters[event.actor].current.setDuration(1.45);
@@ -143,22 +225,7 @@ export class BattleWorld {
   if(!this.motion.matches&&t<.94){actor.current.time=Math.min(t*e.ability.duration/1000*actor.current.timeScale,actor.current.getClip().duration-.001);actor.mixer.update(0);}
   if(t>=impact&&!e.hit){e.hit=true;if(e.actor!==e.target){this.play(e.target,e.defeated?'defeat':'hit');if(this.motion.matches)target.mixer.update(e.defeated?1.5:.35);}}
   if(t>.94){for(const [team,f] of Object.entries(this.fighters))if(f.clip!=='idle'&&f.clip!=='defeat')this.play(team,'idle');}
-  // Fixed safe corridor shots, no wall crossing or fast orbital spins. Controls remain outside canvas.
-  let phase=t<.35?'anticipation':t<.72?'impact':'return';this.canvas.dataset.camera=phase;
-  if(moving){const subject=phase==='anticipation'?a:b;
-   if(phase==='return')this.overview();else{
-    const base=v(this.config.overview);this.goal=base.lerp(subject.clone().add(new THREE.Vector3(e.actor==='A'?-1.7:1.7,2.05,4.2)),.68);
-    this.goal.x=THREE.MathUtils.clamp(this.goal.x,-2.4,2.4);this.goal.y=Math.min(this.goal.y,this.state.arenaId==='trischli'?2.8:4.2);
-    if(this.state.arenaId==='trischli'){this.goal.z=Math.max(.2,this.goal.z);this.goal.y=Math.min(2.55,this.goal.y);}
-    this.goalLook=subject.clone().lerp(e.actor===e.target?subject:phase==='anticipation'?b:a,.38).add(new THREE.Vector3(0,1.05,0));
-   }
-   const blend=1-Math.exp(-Math.min((now-(this.lastCameraTime??now-33))/1000,.25)*8);this.lastCameraTime=now;
-   this.camera.position.lerp(this.goal,blend);this.look.lerp(this.goalLook,blend);this.camera.lookAt(this.look);
-   // Widen the shot rather than cutting off a wing when the other fighter gets the close-up.
-   this.camera.fov=this.camera.aspect<1.1?64:49;this.camera.updateProjectionMatrix();this.camera.updateMatrixWorld(true);
-   let edge=0;for(const fighter of Object.values(this.fighters)){const box=new THREE.Box3().setFromObject(fighter.holder);for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z]){const p=new THREE.Vector3(x,y,z).project(this.camera);edge=Math.max(edge,Math.abs(p.x),Math.abs(p.y));}}
-   const baseFov=this.camera.aspect<1.1?64:49;this.camera.fov=Math.min(78,baseFov+Math.max(0,edge-.88)*22);this.camera.updateProjectionMatrix();
-  }else this.overview(true);
+  this.direct(t);
   if(t>=1){this.finish();}
  }
  finish(){if(this.fx){this.scene?.remove(this.fx);release(this.fx);this.fx=null;}this.active=null;if(this.badge)this.badge.textContent='';if(this.canvas){this.canvas.dataset.camera='overview';delete this.canvas.dataset.action;}this.overview(true);if(this.renderer)this.renderer.shadowMap.needsUpdate=true;}
