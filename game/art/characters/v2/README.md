@@ -49,3 +49,7 @@ The builder reuses original identity-detail functions from ../generate.py, repla
 ## Limits
 
 Stylized moderately low-poly interpretation, not a scan or exact likeness. Limb joints are continuous surfaces; clothing/body/face parts are not one watertight production retopology. The blend contains optimized joined surfaces plus editable skeletons; regenerate from both Python sources to edit individual authored details. No corrective morphs, finger IK, facial blendshapes, cloth simulation, baked texture atlas or LODs. Procedural Cycles fabric micro-bump is not exported; runtime preserves color/roughness/metallic and actual lettering geometry. Chromium emulated mobile is not physical iOS/Android testing or a guaranteed device frame rate.
+
+## Anatomy/contact repair follow-up
+
+The October 2026 follow-up repairs pelvis/thigh continuity, shoulder transitions, prop grips, bimanual support, and planted feet while preserving identity and gameplay contracts. See [repair workflow and reproduction](repair/README.md), [pre-edit repair prompt](repair/SELF-REPAIR-PROMPT.md), and the dated results in [verification](VERIFICATION.md). Final reviewed binaries are integrated into this directory and [`../../../public/assets/characters/`](../../../public/assets/characters/). Residual stylized garment overlaps and test limits are recorded in verification.

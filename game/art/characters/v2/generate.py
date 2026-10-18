@@ -15,8 +15,8 @@ end=source.index(' # Varied body masses',start)
 source=source[:start]+source[end:]
 # Default output belongs to v2, not the archived first pass.
 exec(compile(source,str(BASE.parent/'generate.py'),'exec'),globals())
-OUT=str(BASE);os.makedirs(OUT+'/renders',exist_ok=True)
-EXPORT=BASE.parents[2]/'public'/'assets'/'characters'
+OUT=os.environ.get('HSG_CHARACTER_OUTPUT',str(BASE));os.makedirs(OUT+'/renders',exist_ok=True)
+EXPORT=Path(os.environ.get('HSG_CHARACTER_EXPORT',str(BASE.parents[2]/'public'/'assets'/'characters')))
 EXPORT.mkdir(parents=True,exist_ok=True)
 CURRENT=0;JOINTS={};WEIGHTS={}
 oldell=ell
@@ -160,6 +160,8 @@ def legs(cloth,shoe=dark,wide=1):
   for j in range(3):
    o=line(side+' shoe lace',[(s*.27-.065,-.10-j*.048,.333-j*.025),(s*.27+.065,-.10-j*.048,.333-j*.025)],.006,white);o['bind']=side+'.foot'
 
+exec((BASE/'anatomy-repair.py').read_text(),globals())
+
 ids=['luca','free-rider','tryhard','assessment','trischli-warrior','bad-teacher']
 engineids=['luca-di-grazia','free-rider','tryhard','assessment-hoodie','trischli-warrior','bad-teacher']
 names=['Luca Di Grazia','Free-rider','Tryhard','Assessment','Trischli Warrior','Bad Teacher']
@@ -175,12 +177,13 @@ def bind_default(o,co):
  if 'perfect notes' in n or 'marked examination' in n or 'failed exam cross' in n:return {'left.hand':1}
  if 'folded crumpled' in n or 'crumpled group' in n or 'unfinished group' in n:return {'root':1}
  if z>2.83 or 'halo' in n or 'glasses' in n:return {'head':1}
- if 'bad luck timetable' in n or 'unlucky exam' in n or 'exam rules' in n:return {'left.hand':.5,'right.hand':.5}
+ if 'bad luck timetable' in n or 'unlucky exam' in n or 'exam rules' in n:return {'left.hand':1}
  if 'neck' in n:return blended(z,['chest','head'],[2.63,2.90])
  return blended(z,['pelvis','spine','chest'],[1.65,2.0,2.53])
 
 def make_rig(sc,col,root):
- global C
+ global C,SOURCE_REGIONS
+ SOURCE_REGIONS={}
  bpy.context.window.scene=sc
  armdata=bpy.data.armatures.new(root['character_id']+' anatomical skeleton');rig=bpy.data.objects.new(root['character_id']+' / RIG',armdata);col.objects.link(rig);rig.parent=root;rig.show_in_front=True
  bpy.ops.object.select_all(action='DESELECT');rig.select_set(True);bpy.context.view_layer.objects.active=rig;bpy.ops.object.mode_set(mode='EDIT')
@@ -209,6 +212,10 @@ def make_rig(sc,col,root):
   o=bpy.context.object
   local=o.matrix_local.copy();o.data.transform(local);o.matrix_basis.identity();o.parent=rig
   if not len(o.vertex_groups):setweights(o,[bind_default(o,v.co) for v in o.data.vertices])
+  # Keep semantic source regions after joining for actual contact/seam tests.
+  region=o.data.attributes.new('source_region','INT','POINT')
+  region_id=len(SOURCE_REGIONS)+1;SOURCE_REGIONS[str(region_id)]=o.name
+  for value in region.data:value.value=region_id
   (vfxmeshes if 'dizziness' in o.name or 'orbit particle' in o.name else meshes).append(o)
  if vfxmeshes:
   bpy.ops.object.select_all(action='DESELECT')
@@ -227,6 +234,7 @@ def make_rig(sc,col,root):
   assert total>0,(body.name,v.index)
   for g in body.vertex_groups:g.remove([v.index])
   for gi,w in weights:body.vertex_groups[gi].add([v.index],w/total,'REPLACE')
+ body['source_regions']=json.dumps(SOURCE_REGIONS)
  root['static_model']=False;root['character_id']=engineids[CURRENT];root['generation']='v2 deforming skin';body['original_geometry']=True
  return rig,body
 
@@ -234,8 +242,9 @@ exec((BASE/'ability-poses.py').read_text(),globals())
 def clips(rig):
  rig.animation_data_create()
  for clip,duration in [('idle',48),('attack',24),('hit',18),('defeat',36),('defend',24),('heal',36),('special',36)]:
-  action=bpy.data.actions.new(clip);rig.animation_data.action=action
-  frames=[1,1+duration//4,1+duration//2,1+3*duration//4,1+duration]
+  print('BAKE',engineids[CURRENT],clip,flush=True)
+  action=bpy.data.actions.new(clip);rig.animation_data.action=None
+  frames=list(range(1,duration+2))
   for fi,frame in enumerate(frames):
    t=(frame-1)/duration;wave=math.sin(t*math.pi);pulse=math.sin(t*math.tau)
    for b in rig.pose.bones:b.rotation_mode='XYZ';b.rotation_euler=(0,0,0);b.location=(0,0,0)
@@ -262,24 +271,38 @@ def clips(rig):
    ability_pose(rig,CURRENT,clip,wave)
    for side in ['left','right']:
     for digit in ['index','middle','ring','little']:
-     for k in [1,2,3]:rig.pose.bones[side+'.'+digit+'.'+str(k)].rotation_euler.x=(.025*pulse if clip=='idle' else .23*wave)
-    rig.pose.bones[side+'.thumb.1'].rotation_euler.y=.08*wave
+     for k in [1,2,3]:rig.pose.bones[side+'.'+digit+'.'+str(k)].rotation_euler.x=0 if side in GRIPS.get(CURRENT,{}) else (.025*pulse if clip=='idle' else .12*wave)
+    rig.pose.bones[side+'.thumb.1'].rotation_euler.y=0 if side in GRIPS.get(CURRENT,{}) else .08*wave
     if side+'.wing' in rig.pose.bones:
      rig.pose.bones[side+'.wing'].rotation_euler.y=(1 if side=='left' else -1)*(.035*pulse if clip=='idle' else .18*wave)
      rig.pose.bones[side+'.wingtip'].rotation_euler.x=.08*wave
    rig.pose.bones['vfx'].rotation_euler.y=.12*pulse
+   solve_pose(rig,clip,t,wave)
+   solved={b.name:(b.rotation_euler.copy(),b.location.copy()) for b in rig.pose.bones}
+   rig.animation_data.action=action
    for b in rig.pose.bones:
+    b.rotation_euler,b.location=solved[b.name]
     b.keyframe_insert(data_path='rotation_euler',frame=frame,group=b.name)
-    if b.name=='pelvis':b.keyframe_insert(data_path='location',frame=frame,group=b.name)
-  track=rig.animation_data.nla_tracks.new();track.name=clip;strip=track.strips.new(clip,1,action);strip.name=clip
+    if b.name=='pelvis' or (CURRENT==3 and b.name=='right.hand'):b.keyframe_insert(data_path='location',frame=frame,group=b.name)
+   rig.animation_data.action=None
+  track=rig.animation_data.nla_tracks.new();track.name=clip;strip=track.strips.new(clip,1,action);strip.name=clip;track.mute=True
   rig.animation_data.action=None
  # Muted in editor for clean rest lineup; exporter exports muted tracks when solo flags disabled.
  for track in rig.animation_data.nla_tracks:track.mute=True
+ for bone in rig.pose.bones:bone.rotation_euler=(0,0,0);bone.location=(0,0,0)
+ bpy.context.view_layer.update()
 
 for i,(slug,title) in enumerate(zip(ids,names)):
  CURRENT=i;JOINTS={}
+ print('BUILD CHARACTER',slug,flush=True)
  sc,col,rt=make_character(slug,title,i)
- rig,body=make_rig(sc,col,rt);clips(rig);setup(sc,title,slug)
+ repair_details(col,rt)
+ rig,body=make_rig(sc,col,rt)
+ skinmeshes=[obj for obj in col.all_objects if obj.type=='MESH']
+ for obj in skinmeshes:obj.hide_set(True)
+ clips(rig)
+ for obj in skinmeshes:obj.hide_set(False)
+ setup(sc,title,slug)
  sc.render.fps=24;sc.frame_set(1);sc.cycles.samples=20;sc.render.resolution_x=900;sc.render.resolution_y=1050
  bpy.context.window.scene=sc;bpy.ops.object.select_all(action='DESELECT')
  for o in col.all_objects:o.select_set(True)
