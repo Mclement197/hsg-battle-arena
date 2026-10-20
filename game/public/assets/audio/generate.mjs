@@ -1,4 +1,4 @@
-// Original synthesis, no samples or dependencies. Run from any working directory.
+// Original HSG Battle Arena synthesis by OpenClaw game-sound-designer, 2026-10-20; no samples.
 import { writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { ACTION_SOUNDS } from '../../app.js';
@@ -6,14 +6,23 @@ import { ACTION_SOUNDS } from '../../app.js';
 const RATE = 24000;
 const TAU = 2 * Math.PI;
 const sine = (frequency, t) => Math.sin(TAU * frequency * t);
-const durations = { attack: .34, defend: .62, heal: 1.04, special: .86 };
+const durations = { attack: .22, defend: .36, heal: .60, special: .70 };
+// Finite harmonics keep the chip texture below Nyquist, rather than aliasing a hard square.
+const pulse = phase => {
+  let value = 0;
+  for (let n = 1; n <= 5; n++) value += 2 * Math.sin(Math.PI * n * .25) / (Math.PI * n) * Math.cos(TAU * n * phase - Math.PI * n * .25);
+  return value;
+};
+const triangle = phase => Math.sin(TAU * phase) - Math.sin(TAU * 3 * phase) / 9 + Math.sin(TAU * 5 * phase) / 25;
+const envelope = (t, length, attack, release) => t < 0 || t >= length ? 0 : Math.min(1, t / attack, (length - t) / release);
 
 export function buildSound(move) {
   if (!Object.hasOwn(durations, move)) throw new Error('Unknown sound: ' + move);
-  let seed = 0x485347;
+  let seed = 0x485347, filteredNoise = 0;
   const noise = () => {
     seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
-    return (seed >>> 0) / 2147483648 - 1;
+    filteredNoise = .5 * filteredNoise + .5 * ((seed >>> 0) / 2147483648 - 1);
+    return filteredNoise;
   };
   const duration = durations[move];
   const samples = new Float64Array(Math.round(duration * RATE));
@@ -22,31 +31,33 @@ export function buildSound(move) {
     const t = i / RATE;
     let value;
     if (move === 'attack') {
-      // Fast descending body plus a short broadband contact crack.
-      const phase = 65 * t + 150 * .035 * (1 - Math.exp(-t / .035));
-      value = Math.sin(TAU * phase) * Math.exp(-t * 17) + .55 * noise() * Math.exp(-t * 48);
+      // Pixel strike: one dry 900 -> 220 Hz pulse sweep, with a tiny contact crack.
+      const phase = 900 * t - 680 / (2 * duration) * t * t;
+      value = pulse(phase) * Math.exp(-t * 13) + .18 * noise() * Math.exp(-t * 150);
     } else if (move === 'defend') {
-      // Inharmonic resonances distinguish a metal shield from the bass impact.
-      value = [730, 1171, 1863, 2927].reduce((sum, hz, j) =>
-        sum + sine(hz, t) * Math.exp(-t * (7 + j * 3)) / (j + 1), 0);
-      value += .25 * noise() * Math.exp(-t * 90);
+      // Shield lock: two metallic ticks 55 ms apart, not another descending impact.
+      value = [1200, 1800].reduce((sum, hz, j) => {
+        const u = t - j * .055;
+        return sum + (sine(hz, u) + .28 * sine(hz * 2.37, u)) *
+          envelope(u, .28, .002, .025) * Math.exp(-Math.max(0, u) * 24) * (j ? .85 : 1);
+      }, 0);
     } else if (move === 'heal') {
-      // Ascending C-E-G chimes, each with a softer octave overtone.
+      // Restore sparkle: three soft C5/E5/G5 triangle notes at 120 ms intervals.
       value = [523.25, 659.25, 783.99].reduce((sum, hz, j) => {
-        const u = t - j * .16;
-        return u < 0 ? sum : sum + (sine(hz, u) + .25 * sine(hz * 2, u)) *
-          Math.min(1, u / .012) * Math.exp(-u * 5);
+        const u = t - j * .12;
+        return sum + triangle(hz * u) * envelope(u, .36, .012, .045) * Math.exp(-Math.max(0, u) * 13);
       }, 0);
     } else {
-      // Energy charge rising into a modulated noisy burst and low-frequency tail.
-      const charge = Math.sin(TAU * (140 * t + 1700 * t * t)) * Math.exp(-t * 6);
-      const u = Math.max(0, t - .18);
-      const burst = t < .18 ? 0 : (noise() * (.65 + .35 * sine(42, u)) +
-        .75 * Math.sin(TAU * (90 * u + 55 * .06 * (1 - Math.exp(-u / .06))))) *
-        Math.min(1, u / .006) * Math.exp(-u * 8);
-      value = .5 * charge + burst;
+      // Charged overdrive: 150 ms rising pulse, then a controlled burst/stepped tail.
+      const charge = pulse(350 * t + 1450 / .30 * t * t) * envelope(t, .15, .006, .012);
+      const u = Math.max(0, t - .15);
+      const phase = 700 * Math.min(u, .06) + 523.25 * Math.max(0, Math.min(u - .06, .07)) +
+        392 * Math.max(0, Math.min(u - .13, .08)) + 250 * Math.max(0, u - .21);
+      const burst = (pulse(phase) + .42 * noise() * Math.exp(-u * 22)) *
+        envelope(t - .15, .55, .006, .035) * Math.exp(-u * 12);
+      value = .48 * charge + burst;
     }
-    // Short edge fades prevent sample boundary clicks, including the final frame.
+    // Fade both sample boundaries; all rendering/level balancing is offline, not a mixer change.
     value *= Math.min(1, t / .002, (samples.length - 1 - i) / (RATE * .025));
     samples[i] = value;
     peak = Math.max(peak, Math.abs(value));

@@ -1,13 +1,86 @@
 # Game sounds
 
-Original procedural effects authored for this game, with no third-party samples,
-services, dependencies, or attribution requirements. Four PCM WAV assets
-(24 kHz, mono, 16-bit; combined size about 134 KiB):
+Original procedural effects authored for this game. The four approved 8-bit action
+concepts were rendered by OpenClaw's game-sound-designer on 2026-10-20, using only
+local JavaScript synthesis: no third-party samples, recordings, paid services,
+new dependencies or imitations of a copyrighted game recording. Four PCM WAVs
+(24 kHz, mono, 16-bit; 90,416 bytes / 88.30 KiB combined):
 
-- `attack-impact.wav` — 0.34 s; descending bass impact and sharp contact crack.
-- `defend-shield.wav` — 0.62 s; ringing, inharmonic metallic shield clang.
-- `heal-chime.wav` — 1.04 s; rising C–E–G chime with octave shimmer.
-- `special-burst.wav` — 0.86 s; rising energy charge, noisy burst, bass tail.
+| Move / concept | Destination | Duration / bytes | Reproducible recipe |
+| --- | --- | --- | --- |
+| Attack / Pixel strike | `attack-impact.wav` | 220 ms / 10,604 | 25%-duty finite-harmonic pulse, linear 900→220 Hz sweep, exponential decay 13/s, filtered-noise contact crack decaying 150/s. |
+| Defend / Shield lock | `defend-shield.wav` | 360 ms / 17,324 | 1200 then 1800 Hz sine ticks 55 ms apart, 0.28× inharmonic 2.37× partial, second tick 0.85×, 2 ms attacks and decay 24/s. Each tick releases over 25 ms. |
+| Heal / Restore sparkle | `heal-chime.wav` | 600 ms / 28,844 | Three rounded triangle notes (523.25, 659.25, 783.99 Hz), spaced 120 ms; fundamental − third harmonic/9 + fifth/25; 12 ms attacks, decay 13/s and 45 ms releases. |
+| Special / Charged overdrive | `special-burst.wav` | 700 ms / 33,644 | 150 ms 350→1800 Hz rising pulse (6 ms attack, 12 ms release), then 6 ms burst attack, filtered noise and phase-continuous 700/523.25/392/250 Hz stepped pulse tail; decay 12/s and 35 ms release. |
+
+For **each** of these four files: author/source is the project-authored generator
+`generate.mjs` and the recipe above; external source URL, third-party license
+version and attribution obligations are not applicable because no external audio
+is used. These are newly synthesized replacements, not edits of downloaded
+recordings. No separate distribution license is declared here, and no CC0,
+Creative Commons or third-party rights-clearance claim is invented; project
+maintainers determine the distribution terms of this original contribution.
+
+The xorshift32 noise seed resets to `0x485347` for each render. Noise uses
+`y[n] = 0.5 y[n−1] + 0.5 x[n]`. Pulse synthesis sums harmonics 1–5 of a
+25%-duty, DC-free Fourier series (maximum carrier harmonic 9 kHz). All four
+receive 2 ms boundary fade-in / 25 ms boundary fade-out, zero first/last frames,
+and the unchanged 0.8 PCM peak target. Interior note/charge transitions have their
+own envelopes; the special's tail steps preserve phase. Runtime playback gains,
+sliders and music are not modified. Distinction comes from descending single
+strike / metallic double tick / soft three-note rise / rising charge then burst,
+with useful midrange harmonics instead of dependence on sub-bass or stereo.
+
+Objective PCM checks (not listening or perceptual-loudness measurements): all four
+peak at −1.94 dBFS with no clipped samples. Maximum **sliding 50 ms RMS** levels
+are attack −10.90, defend −10.77, heal −9.53 and special −11.20 dBFS, a 1.67 dB
+spread. The existing mixer remains unchanged: action source 0.45 × SFX slider
+(default 0.80), lobby 0.45 × Music slider (default 0.35), battle additionally ×0.5,
+victory additionally ×2, countdown source 0.9 and Ready/Fight source 0.45.
+Physical speaker balance/intelligibility and real Safari/iOS remain separate
+listening/device acceptance checks, not established by waveform tests.
+
+### Candidate verification (2026-10-20)
+
+- Deterministic generator comparison, exact lengths/size, PCM format, zero boundary
+  frames, DC, peak and 50 ms energy regression checks pass in `test/audio.test.mjs`
+  together with the existing authoritative deadline, mute, dedup, preload,
+  reconnect, protected gain/source-identity and routing tests (18/18).
+- Chromium **153.0.8010.12**, installed Playwright Chromium build **1243**, Linux x64:
+  native 48 kHz decoding succeeds for all four action WAVs. Decoded action peaks
+  range 0.8000–0.8244; an additional native 96 kHz offline rendering also remains
+  below 0.825 (a resampling check, not a standardized true-peak certification).
+  Sum-of-individual-peak bounds with the unchanged decoded battle track plus one
+  action are below 0.636 at both sliders 100%, or 0.390 at defaults. Victory plus
+  one action remains below 0.492 at maximum sliders. These conservative bounds
+  are not a listening/masking assessment or a promise about arbitrary extra voices.
+- The complete serial `node --test --test-concurrency=1 test/*.test.mjs` run with
+  explicit `PLAYWRIGHT_MODULE` and `CHROMIUM_EXECUTABLE` executed 166 tests:
+  **158 passed, 6 failed, 1 cancelled, 1 skipped** (live URL intentionally unset).
+  This is **not** a full green browser-suite claim. The isolated worktree uses the
+  existing installed dependencies through an in-memory Node `registerHooks`
+  resolution fallback; no dependency or runtime file was added or changed.
+- Existing desktop/touch audio fixtures run out of HP before their suspension
+  checks (`room.turn` becomes null). The identical desktop failure was reproduced
+  with the original action WAVs routed into the unchanged candidate frontend.
+  Other full-suite blockers are missing `createMensa` export, missing GOLDEN CHALK
+  choreography, intro digit timing, battle lifecycle timeout and victory wait
+  timeout. No unrelated production code, protected audio or browser-test file was
+  changed to hide these failures. Independent QA/integration must resolve or
+  explicitly disposition these blockers before publication.
+- A nonlethal in-memory adaptation of those two older desktop/touch fixtures
+  progressed past the HP failure but still timed out waiting for UI move controls
+  (0/2 passed); it was not committed or presented as a passing suite.
+- A separate inline native smoke **passed** using three seeded, isolated loopback
+  sessions (desktop host, Chromium iPhone 13 and iPad gen 7 emulation), the actual
+  UI, native audio graph and real SSE parser. Explicit engine votes followed by
+  deadline resolution played attack/defend/heal/special once per client at source
+  gain 0.45 on SFX. Vote snapshots and unresolved zero-deadline snapshots were
+  silent; duplicates, mute/unmute, suspension and trusted-gesture recovery did not
+  replay consumed outcomes. The smoke restores fixture HP before each resolution
+  to keep the non-victory scenario alive; it does not change game code or assets.
+  All nine assets decoded on each client; there were no browser exceptions. This
+  is graph/playback evidence, not physical iPhone/iPad/Safari or speaker listening.
 
 ## Reproduce and extend
 
@@ -67,7 +140,7 @@ the prebattle engine update described below requires an approved service restart
 - **WAV SHA-256:**
   `ac1753b0c966a04b728a6d76f6650078654049337eeb152fbfc3b2fecc308925`
 
-The four original procedural action effects above remain unchanged; running
+The four original procedural action effects were redesigned on 2026-10-20; running
 `generate.mjs` does not regenerate or overwrite this third-party sample.
 `AUDIO_SOUNDS` combines the four move mappings with the battle-start, countdown and lobby assets. The source credit is also visible in the game’s How to play page.
 
@@ -77,7 +150,7 @@ A new match’s lobby re-arms it after reset. A newly opened room or re-establis
 stream first consumes its snapshot silently, including starts missed offline.
 Muted/loading/suspended starts are consumed and never queued for later. All
 sound-enabled host and player clients use the same hook; the Start button itself
-is not an audio trigger. The existing resolved-action effects remain unchanged; music and SFX now use independent volume buses.
+is not an audio trigger. At this earlier intro integration, the resolved-action effects were unchanged; music and SFX use independent volume buses.
 
 ## Requested lobby music and generated countdown (2026-10-17)
 
