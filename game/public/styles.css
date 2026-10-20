@@ -121,3 +121,155 @@ body[data-screen=player] .player-preview img{display:block;height:60px;width:60p
 .solo-moves button,.move{height:auto;min-height:100px;min-width:0}
 .move strong{max-width:100%}
 @media(max-width:760px){.solo-moves strong,.move strong{font-size:1.08rem}.solo-moves button,.move{min-height:110px}}
+/* Viewport-sized setup surfaces: content may grow when zoom/keyboard makes fitting impossible. */
+body{display:grid;grid-template-rows:auto auto minmax(0,1fr);min-height:100vh;min-height:100svh;min-height:100dvh}
+main{display:grid;min-height:0;min-width:0}
+.screen{min-height:0;min-width:0}
+#sound-hint{min-height:0}
+.menu-screen{min-height:0}
+.victory-screen{min-height:0}
+.entry-screen,.lobby-screen,.victory-screen{min-height:0}
+@media(max-width:760px){
+ .screen{padding:clamp(.65rem,2dvh,1.2rem) max(1rem,env(safe-area-inset-right)) max(.7rem,env(safe-area-inset-bottom)) max(1rem,env(safe-area-inset-left));min-height:0}
+ .topbar{padding-left:max(.65rem,env(safe-area-inset-left));padding-right:max(.65rem,env(safe-area-inset-right));padding-bottom:.4rem;min-height:60px}
+ #sound-hint{margin:.1rem max(.65rem,env(safe-area-inset-right));line-height:1.1}
+ .button{min-height:48px;padding:.55rem 1rem;font-size:1.15rem}
+ .menu-screen{padding:clamp(.65rem,2dvh,1.2rem) max(1rem,env(safe-area-inset-right)) max(.7rem,env(safe-area-inset-bottom)) max(1rem,env(safe-area-inset-left));align-content:center;overflow:visible}
+ .menu-copy h1{font-size:clamp(2.8rem,9vw,4rem)}
+ .menu-actions .mode-button{min-height:64px;padding:.4rem .9rem}
+ .menu-actions{gap:.45rem}
+ .menu-art{min-height:clamp(135px,26dvh,245px)}
+ .menu-art img{height:clamp(145px,30dvh,270px)}
+ .entry-screen{gap:clamp(.5rem,2dvh,1rem);align-content:center}
+ .entry-copy h1{font-size:clamp(2.8rem,8vw,3.7rem);margin-bottom:.5rem}
+ .entry-copy>p{margin-bottom:.6rem}
+ .entry-panel{padding:clamp(.75rem,2dvh,1.3rem)}
+ .entry-panel .panel-switch{margin-bottom:.6rem}
+ .entry-panel p{margin-bottom:.5rem}
+ .entry-panel form{gap:.25rem}
+ .entry-panel label{margin-top:.3rem}
+ .entry-panel input{height:48px}
+ .entry-panel .button{margin-top:.5rem}
+ .lobby-screen{gap:clamp(.4rem,1.5dvh,.85rem)}
+ .lobby-head{gap:.35rem}
+ .lobby-head h1{font-size:clamp(2rem,7vw,3rem);margin-bottom:.4rem}
+ .lobby-head p{font-size:.9rem;line-height:1.3;margin-bottom:.3rem}
+ .room-code{min-width:0;padding:.35rem .65rem}
+ .room-code strong{font-size:1.7rem;line-height:1.1}
+ .room-code .text-button{min-height:44px;padding:.2rem}
+ .lobby-grid{flex:1;min-height:0;align-content:center;gap:.55rem}
+ .qr-slot{width:clamp(100px,19dvh,160px)}
+ .join-url{margin:.35rem 0 .1rem;font-size:.75rem}
+ .join-card .hint{margin-bottom:0;line-height:1.2}
+ .team-roster{padding:.45rem;min-height:0}
+ .team-roster img{height:clamp(65px,13dvh,120px)}
+ .team-roster h2{margin:.2rem 0;font-size:1.25rem}
+ .team-roster ul{max-height:3rem;margin-top:.2rem}
+ .lobby-footer{gap:.4rem;padding-top:.5rem}
+ .lobby-footer p{font-size:.85rem;line-height:1.2}
+ .lobby-footer .button{width:100%}
+ .player-screen{display:flex;flex-direction:column;gap:clamp(.25rem,1dvh,.6rem)}
+ .player-head h1{font-size:clamp(2.2rem,8vw,3rem);margin:.1rem 0}
+ .player-head p{margin-bottom:.1rem;line-height:1.25}
+ .player-world{height:clamp(105px,20dvh,190px);flex:none;margin:0}
+ .player-preview{margin:0;padding:.25rem;flex:none}
+ .player-preview img,body[data-screen=player] .player-preview img{height:clamp(38px,6dvh,55px);width:55px}
+ .player-timer{margin:0;padding:.2rem .75rem;min-height:44px;flex:none}
+ .player-timer strong{font-size:2.3rem}
+ .move-grid{gap:.45rem}
+ .move{min-height:72px;padding:.45rem .65rem;gap:.15rem}
+ .move-icon{font-size:1.1rem;line-height:1}
+ .move strong{font-size:1rem;line-height:1.1}
+ .move small{font-size:.75rem;line-height:1.15}
+ .vote-feedback{margin:.1rem 0;font-size:.9rem;line-height:1.25}
+ .player-note{margin:0;font-size:.78rem;line-height:1.3}
+ .victory-screen img{height:clamp(125px,28dvh,270px)}
+ .victory-screen h1{font-size:clamp(2.2rem,8vw,3rem)}
+ .fight-stage{height:clamp(200px,36dvh,350px);min-height:200px}
+ .battle-screen{padding-top:.5rem}
+ .battle-bottom{padding:.5rem .7rem}
+ .solo-moves button{min-height:74px;padding:.45rem .65rem}
+ .selection-screen .selection-heading{margin:.3rem 0 .7rem}
+ .arena-option{min-height:clamp(95px,16dvh,138px)}
+ .arena-option img,.arena-unmodeled{height:clamp(95px,16dvh,138px)}
+ .arena-option strong{padding:.4rem .4rem 0 0;font-size:1.7rem}
+ .arena-option small{padding:0 .4rem .35rem 0}
+ .selection-footer{margin-top:.6rem;padding-top:.5rem;gap:.4rem}
+}
+@media(max-width:760px) and (max-height:700px){
+ .menu-art{min-height:120px}.menu-art img{height:150px}
+ .lobby-screen{gap:.35rem}.qr-slot{width:100px}.team-roster img{height:65px}
+ .player-world{height:105px}.player-preview img,body[data-screen=player] .player-preview img{height:38px}
+ .player-screen{gap:.25rem}
+}
+@media(max-width:760px) and (orientation:landscape) and (max-height:430px){
+ .menu-screen{grid-template-columns:1fr 1fr;gap:.5rem}.menu-art{min-height:230px}.menu-art img{height:230px}
+ .entry-screen{grid-template-columns:1fr 1fr;align-items:start}
+ .lobby-head{flex-direction:row}.room-code{width:auto;min-width:170px}
+ .lobby-grid{grid-template-columns:1fr 1fr 1fr}.join-card{grid-column:2;grid-row:1}.team-roster img{height:60px}
+ .player-world{height:105px}.player-screen{display:block}.player-screen>*{margin-bottom:.3rem}
+ .victory-screen{padding-block:1rem}
+}
+/* Dense-but-readable variants use actual available height, never clip the document. */
+@media(min-width:761px){
+ .player-screen{display:flex;flex-direction:column;gap:.35rem;justify-content:center}
+ .player-head h1{font-size:clamp(2.6rem,4vw,3.2rem);margin:.2rem 0}
+ .player-head p{margin-bottom:.2rem}
+ .player-world{height:clamp(145px,23dvh,215px);margin:0}
+ .player-preview{margin:0}.player-timer{margin:0;min-height:48px}
+ .move-grid{gap:.55rem}.move{min-height:74px;padding:.55rem .8rem}
+ .vote-feedback{margin:.2rem 0}.player-note{margin:0}
+}
+@media(max-width:760px) and (max-height:700px) and (orientation:portrait){
+ .entry-copy h1{font-size:2.35rem;margin:0 0 .2rem}
+ .entry-copy>p{font-size:.85rem;line-height:1.25;margin:0 0 .3rem}
+ .mini-rules{font-size:.7rem;gap:.35rem}.mini-rules span{padding-top:.3rem}
+ .entry-panel{padding:.65rem}.entry-panel h2{font-size:1.55rem;margin-bottom:.25rem}
+ .entry-panel p{font-size:.82rem;line-height:1.25;margin-bottom:.25rem}
+ .entry-panel .tab{min-height:44px}.entry-panel input{height:44px}
+ .selection-heading h1{font-size:2.3rem}.selection-heading p{margin-top:.25rem;line-height:1.25}
+ .arena-options{gap:.4rem}.arena-option{min-height:86px}.arena-option img,.arena-unmodeled{height:86px}
+ .arena-option strong{font-size:1.5rem}.arena-option small{font-size:.75rem}
+ .lobby-head h1{font-size:1.9rem;margin:0 0 .2rem}.lobby-head p{font-size:.8rem;margin:0}
+ .room-code{padding:.25rem .5rem}.room-code strong{font-size:1.5rem}.room-code .text-button{min-height:44px}
+ .qr-slot{width:110px;font-size:.75rem;line-height:1.15;padding:.2rem}
+ .team-roster img{height:55px}.team-roster h2{font-size:1.12rem}
+ .join-url{font-size:.7rem;margin:.15rem 0}.join-card .hint{font-size:.7rem}
+ .lobby-footer{padding-top:.3rem}
+ .player-head h1{font-size:2.1rem}.player-head p{font-size:.88rem}
+ .player-world{height:84px}.player-preview{padding:.15rem}
+ .player-preview img,body[data-screen=player] .player-preview img{height:32px}
+ .player-preview>div{gap:.1rem;font-size:.72rem}
+ .player-timer{min-height:44px}
+ .move{min-height:64px;padding:.3rem .5rem}
+ .move strong{font-size:.93rem}.move small{font-size:.7rem}
+ .vote-feedback{font-size:.82rem}.player-note{font-size:.72rem}
+}
+@media(min-width:761px) and (max-height:950px){
+ .player-world{height:clamp(135px,18dvh,175px)}
+ .player-preview img{height:75px}
+ .player-timer{padding:.2rem .8rem}
+ .move{min-height:76px;padding:.35rem .65rem;gap:.1rem}
+ .move-icon{font-size:1.15rem;line-height:1}.move strong{font-size:1.25rem}.move small{font-size:.75rem}
+ .battle-screen .fight-stage{height:clamp(300px,42dvh,430px);min-height:300px}
+ .battle-screen .solo-moves button{min-height:76px;padding:.45rem .65rem}
+}
+@media(max-width:760px) and (max-height:700px) and (orientation:portrait){
+ .qr-slot{width:95px;font-size:.7rem}
+ .lobby-screen{gap:.2rem}
+ .battle-screen .fight-stage{height:170px;min-height:170px}
+ .battle-screen .solo-moves button{min-height:60px;padding:.3rem .5rem}
+ .battle-screen .solo-moves strong{font-size:.95rem}
+ .battle-screen .solo-moves small{font-size:.7rem}
+}
+@media(min-width:761px) and (max-height:950px){
+ .menu-screen{padding-block:1rem}
+ .menu-art{min-height:clamp(400px,58dvh,550px)}
+ .menu-art img{height:clamp(390px,53dvh,500px)}
+ .selection-screen .selection-heading{margin:.4rem 0 1rem}
+ .arena-option img{height:clamp(185px,27dvh,260px)}
+ .arena-unmodeled{height:clamp(185px,27dvh,260px)}
+ .arena-option:nth-child(2){margin-top:1rem}
+ .arena-option:nth-child(3){margin-top:2rem}
+ .selection-footer{margin-top:.8rem;padding-top:.7rem}
+}
