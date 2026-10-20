@@ -1,7 +1,7 @@
-import { BattleWorld } from './battle-world.js?v=20261020-attacks1';
+import { BattleWorld } from './battle-world.js?v=20261020-action-sync-current1';
 import { CharacterStage, modelFor } from './characters.js?v=20261018-previews';
 import { FIGHTER_PROFILES, STAT_META, fighterStats, moveDescription } from './fighter-data.js?v=20261020-luca-max';
-import { ABILITIES, BattlePresentation, moveLabel } from './battle-contract.js?v=20261018-move-presentation';
+import { ABILITIES, BattlePresentation, moveLabel, actionSoundTiming, actionEventId } from './battle-contract.js?v=20261020-action-sync-current1';
 // Presentation identities use the authoritative team characterId, never nickname or team order.
 export const CHARACTER_THEMES = Object.freeze(Object.fromEntries(Object.entries({
  'luca-di-grazia': 'Luca Di Grazia', 'free-rider': 'Free rider in group project', 'tryhard': 'Tryhard',
@@ -100,22 +100,47 @@ export function countdownDelay(state, now) {
 }
 
 // Consume server snapshots only, never votes or the presentation countdown.
-export function createActionCue(play) {
+export function createActionCue(play, { presentation = false, ready = () => true, select = (move, id) => Object.hasOwn(THEMED_ACTION_SOUNDS, id + ':' + move) ? id + ':' + move : move, stop = () => {} } = {}) {
   let scope = null, seenNumber = 0;
+  const pending = new Map();
+  const cancel = ({ preserveTail = false } = {}) => { pending.clear(); if (!preserveTail) stop(); };
   const consume = state => {
-    const nextScope = state.roomId + ':' + state.match;
-    const result = state.lastResult;
-    const number = result?.number || 0;
-    if (scope !== nextScope) {
-      scope = nextScope;
-      seenNumber = number; // A first/reopened snapshot is history, not a new action.
-      return;
+    const nextScope = state.roomId + ':' + state.match, number = state.lastResult?.number || 0;
+    if (scope !== nextScope || state.phase === 'lobby') {
+      cancel(); scope = nextScope; seenNumber = number; return; // Initial/reconnected state is history.
     }
     if (number <= seenNumber) return;
-    seenNumber = number; // Consume even muted/unavailable cues; never replay them later.
-    if (Object.hasOwn(ACTION_SOUNDS, result.move)) play(result.move);
+    const previous = seenNumber; seenNumber = number;
+    const results = presentation ? state.recentResults || [state.lastResult] : [state.lastResult];
+    for (const result of results) {
+      if (!result || result.number <= previous || result.number > number || !Object.hasOwn(ACTION_SOUNDS, result.move)) continue;
+      const characterId = result.actorCharacterId || state.teams?.[result.team]?.characterId;
+      if (!presentation) { play(result.move, { characterId }); continue; }
+      const id = actionEventId(state, result);
+      // Freeze availability/mapping at receipt: later decoding, unmute or resume cannot revive a missed cue.
+      if (!pending.has(id) && ready() && ['running','finished'].includes(state.phase)) {
+        pending.set(id, { move: result.move, characterId, soundKey: select(result.move, characterId) });
+      }
+    }
   };
-  consume.reset = () => { scope = null; seenNumber = 0; };
+  consume.present = (event, { elapsed = 0, tableau = false, fallback = false } = {}) => {
+    const cue = pending.get(event.id);
+    if (!cue) return;
+    if (!ready()) { pending.delete(event.id); return; }
+    const phase = actionSoundTiming(cue.move, cue.characterId + ':' + cue.move).phase;
+    const { accent } = actionSoundTiming(cue.move, cue.soundKey), duration = event.ability?.duration || 2200;
+    const anchor = phase * duration, lead = anchor - accent * 1000;
+    if (Math.abs(elapsed - anchor) < .001) elapsed = anchor; // Timestamp subtraction must not turn an exact marker into a missed prelude.
+    const step = elapsed - (cue.elapsed || 0); cue.elapsed = elapsed;
+    if (!tableau && !fallback && (elapsed < lead || (elapsed < anchor && step > 80))) return;
+    pending.delete(event.id); // Single use even when playback fails or the entire visible cue window was skipped.
+    if (!tableau && !fallback && elapsed > anchor + 180) return;
+    const offset = tableau || fallback ? accent : Math.min(accent, Math.max(0, (elapsed - lead) / 1000));
+    play(cue.move, { ...cue, actionId: event.id, offset });
+  };
+  consume.complete = event => pending.delete(event.id);
+  consume.cancel = cancel;
+  consume.reset = () => { cancel(); scope = null; seenNumber = 0; };
   return consume;
 }
 
@@ -154,6 +179,7 @@ export class ActionAudio {
     this.buffers = new Map();
     this.active = new Set();
     this.prebattle = new Set();
+    this.actions = new Set();
     this.music = null;
     this.musicVolume = .35; this.sfxVolume = .8;
     this.musicGain = context.createGain(); this.sfxGain = context.createGain();
@@ -198,26 +224,42 @@ export class ActionAudio {
   stopVictory() {
     this.victory?.stop(); this.victory = null;
   }
-  play(move, { delay = 0, offset = 0, loop = false } = {}) {
+  actionSound(move, characterId) {
+    const key = characterId + ':' + move;
+    return Object.hasOwn(THEMED_ACTION_SOUNDS, key) && this.buffers.has(key) ? key : move;
+  }
+  stopActions() {
+    for (const source of [...this.actions]) source.stop();
+    this.actions.clear();
+  }
+  play(move, { delay = 0, offset = 0, loop = false, characterId, soundKey, actionId } = {}) {
     if (move === 'win') { this.setMusic(null); this.stopVictory(); }
-    const buffer = this.buffers.get(move);
+    const key = actionId ? soundKey : this.actionSound(move, characterId);
+    const buffer = this.buffers.get(key);
     // Never queue a stale action while loading or waiting for a user gesture.
-    if (!buffer || this.context.state !== 'running') return false;
+    if (!buffer || this.context.state !== 'running' || (Number.isFinite(buffer.duration) && offset >= buffer.duration)) return false;
     const source = this.context.createBufferSource();
     const gain = this.context.createGain();
     source.buffer = buffer; source.loop = loop; this.lastSource = source;
     gain.gain.setValueAtTime((move === 'countdown' ? .9 : .45) * (move === 'battle' ? .5 : move === 'win' ? 2 : 1), this.context.currentTime);
     source.connect(gain).connect(['lobby', 'battle', 'win'].includes(move) ? this.musicGain : this.sfxGain);
+    // Seeking past a missed prelude must not introduce a discontinuity at an interior PCM sample.
+    if (actionId && offset > 0) {
+      const at = this.context.currentTime + delay;
+      gain.gain.setValueAtTime(0, at);
+      gain.gain.linearRampToValueAtTime?.(.45, at + .003);
+    }
     this.active.add(source);
+    if (actionId) this.actions.add(source);
     if (move === 'win') this.victory = source;
     if (['countdown', 'battle-start'].includes(move)) this.prebattle.add(source);
-    source.onended = () => { if (this.victory === source) this.victory = null; this.active.delete(source); this.prebattle.delete(source); source.disconnect(); gain.disconnect(); };
+    source.onended = () => { if (this.victory === source) this.victory = null; this.active.delete(source); this.actions.delete(source); this.prebattle.delete(source); source.disconnect(); gain.disconnect(); };
     source.start(this.context.currentTime + delay, offset);
     return true;
   }
   stop() {
     for (const source of this.active) source.stop();
-    this.active.clear(); this.prebattle.clear(); this.music = null; this.musicKey = null; this.victory = null;
+    this.active.clear(); this.actions.clear(); this.prebattle.clear(); this.music = null; this.musicKey = null; this.victory = null;
   }
 }
 
@@ -459,6 +501,7 @@ if (typeof document !== 'undefined') (() => {
   const moves = ['attack', 'defend', 'heal', 'special'];
   let audioContext;
   let actionAudio;
+  let actionCue;
   let muted = false; // Desired preference; readiness still depends on browser permission and decoding.
   let audioAttempt = 0;
   let audioLoading = false;
@@ -474,7 +517,13 @@ if (typeof document !== 'undefined') (() => {
     if (!screens.includes(screen) || document.body.dataset.screen === screen) return;
     screens.forEach((name) => { $(name + '-screen').hidden = name !== screen; });
     document.body.dataset.screen = screen;
-    if (!['battle', 'player'].includes(screen)) { clearTimeout(countdownTimer); battleWorld.clear(); actionAudio?.stopPrebattle(); $('prebattle').hidden = true; }
+    if (!['battle', 'player'].includes(screen)) {
+      clearTimeout(countdownTimer);
+      // show() clears before world.sync(): preserve only an already-emitted
+      // natural-final tail here too. clear() still invalidates every pending cue.
+      battleWorld.clear(screen === 'victory' && battleWorld.state?.phase === 'finished' && !battleWorld.active && !battleWorld.events.pending.length);
+      actionAudio?.stopPrebattle(); $('prebattle').hidden = true;
+    }
     syncMusic();
     characters.sync();
     const heading = $(screen + '-screen').querySelector('h1');
@@ -581,6 +630,7 @@ if (typeof document !== 'undefined') (() => {
     if (!muted) {
       ++audioAttempt;
       muted = true;
+      actionCue?.cancel();
       actionAudio?.stop();
       for (const tone of activeTones) tone.stop();
       activeTones.clear();
@@ -605,6 +655,7 @@ if (typeof document !== 'undefined') (() => {
         audioContext = new Audio();
         audioContext.addEventListener?.('statechange', () => {
           if (audioContext.state !== 'running') {
+            actionCue?.cancel();
             actionAudio?.stop();
             for (const tone of activeTones) tone.stop();
             activeTones.clear();
@@ -736,7 +787,15 @@ if (typeof document !== 'undefined') (() => {
   }
   window.ArenaUI = { render, cue, connected: false };
   $('copy-link').disabled = true;
-  const actionCue = createActionCue(cue);
+  actionCue = createActionCue(cue, {
+    presentation: true,
+    ready: () => soundReady() && window.ArenaUI.connected && !document.hidden,
+    select: (move, id) => actionAudio.actionSound(move, id),
+    stop: () => actionAudio?.stopActions()
+  });
+  battleWorld.onPresent = (event, frame) => actionCue.present(event, frame);
+  battleWorld.onCancel = options => actionCue.cancel(options);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) actionCue.cancel(); });
   const battleStartCue = createBattleStartCue(cue, () => actionAudio?.stopPrebattle());
   let activeEffect, effectTimer;
   function showActionEffect(effect) {
@@ -784,10 +843,10 @@ if (typeof document !== 'undefined') (() => {
   const client = new ArenaClient({
     onState(state) {
       if (setupBusy || pendingSetupRoom) return;
+      actionCue(state);
       presentation.consume(state);
       paintState();
       battleStartCue({ ...state, serverNow: client.serverTime() });
-      actionCue(state);
       if (state.you.role === 'host' && $('qr-container').querySelector('img')?.src !== location.origin + '/game/api/rooms/' + state.roomId + '/qr.svg') {
         const qr = document.createElement('img');
         qr.src = '/game/api/rooms/' + state.roomId + '/qr.svg';
@@ -821,10 +880,18 @@ if (typeof document !== 'undefined') (() => {
     render(view); renderIdentity(state); updateCountdown();
     // The world consumes authoritative results, never the staged result/phase.
     battleWorld.sync(client.state);
-    if (!presentation.busy) { visualCue(state); victoryCue(state); }
+    if (!presentation.busy) {
+      // Older/unknown identities have no world event; the visible result is their presentation point.
+      const result = state.lastResult;
+      if (result && !ABILITIES[result.actorCharacterId || state.teams?.[result.team]?.characterId]?.[result.move]) {
+        actionCue.present({ id: actionEventId(state, result) }, { fallback: true });
+      }
+      visualCue(state); victoryCue(state);
+    }
   }
-  battleWorld.onComplete = event => { if (presentation.complete(event.id)) paintState(); };
+  battleWorld.onComplete = event => { actionCue.complete(event); if (presentation.complete(event.id)) paintState(); };
   battleWorld.onSkip = () => {
+    actionCue.cancel();
     presentation.reset();
     if (client.state) { presentation.consume(client.state); paintState(); }
   };

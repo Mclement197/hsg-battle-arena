@@ -1,6 +1,6 @@
 import * as THREE from './vendor/three.module.js';
 import { loadModel, modelFor, release } from './characters.js?v=20261018-previews';
-import { ARENA_WORLDS, BattleEvents } from './battle-contract.js?v=20261018-move-presentation';
+import { ARENA_WORLDS, BattleEvents, actionSoundTiming } from './battle-contract.js?v=20261020-action-sync-current1';
 const v = a => new THREE.Vector3(...a);
 const ease = t => { t = THREE.MathUtils.clamp(t,0,1); return t*t*(3-2*t); };
 
@@ -374,7 +374,7 @@ export class BattleWorld {
   this.state=state;
   const screen=document.body.dataset.screen;
   const host=screen==='battle',phone=screen==='player' && state.phase!=='lobby';
-  if(!host&&!phone){this.clear();return;}
+  if(!host&&!phone){this.clear(screen==='victory'&&state.phase==='finished'&&!this.active&&!this.events.pending.length);return;}
   if(document.hidden){this.events.reset();this.events.consume(state);if(this.events.scope+':'+this.events.number!==this.hiddenNumber){this.hiddenNumber=this.events.scope+':'+this.events.number;queueMicrotask(()=>this.onSkip?.());}return;}
   const container=host?document.querySelector('.fight-stage'):document.querySelector('#player-world');
   const scope=[state.roomId,state.match,state.arenaId,state.teams.A.characterId,state.teams.B.characterId].join(':');
@@ -433,9 +433,13 @@ export class BattleWorld {
    let last=performance.now();const tick=now=>{if(generation!==this.generation)return;this.raf=requestAnimationFrame(tick);if(document.hidden||now-last<1000/30)return;const dt=Math.min((now-last)/1000,.25);last=now;
     for(const [team,f] of Object.entries(this.fighters))if(!this.motion.matches&&team!==this.active?.actor)f.mixer.update(dt);
     if(!this.active&&this.events.pending.length)this.begin(this.events.pending.shift(),now);
-    if(this.active)this.animate(now);else this.idleCamera(now);
+    const presentationNow=this.active?this.presentationTime(now):now;
+    if(this.active)this.animate(presentationNow);else this.idleCamera(now);
     if(this.active&&!this.motion.matches)this.renderer.shadowMap.needsUpdate=true;
-    if(this.renderer&&this.scene)this.renderer.render(this.scene,this.camera);
+    if(this.renderer&&this.scene){
+      this.renderer.render(this.scene,this.camera);
+      if(this.active)this.onPresent?.(this.active,{elapsed:presentationNow-this.active.startedAt,tableau:this.motion.matches});
+    }
    };this.raf=requestAnimationFrame(tick);
   } catch(error) {
    for(const g of roots)release(g.scene);if(generation!==this.generation)return;
@@ -516,6 +520,8 @@ export class BattleWorld {
   if(this.active||!this.events.pending.length)return;
   const event=this.events.pending.shift();this.active=event;
   if(this.container){this.fallbackLabel=document.createElement('span');this.fallbackLabel.className='world-action-label';this.fallbackLabel.textContent=event.ability.label;this.container.append(this.fallbackLabel);}
+  const generation=this.generation;
+  if(this.container)this.fallbackRaf=requestAnimationFrame(()=>{if(generation===this.generation&&this.active===event&&!document.hidden)this.onPresent?.(event,{fallback:true});});
   // Same completion contract and ability duration without a WebGL renderer.
   this.fallbackTimer=setTimeout(()=>{this.finish();this.onComplete?.(event);this.pumpFallback();},event.ability.duration);
  }
@@ -530,17 +536,25 @@ export class BattleWorld {
   choreograph(this,this.fx.userData.recipe.mode==='melee'?.46:event.ability.launch);this.releasePoint=this.fx.userData.release.clone();this.contactPoint=this.fx.userData.destination.clone();
   this.animate(now);
  }
+ // Sample the existing semantic pose once if RAF crosses it, even across the end.
+ // Never move startedAt: the next frame resumes the original absolute timeline.
+ presentationTime(now){
+  const e=this.active;if(!e||this.motion.matches||e.markerSampled)return now;
+  const phase=actionSoundTiming(e.move,e.characterId+':'+e.move).phase,marker=e.startedAt+phase*e.ability.duration;
+  if(now<marker)return now;
+  e.markerSampled=true;e.markerTime=marker;e.markerPhase=phase;return marker;
+ }
  animate(now){
   const e=this.active;if(!e)return;
-  const t=THREE.MathUtils.clamp((now-e.startedAt)/e.ability.duration,0,1),target=this.fighters[e.target];
+  const t=now===e.markerTime?e.markerPhase:THREE.MathUtils.clamp((now-e.startedAt)/e.ability.duration,0,1),target=this.fighters[e.target];
   this.choreography=choreograph(this,t);
   if(t>=e.ability.impact&&!e.hit){e.hit=true;if(e.actor!==e.target){this.play(e.target,e.defeated?'defeat':'hit');if(e.defeated)target.current?.setDuration(e.ability.duration*(1-e.ability.impact)/1000);if(this.motion.matches)target.mixer.update(e.defeated?1.5:.35);}}
   this.direct(t);
   if(t>=1){if(e.defeated&&target.current){target.current.time=target.current.getClip().duration;target.mixer.update(0);}this.finish();this.onComplete?.(e);}
  }
- finish(){for(const f of Object.values(this.fighters)){restoreHood(f);restoreGarment(f);for(const [mesh,visible]of f.hiddenProps||[])mesh.visible=visible;f.hiddenProps=null;restoreFighter(f);f.sampledPose=null;if(f.clip!=='defeat'){f.mixer.stopAllAction();f.current=null;f.clip=null;f.mixer.update(0);} }this.choreography=null;this.releasePoint=null;this.contactPoint=null;this.contactTop=null;this.propRotation=null;clearTimeout(this.fallbackTimer);this.fallbackLabel?.remove();this.fallbackLabel=null;this.selection=null;if(this.fx){this.scene?.remove(this.fx);release(this.fx);this.fx=null;}this.active=null;for(const [team,f]of Object.entries(this.fighters))if(f.clip!=='defeat'){this.play(team,'idle');f.mixer.update(0);}if(this.badge)this.badge.textContent='';if(this.canvas){this.canvas.dataset.camera='overview';delete this.canvas.dataset.action;}this.overview(true);if(this.renderer)this.renderer.shadowMap.needsUpdate=true;}
- cancel(){this.events.reset();this.finish();for(const [t,f] of Object.entries(this.fighters))this.play(t,this.state?.teams[t].hp===0?'defeat':'idle');}
+ finish(){for(const f of Object.values(this.fighters)){restoreHood(f);restoreGarment(f);for(const [mesh,visible]of f.hiddenProps||[])mesh.visible=visible;f.hiddenProps=null;restoreFighter(f);f.sampledPose=null;if(f.clip!=='defeat'){f.mixer.stopAllAction();f.current=null;f.clip=null;f.mixer.update(0);} }this.choreography=null;this.releasePoint=null;this.contactPoint=null;this.contactTop=null;this.propRotation=null;clearTimeout(this.fallbackTimer);if(this.fallbackRaf)cancelAnimationFrame(this.fallbackRaf);this.fallbackRaf=null;this.fallbackLabel?.remove();this.fallbackLabel=null;this.selection=null;if(this.fx){this.scene?.remove(this.fx);release(this.fx);this.fx=null;}this.active=null;for(const [team,f]of Object.entries(this.fighters))if(f.clip!=='defeat'){this.play(team,'idle');f.mixer.update(0);}if(this.badge)this.badge.textContent='';if(this.canvas){this.canvas.dataset.camera='overview';delete this.canvas.dataset.action;}this.overview(true);if(this.renderer)this.renderer.shadowMap.needsUpdate=true;}
+ cancel(preserveTail=false){this.onCancel?.({preserveTail});this.events.reset();this.finish();for(const [t,f] of Object.entries(this.fighters))this.play(t,this.state?.teams[t].hp===0?'defeat':'idle');}
  disconnect(){this.cancel();if(this.state)this.events.consume(this.state);}
- clear(){this.fallback=false;this.generation++;cancelAnimationFrame(this.raf);this.cancel();this.observer?.disconnect();for(const f of Object.values(this.fighters)){f.mixer.stopAllAction();f.mixer.uncacheRoot(f.root);}release(this.scene);this.renderer?.dispose();this.renderer?.forceContextLoss();this.canvas?.remove();this.badge?.remove();if(this.container)delete this.container.dataset.worldStatus;this.renderer=null;this.scene=null;this.fighters={};this.scope=null;this.camera=null;}
+ clear(preserveTail=false){this.fallback=false;this.generation++;cancelAnimationFrame(this.raf);this.cancel(preserveTail);this.observer?.disconnect();for(const f of Object.values(this.fighters)){f.mixer.stopAllAction();f.mixer.uncacheRoot(f.root);}release(this.scene);this.renderer?.dispose();this.renderer?.forceContextLoss();this.canvas?.remove();this.badge?.remove();if(this.container)delete this.container.dataset.worldStatus;this.renderer=null;this.scene=null;this.fighters={};this.scope=null;this.camera=null;}
  dispose(){this.clear();this.motion.removeEventListener('change',this.onMotion);document.removeEventListener('visibilitychange',this.onHide);window.removeEventListener('pagehide',this.onPage);}
 }
