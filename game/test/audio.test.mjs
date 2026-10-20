@@ -25,7 +25,9 @@ function fixture() {
 
 test('all moves map to four distinct, reproducible, non-clipping PCM WAV assets', async () => {
   assert.deepEqual(Object.keys(ACTION_SOUNDS), MOVES);
-  const hashes = new Set();
+  const hashes = new Set(), windowLevels = [];
+  const durations = { attack: .22, defend: .36, heal: .60, special: .70 };
+  let totalBytes = 0;
   for (const [move, url] of Object.entries(ACTION_SOUNDS)) {
     assert.match(url, /^\.\/assets\/audio\/[a-z-]+\.wav$/);
     const wav = await readFile(new URL('../public/' + url, import.meta.url));
@@ -41,16 +43,29 @@ test('all moves map to four distinct, reproducible, non-clipping PCM WAV assets'
     assert.equal(wav.readUInt32LE(40), wav.length - 44);
     assert.equal(wav.readInt16LE(44), 0);
     assert.equal(wav.readInt16LE(wav.length - 2), 0);
-    let peak = 0, energy = 0;
-    for (let i = 44; i < wav.length; i += 2) {
-      const sample = wav.readInt16LE(i);
-      peak = Math.max(peak, Math.abs(sample)); energy += sample * sample;
+    const samples = Array.from({ length: (wav.length - 44) / 2 }, (_, i) => wav.readInt16LE(44 + i * 2) / 32768);
+    assert.equal(samples.length / 24000, durations[move]);
+    assert.equal(wav.length, 44 + durations[move] * 24000 * 2);
+    totalBytes += wav.length;
+    let peak = 0, energy = 0, mean = 0, windowEnergy = 0, maxWindow = 0;
+    const window = 1200; // 50 ms sliding RMS, not a perceptual-loudness claim.
+    for (const [i, sample] of samples.entries()) {
+      peak = Math.max(peak, Math.abs(sample)); energy += sample * sample; mean += sample;
+      windowEnergy += sample * sample;
+      if (i >= window) windowEnergy -= samples[i - window] ** 2;
+      if (i >= window - 1) maxWindow = Math.max(maxWindow, windowEnergy / window);
     }
-    assert.ok(peak > 20000 && peak < 32767);
-    assert.ok(energy > 1000000);
+    assert.ok(peak > .79 && peak <= .8, move + ' preserves sample headroom');
+    assert.ok(Math.abs(mean / samples.length) < .005, move + ' has negligible DC');
+    assert.ok(energy / samples.length > .005, move + ' is not empty');
+    const windowDb = 10 * Math.log10(maxWindow);
+    assert.ok(windowDb > -12 && windowDb < -9, move + ' controlled short-window energy');
+    windowLevels.push(windowDb);
     hashes.add(createHash('sha256').update(wav).digest('hex'));
   }
   assert.equal(hashes.size, 4);
+  assert.equal(totalBytes, 90416);
+  assert.ok(Math.max(...windowLevels) - Math.min(...windowLevels) < 2, 'short-window energy spread stays within 2 dB');
   assert.throws(() => buildSound('unknown'), /Unknown sound/);
 });
 
