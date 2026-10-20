@@ -28,7 +28,7 @@ for(const id of CHARACTERS)test(id+' all moves, both sides, all arenas: seekable
     for(const aspect of [2.7,.85]){w.camera.aspect=aspect;w.direct(t);for(const p of w.framingPoints){const point=p.clone().project(w.camera);assert.ok(Math.abs(point.x)<=.881);assert.ok(point.y<=.841&&point.y>=-.781,'HUD bounds');}
      const center=f.holder.position.clone().add(new THREE.Vector3(0,1,0)),direction=center.sub(w.camera.position);ray.set(w.camera.position,direction.clone().normalize());ray.near=.12;ray.far=direction.length()-.1;assert.equal(ray.intersectObject(environment,true).length,0,'moving performer stays visible through real arena geometry');
     }
-    assert.ok(new THREE.Box3().setFromObject(f.holder,true).min.y>=config.floor-1e-5,'floor');
+    assert.ok(new THREE.Box3().setFromObject(f.holder,true).min.y>=config.floor-1e-5,'floor '+JSON.stringify({id,actor,move,t,min:new THREE.Box3().setFromObject(f.holder,true).min.y,floor:config.floor}));
    }
    w.cancel();for(const f of Object.values(w.fighters)){assert.deepEqual(f.holder.position.toArray(),f.home.position.toArray());assert.ok(f.holder.quaternion.angleTo(f.home.rotation)<1e-6);}assert.equal(w.fx,null);assert.deepEqual(w.camera.position.toArray(),config.overview);
    w.motion.matches=true;w.begin(e,0);const matrices=[];for(const t of [.2,.4,.7,.86]){w.animate(t*ability.duration);matrices.push(w.camera.projectionMatrix.toArray());assert.deepEqual(w.fighters[actor].holder.position.toArray(),w.fighters[actor].home.position.toArray());}assert.ok(matrices.every(m=>JSON.stringify(m)===JSON.stringify(matrices[0])));w.cancel();w.motion.matches=false;

@@ -1,63 +1,82 @@
-# Attack choreography (presentation only)
+# Grounded choreography: all 24 named moves
 
-Audit: authoritative roster exports **6 characters × 4 moves = 24 named moves**. Every label has a deliberate prop and distinct joint gesture, not a motif recolor.
+Presentation only. Combat values, authoritative 2200 ms resolution, launch .32, impact .59, HP application and server logic are unchanged. Selection camera, arenas, game/selection layout and preexisting working-tree edits are preserved.
 
-## Complete coverage
+## Why the staging changed
 
-| Fighter ID | Mechanic | Actual move | Spatial action | Windup → action / impact → recovery |
-|---|---|---|---|---|
-| luca-di-grazia | attack | Golden Chalk | melee | Draw back chalk; run in; carve a golden tick; jog home. |
-| luca-di-grazia | defend | Open Book | self | Lift closed book; open both covers as a shield; read; fold away. |
-| luca-di-grazia | heal | Good Work | self | Lean forward; approving thumbs-up and gold star; proud nod; settle. |
-| luca-di-grazia | special | Full Marks | melee | Raise marked exam; stride in; stamp 100% with a gold shower; return. |
-| free-rider | attack | Copy / Paste | projectile | Pinch a source page; duplicate it; send the PASTE copy; pocket the original. |
-| free-rider | defend | Paper Decoy | self | Fold paper; unfold a life-size paper stand-in; duck behind it; stand back up. |
-| free-rider | heal | Group Credit | self | Beckon three contributors; take their CREDIT medal; celebrate; wave them off. |
-| free-rider | special | AI Slop | projectile | Hunch over laptop; type; launch a tangled robot-generated noodle ball; close laptop. |
-| tryhard | attack | Formula | projectile | Count on fingers; write an equation; propel a spinning sigma; erase and reset. |
-| tryhard | defend | Textbook | self | Heave a heavy textbook; brace behind its spine; absorb a pulse; lower it. |
-| tryhard | heal | Extra Credit | self | Stack extra books; step up with raised hand; collect +1 star; step down. |
-| tryhard | special | A+ | projectile | Wind up a gold grade; flourish; send an enormous A+ seal; scholarly bow. |
-| assessment-hoodie | attack | Bad Luck | summon | Recoil superstitiously; point; summon rain and lightning above opponent; shake it off. |
-| assessment-hoodie | defend | Hood Up | self | Grab both sides; pull a real hood overhead; hunker down; release the fabric. |
-| assessment-hoodie | heal | Take Hoodie Off | self | Cross arms; peel off a modeled hoodie; stretch in sunshine; fold it away. |
-| assessment-hoodie | special | Skip Maths A Lecture | evade | Eye the MATHS A board; sneak away leaving an empty chair; send absent note; sneak back. |
-| trischli-warrior | attack | Dance Off | melee | Run to dance floor; windmill arms and alternate high knees; disco stomp; moonwalk home. |
-| trischli-warrior | defend | Call the Bouncer | self | Phone the door; summon a suited bouncer; fold arms together; dismiss the guard. |
-| trischli-warrior | heal | Glass of Water | self | Reach for transparent water glass; lift to mouth; sip and sparkle; lower glass. |
-| trischli-warrior | special | Throw a Beer | lob | Cock mug behind shoulder; overarm throw; amber beer arcs and splashes; wipe brow. |
-| bad-teacher | attack | Red Pen | melee | Brandish red pen; run in; draw a broad correction slash; step back home. |
-| bad-teacher | defend | Curved Exam | self | Grip exam ends; physically bend a curved exam shield; trace grade curve; flatten and lower. |
-| bad-teacher | heal | Brian AI | self | Tap a tablet; summon BRIAN robot tutor; receive a green advice heart; thank and close. |
-| bad-teacher | special | Failed | melee | Hoist a red stamp; charge; slam FAILED onto a report beside opponent; recoil and retreat. |
+The previous 8161e30 evidence sampled four phases and mostly mirrored opponents. That passed geometry checks but did not establish animation quality. The polish audit records **each move before and after**, reviews 24 motion samples per clip, and uses different opponents plus reverse-side/all-arena/device checks.
 
-## Implementation decisions
+An approximately 4 m outward sprint plus 4 m backward sprint cannot look grounded in this fixed combat slot. Golden Chalk, Full Marks, Red Pen and Failed now use a **1.15 m measured advance and planted return**; the existing ink mark or stamped report travels the remaining aisle. Dance Off uses the same short approach to a floor that remains fixed in the scene. This is intentional stylization, not an invisible teleport or a longer combat clock. Ink/report release is .46; it still contacts exactly at .59. Physical thrown beer retains release .32.
 
-- Reuse shipped Three.js, authored glTF clips and actual named limb/finger rig. Deterministic additive joint offsets and original procedural props; no dependency, downloaded asset or backend/balance change.
-- Preserve 2200 ms duration, .32 launch, .59 impact and existing authoritative result queue/completion/HP contract. No new combat timers.
-- Melee runs along the central aisle, maintains 1.2 m body separation, then returns exactly home. Ranged actions transport actual pages, grades, formulae, noodles or beer. Summons appear at the destination.
-- Camera stays in the previously ray-tested aisle corridor, follows performer toward impact and fits live skinned bounds/props below HUD. Self-care shots prioritize the performer. Ranged shots follow performer → traveling prop → receiving actor; inactive bodies may leave the cinematic shot. Melee contact retains both actors. Selection camera and all arena geometry preserved.
-- Hoodie removal uses a theatrical garment prop and temporary ivory undershirt color on existing green-clothing material, not clothing simulation or a replacement character mesh.
-- Reduced motion holds a semantic tableau with baseline camera; no running, flight, spin, pulsing pose or camera movement. Completion remains on the original event clock.
-- Finish/cancel/reset/scope changes restore holder transforms, idle joints, camera and costume colors. Geometry/materials/text textures disposed through existing release helper.
+## Per-move corrections
 
-## Reproduction
+| Fighter | Move | Choreography correction |
+|---|---|---|
+| luca-di-grazia | Golden Chalk (attack) | Cap the advance at 1.15 m; distance-driven alternating support; chalk mark leaves its actual hand at 1112 ms and reaches contact at 1398 ms. |
+| luca-di-grazia | Open Book (defend) | Neutral-idle base, two solved edge grips, hinge opening; stationary solid orientation; planted reading stance. |
+| luca-di-grazia | Good Work (heal) | Small hand-borne approval token, measured wrist raise and one head nod, no generic heal bob or expanding impact burst. |
+| luca-di-grazia | Full Marks (special) | Short planted advance; gold stamp presses the held exam before its .46 release, with a constant wrist grip; marked paper contacts the opponent at .59. |
+| free-rider | Copy / Paste (attack) | Original left-hand page, right-hand release, frozen release anchor, constant horizontal flight and prompt contact retirement; keep both bodies framed. |
+| free-rider | Paper Decoy (defend) | Uniform paper reveal in front of the body, compact crouch solved over stationary feet; prop stays on the ground in its own space. |
+| free-rider | Group Credit (heal) | Place helpers in free flank; medal at actual joined hands; controlled acceptance and smaller semantic props. |
+| free-rider | AI Slop (special) | Two-hand keyboard staging with alternating small index/middle-finger flexes; right-hand emission; no random spin; small ballistic flight and contact collapse. |
+| tryhard | Formula (attack) | Equation beside actual left hand below face; right-hand sigma release; limited 0.45-radian rotation, no ease-out stall, quick contact cleanup. |
+| tryhard | Textbook (defend) | Reduce textbook to hand-held scale, two edge anchors, low braced hip and opposing chest settle while feet remain planted. |
+| tryhard | Extra Credit (heal) | Lead foot steps 0.20 m onto stack, support foot stays down; small hip transfer instead of whole-body levitation. |
+| tryhard | A+ (special) | Hand-sized grade held at wrist, frozen launch point, modest flourish and immediate post-contact scale-out; remove redundant ring. |
+| assessment-hoodie | Bad Luck (attack) | Cloud is an anticipation cue above the recipient’s actual crown envelope, including Luca’s halo; lightning connects cloud to contact exactly at the hit timestamp. |
+| assessment-hoodie | Hood Up (defend) | An open-front, double-sided hood preserves the visible face; head-relative fit and both hands raise to actual hood sides; restrained chin tuck. |
+| assessment-hoodie | Take Hoodie Off (heal) | Garment remains between both wrists during a higher peel that clears the head; compact folded recovery and deliberate torso extension, without body levitation. |
+| assessment-hoodie | Skip Maths A Lecture (special) | Upright, floor-pivoted lecture board/chair placed farther ahead of the body; two planted side steps out and back; hand-origin note contacts at .59. |
+| trischli-warrior | Dance Off (attack) | Fixed floor at a short-approach destination; soles rise to the actual lit pad surface, with two restrained knee accents and alternate support; no root spin or flying carpet. |
+| trischli-warrior | Call the Bouncer (defend) | Adult-sized guard in a readable, grounded flank; actual wrist phone; final placement clears real arena furniture on both sides in all three arenas. |
+| trischli-warrior | Glass of Water (heal) | Wrist-driven glass, rim raised toward mouth with slight tilt; planted support and short controlled sip. |
+| trischli-warrior | Throw a Beer (special) | Snapshot actual hand release; 9.81 m/s² parabola with nonzero landing speed; bounded mug rotation and prompt splash/prop retirement. |
+| bad-teacher | Red Pen (attack) | Measured advance and planted return; pen stays at actual wrist; correction stroke visibly travels from pen and clears shortly after hit. |
+| bad-teacher | Curved Exam (defend) | Two edge grips, smaller sheet, bounded bend; red curve stays in sheet local space rather than hovering at a torso offset. |
+| bad-teacher | Brian AI (heal) | Robot supported above left wrist; small advice token accepted at right hand; head looks down and settles, feet stay planted. |
+| bad-teacher | Failed (special) | Short planted advance; constant right-hand stamp grip and deliberate pre-release press over the held report; left-hand paper flight and contact at .59. |
 
-- Run npm test in game/ (includes test/attack-overhaul.test.mjs).
-- Browser: set PLAYWRIGHT_MODULE=/path/to/playwright-core/index.mjs and CHROMIUM_EXECUTABLE=/path/to/chrome, then run node game/test/attack-overhaul-browser.mjs from repository root.
-- Optional ARENA_ID / FIGHTER_ID selects a focused reproduction. EVIDENCE_DIR controls output.
-- Harness creates only owned loopback Friend rooms, submits actual HTTP/SSE moves and renders production begin/animate/finish paths. Four-frame contact sheets cover windup/action/impact/recovery for every move, both sides, three arenas, desktop host/phone guest. Projected bounds, home restoration and GPU resources are asserted.
-- Also exercises interrupted/repeated poses, reduced motion, orientation and reset/arena reentry. First-character cases additionally record real-time WebM using captureStream/MediaRecorder. These are actual WebGL frames, not canned/mocked attack images.
+## Shared motion implementation
 
-Evidence: /home/mathis/.openclaw/workspace/media/hsg-attack-overhaul/. See final handoff for actual outcomes; a harness is not a claim that an unrun check passed.
+- Reuse shipped Three.js and original glTF rigs. No new dependency, downloaded asset, backend or balance change. Existing idle and hit/defeat clips remain the animation source.
+- Neutral idle sample rather than a generic punch, bounce or overhead heal underneath unrelated gestures. Absolute bone position/quaternion/scale restoration makes each seek and repeated action deterministic.
+- World-space two-segment IK respects the rigs’ differing bind axes and segment lengths. Feet alternate actual planted support and low swing; stride phase follows traveled distance, not an unrelated sine clock. Standing actions solve over fixed feet. Small skinned-sole correction prevents bent-knee skin weights penetrating the floor.
+- Decoy, helpers, bouncer and lecture chair stay upright and scale around an actual floor pivot rather than hovering as they appear. The lead foot rises 0.20 m to match the stack top.
+- Wrist-driven props; books and laptops use two grip points. Copied pages, grades, formulae, noodles and beer snapshot their release point, so recovery cannot tow a flying projectile. Physical beer uses a 9.81 m/s² parabola with constant horizontal velocity and nonzero landing speed.
+- Props retire promptly after contact instead of freezing on the receiver. Generic impact stars are short and small; self-care actions do not receive a damage burst. Storm lightning starts at contact, not during anticipation.
+- Fixed prop orientation, rather than attaching solid objects to a moving camera quaternion. Only graphic labels face the audience. Original baked notebook/pen meshes are temporarily hidden while a move supplies its own prop, then restored.
+- Offensive camera retains source, flight and receiver; no projectile chase or shake. Lateral motion and push are reduced; camera ease is slower than hand/pose ease. Existing live bounds/HUD fitting and aisle clearance remain.
+- Finish, cancel, reset, repeated and interrupted actions restore actors, original prop visibility, costume colors and baseline camera; procedural geometry/materials/textures are disposed. Reduced motion holds a semantic tableau, does not run/fly/spin/pan, and still completes on the original event clock.
 
-Limits: software Chromium does not prove physical phone GPU performance. Procedural comedy over existing low-poly assets, not new motion-capture animation.
+## Evidence and reproduction
 
-## Verified 2026-10-20
+Evidence root: `/home/mathis/.openclaw/workspace/media/hsg-attack-polish/`.
 
-- Full game suite on the final implementation: 182 tests, 173 passed, 9 optional tests skipped, 0 failed. Final TAP: game-tests-final.tap in the evidence directory below.
-- Aggregated browser verification: 288 real-render cases (24 moves × both sides × all three arenas × desktop/phone), 1,152 captured phase frames, 333 check records, 288 repeated cancellations and no console/page errors. Every move returns actors exactly home, disposes its GPU geometry/textures, and restores the baseline camera. Reduced-motion, orientation, reset and arena reentry checks passed.
-- The leak check warms arena geometry once before measuring: a first camera pan legitimately uploads previously culled Mensa geometry, which is a renderer cache, not a move leak.
-- Evidence: /home/mathis/.openclaw/workspace/media/hsg-attack-overhaul/final/coverage.json and checks-final.json; all-24-moves-impact-overview.png; six proof-*-all-moves.png sheets; all 288 individual four-phase sheets; three *-live-action.webm recordings.
-- Public HTML, app.js and battle-world.js returned 200/no-store and byte-identical SHA-256 hashes to the tested source, with cache key 20261020-attacks1. No production service restart or production-room mutation was used.
-- Limit: standalone Chromium public navigation returned ERR_INVALID_AUTH_CREDENTIALS in this runtime. The live public browser flow is not claimed verified; public source integrity and isolated real HTTP/SSE browser rendering were verified separately. Physical phone GPU performance is not measured.
+- `index.html`: paired normal-speed video review for all 24 moves.
+- `LEDGER.md`: observed timing defects, corrections, direct AFTER review and honest limits.
+- `before/<fighter>-<mechanic>.webm` and `after/<fighter>-<mechanic>.webm`: individual playable performances.
+- Matching `*-dense.png`: 24 samples at 100 ms spacing. `comparisons/`: concise before/after sheets.
+- `before/recordings.json`, `after/recordings.json`: exact camera/aspect/matchup/timing measurements and source provenance.
+- `coverage-final.json`, `matrix-final/`, `matrix-final-cloud/`: numeric real-render checks, not a large repetitive screenshot corpus.
+
+`npm test` in `game/` includes dense mixed-character continuity, planted stance, trajectory, end restoration and interruption tests. Browser harnesses create only owned loopback HTTP/SSE Friend rooms, never public rooms. Run from repository root with `PLAYWRIGHT_MODULE` and `CHROMIUM_EXECUTABLE` pointing to installed Playwright/Chromium:
+
+```sh
+NO_PROXY=127.0.0.1,localhost PHASE=review-reproduction node game/test/attack-polish-browser.mjs
+node game/test/attack-polish-matrix.mjs
+```
+
+The recording harness also accepts `WORLD_SOURCE`, `FIGHTER_ID`, `TEST_PORT`, `EVIDENCE_DIR` and `FFMPEG_EXECUTABLE`. The canonical pair is Library, 1280×900 host, actor A versus the character three roster positions away. BEFORE and AFTER use the same baseline camera, aspect and matchup; action-camera refinement is intentional.
+
+**Recording method:** actual production WebGL frames sampled at a fixed 30 Hz animation clock and encoded for natural-speed playback. Software Chromium is too slow to claim this as a real-time performance benchmark. No PNG-frame corpus is written; images are piped directly to the installed encoder. The smaller raster in the all-arena/device matrix changes neither CSS viewport nor camera geometry.
+
+## Limits and integration caution
+
+Stylized low-poly gesture animation, not motion capture or cloth simulation. Hood removal is a hand-supported garment prop plus temporary undershirt color; the full removal of a skinned sleeve is not simulated. Stamp-to-paper detail remains subtle at the compact host-stage scale. Original large wings still limit close-up scale without cropping. Physical phone GPU performance is unmeasured.
+
+The live game serves this working tree. The feature commit and this narrow polish commit both depend on preexisting dirty move-label/Mensa prerequisites. **Do not deploy a clean checkout or push main blindly.** No service restart, infrastructure edit or production-room mutation is part of this work. Actual test counts, source SHA-256 and matrix outcomes belong to the final ledger; the existence of these harnesses alone is not a verification claim.
+
+## Final verified outcome
+
+193 game tests: 184 passed, 9 optional skipped, 0 failed on the final source. Full 288-case mixed-character matrix plus two 96-case targeted regressions passed with no console/page errors; all 24 before/after dense sequences were directly inspected. A real Trischli helper/bar contact was caught by additional body/sight-line probes and fixed, with a dedicated red→green regression. All 48 encoded WebMs decode, seek and retain their natural duration/aspect. Evidence and honest per-clip source provenance are in the final LEDGER.md and MANIFEST.json described above. Public renderer and six dependency assets match the working tree byte-for-byte; no restart or production-room mutation.
