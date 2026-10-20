@@ -115,7 +115,7 @@ export function createMoveProps(label,color=0xffcf63) {
  case 'chalk':mesh(prop,new THREE.CylinderGeometry(.045,.045,.65,8)).rotation.z=-.8;tube(secondary,[[-.5,-.2,0],[-.12,-.4,0],[.6,.45,0]],.045,0xffd34f);break;
  case 'open-book':{for(const s of [-1,1]){const cover=new THREE.Group();cover.name=s<0?'left-cover':'right-cover';prop.add(cover);box(cover,.47,.67,.07,s*.24,0,0,0x257e69);box(cover,.43,.60,.05,s*.24,0,.05,0xfff4d6);for(let i=0;i<4;i++)box(cover,.30,.014,.01,s*.24,.19-i*.12,.08,0x5d8f82);}break;}
  case 'praise':{star(prop,.32);text(secondary,'GOOD WORK',1.05,.25);ball(prop,.09,.30,-.02,0,0xffdfa1);box(prop,.13,.32,.12,.30,.12,0,0xffdfa1).rotation.z=-.2;break;}
- case 'marks':box(prop,.13,.26,.13,0,.22,0,0x8a6630);box(prop,.46,.18,.19,0,0,0,0xd6a422);text(prop,'100%',.44,.15,'#664900','#ffe798').position.z=.11;page(secondary,'100%',.68,.78);text(secondary,'FULL MARKS',.87,.20,'#664900','#ffe798').position.y=.54;break;
+ case 'marks':box(prop,.13,.26,.13,0,.22,0,0x8a6630);box(prop,.46,.18,.19,0,0,0,0xd6a422);text(prop,'100%',.44,.15,'#664900','#ffe798').position.z=.11;page(secondary,'',.68,.78);{const print=new THREE.Group();print.name='contact print';secondary.add(print);text(print,'100%',.59,.23,'#664900','#ffe798').position.y=.13;text(print,'FULL MARKS',.61,.13,'#664900','#ffe798').position.y=-.10;}break;
  case 'copies':page(prop,'COPY');page(secondary,'PASTE');break;
  case 'decoy':humanoid(prop,0xfff4d6,true);text(secondary,'NOT ME',.72,.25);break;
  case 'group':for(let i=0;i<3;i++){const p=new THREE.Group();p.position.set((i-1)*.48,0,-.10);humanoid(p,[0x4aaba2,0x7588c7,0xcc8b69][i]);prop.add(p);}star(secondary,.24);text(secondary,'CREDIT',.67,.24).position.y=.34;break;
@@ -135,7 +135,7 @@ export function createMoveProps(label,color=0xffcf63) {
  case 'pen':mesh(prop,new THREE.CylinderGeometry(.032,.032,.76,10),0,0,0,0xe33e36).rotation.z=-.5;mesh(prop,new THREE.ConeGeometry(.035,.13,8),.21,-.39,0,0xeee3c0).rotation.z=Math.PI-.5;tube(secondary,[[-.50,.35,0],[0,-.10,0],[.40,-.35,0]],.055,0xf54343);break;
  case 'curve':{const shape=new THREE.Shape();shape.moveTo(-.55,-.28);shape.quadraticCurveTo(0,-.55,.55,-.28);shape.lineTo(.55,.36);shape.quadraticCurveTo(0,.08,-.55,.36);shape.closePath();mesh(prop,new THREE.ExtrudeGeometry(shape,{depth:.06,bevelEnabled:false}),0,0,0,0xffefd3);tube(secondary,[[-.44,-.20,0],[-.16,-.13,0],[.12,.08,0],[.40,.23,0]],.032,0xff5149);text(prop,'CURVED',.79,.20,'#bd2828','#fff4d6').position.y=.37;break;}
  case 'brian':box(prop,.56,.39,.18,0,0,0,0x7ac6c1);box(prop,.43,.22,.04,0,.015,.11,0x183849);for(const s of [-1,1])ball(prop,.047,s*.12,.015,.15,0x98ffe3);tube(prop,[[0,.19,0],[0,.33,0]],.023,0x77dcbe);ball(prop,.06,0,.36,0,0x77dcbe);text(prop,'BRIAN AI',.75,.23).position.y=-.35;star(secondary,.22);text(secondary,'+ ADVICE',.87,.24,'#144838','#b4ffe0').position.y=.32;break;
- case 'failed':box(prop,.17,.35,.16,0,.26,0,0x65372f);box(prop,.88,.27,.22,0,0,0,0xd72e39);text(prop,'FAILED',.84,.24,'#fff1de','#b91f32').position.z=.13;page(secondary,'FAILED',.85,1.0);tube(secondary,[[-.20,-.02,.07],[.22,-.36,.07]],.045,0xe43439);tube(secondary,[[-.20,-.36,.07],[.22,-.02,.07]],.045,0xe43439);break;
+ case 'failed':box(prop,.17,.35,.16,0,.26,0,0x65372f);box(prop,.88,.27,.22,0,0,0,0xd72e39);text(prop,'FAILED',.84,.24,'#fff1de','#b91f32').position.z=.13;page(secondary,'',.85,1.0);{const print=new THREE.Group();print.name='contact print';secondary.add(print);text(print,'FAILED',.76,.23,'#fff1de','#b91f32').position.y=.22;tube(print,[[-.20,-.02,.07],[.22,-.36,.07]],.032,0xe43439);tube(print,[[-.20,-.36,.07],[.22,-.02,.07]],.032,0xe43439);}break;
  }
  // A small readable contact burst; the named prop supplies the semantic impact. No screen flash.
  for(let i=0;i<6;i++){const a=i*Math.PI/3;const s=star(impact,.055);s.position.set(Math.cos(a)*.30,Math.sin(a)*.30,0);}
@@ -160,6 +160,19 @@ function solveLimb(f,side,kind,goal,hint,endRotation){
  aim(upper,lower,joint);aim(lower,end,a.clone().addScaledVector(axis,d));
  if(endRotation){end.quaternion.copy(end.parent.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(endRotation));f.holder.updateMatrixWorld(true);}
  return end.getWorldPosition(new THREE.Vector3());
+}
+export function isolateHeldAccessories(f){
+ if(f.accessories)return f.accessories;f.accessories=[];const candidates=[];
+ f.root.traverse(o=>{if(o.isSkinnedMesh&&o.material?.name==='ink charcoal')candidates.push(o);});
+ for(const mesh of candidates){const geometry=mesh.geometry,skin=geometry.attributes.skinIndex,weights=geometry.attributes.skinWeight;
+  const joint=mesh.skeleton.bones.findIndex(b=>b.name==='lefthand');if(joint<0||!skin||!weights)continue;
+  const held=i=>[0,1,2,3].every(k=>weights.getComponent(i,k)<.0001||skin.getComponent(i,k)===joint);
+  const indices=geometry.index?Array.from(geometry.index.array):Array.from({length:geometry.attributes.position.count},(_,i)=>i),body=[],cover=[];
+  for(let i=0;i<indices.length;i+=3){const tri=indices.slice(i,i+3);(tri.every(held)?cover:body).push(...tri);}if(!cover.length)continue;
+  // Clone only the index, retaining all original skin attributes and exact body triangles.
+  const kept=geometry.clone();kept.setIndex(body);mesh.geometry=kept;
+  const cut=geometry.clone();cut.setIndex(cover);const accessory=new THREE.SkinnedMesh(cut,mesh.material);accessory.name='isolated original exam cover';accessory.position.copy(mesh.position);accessory.quaternion.copy(mesh.quaternion);accessory.scale.copy(mesh.scale);accessory.bindMode=mesh.bindMode;accessory.bind(mesh.skeleton,mesh.bindMatrix);accessory.castShadow=mesh.castShadow;mesh.parent.add(accessory);f.accessories.push(accessory);geometry.dispose();
+ }return f.accessories;
 }
 function captureMotionRig(f){
  f.holder.updateMatrixWorld(true);const pose=[];f.root.traverse(o=>{if(o.isBone)pose.push([o,o.position.clone(),o.quaternion.clone().normalize(),o.scale.clone()]);});
@@ -236,9 +249,37 @@ export function choreograph(world,progress){
  const sole=new THREE.Box3().setFromObject(f.holder,true).min.y;if(moving&&sole<a.y){f.holder.position.y+=a.y-sole;f.holder.updateMatrixWorld(true);}
  // A two-hand prop's grip points are on its actual edges, not near a screen-space icon.
  const displayQ=world.propRotation||world.camera.quaternion,center=local(0,1.09,.31);
+ // Surface frame tilted upward toward the stamp hand (not an upright billboard).
+ let stampFrame,drinkFrame,jacketFrame;
+ if(r.gesture==='stamp'||r.gesture==='slam'){
+  const q=f.holder.getWorldQuaternion(new THREE.Quaternion()).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-.95,0,0))),scale=.68*.65;
+  const paper=local(.065,1.17,.16),press=ramp(t,.22,.385),recoil=ramp(t,.415,.46),gap=.065*(1-press)+.035*recoil;
+  const size=r.prop==='marks'?.68*.85:.68*.60,baseHalf=r.prop==='marks'?.09:.135;
+  const stampQ=q.clone().multiply(new THREE.Quaternion().setFromAxisAngle(v([1,0,0]),Math.PI/2));
+  const stamp=paper.clone().add(v([0,.03*scale,.0225*scale+gap+baseHalf*size]).applyQuaternion(q));
+  stampFrame={q,paper,stampQ,stamp,scale,size};
+  left=f.holder.worldToLocal(paper.clone().add(v([-.30*scale,-.22*scale,0]).applyQuaternion(q)));
+  right=f.holder.worldToLocal(stamp.clone().add(v([0,r.prop==='marks'?.24:.30,0]).multiplyScalar(size).applyQuaternion(stampQ)));
+ }
+ if(r.gesture==='drink'){
+  const sip=ramp(t,.28,.53)*(1-ramp(t,.68,.84)),tilt=.85*ramp(t,.44,.55)*(1-ramp(t,.66,.79));
+  const q=f.holder.getWorldQuaternion(new THREE.Quaternion()).multiply(new THREE.Quaternion().setFromAxisAngle(v([1,0,0]),-tilt));
+  // Model authored at Blender (0,-.247,2.952), relative to head bind (0,0,2.68).
+  const mouth=f.root.getObjectByName('head')?.localToWorld(v([0,.272,.247]))||local(0,1.50,.15),size=.68*.78;
+  const rim=v([0,.17,-.14]).multiplyScalar(size).applyQuaternion(q),cup=local(.24,1.08,.30).lerp(mouth.clone().sub(rim),sip);
+  drinkFrame={q,cup,size};right=f.holder.worldToLocal(cup.clone().add(v([.14,-.02,0]).multiplyScalar(size).applyQuaternion(q)));
+ }
+ if(r.gesture==='undress'){
+  // Reverse the same overhead path on recovery; no instant green restoration.
+  const peel=ramp(t,.10,.34),lower=ramp(t,.39,.52),redress=ramp(t,.69,.79),seat=ramp(t,.81,.94);
+  const height=1.14+.68*peel-.64*lower+.64*redress-.68*seat,front=.25+.12*lower-.12*redress;
+  const exposure=ramp(t,.265,.34)*(1-ramp(t,.825,.93));
+  const garment=ramp(t,.27,.345)*(1-ramp(t,.82,.93));jacketFrame={height,front,exposure,garment};
+  left.set(-.23,height,front);right.set(.23,height,front);
+ }
  if(twoHand){const half=r.prop==='textbook'?.27:.25;left=f.holder.worldToLocal(center.clone().add(new THREE.Vector3(-half,-.06,.02).applyQuaternion(displayQ)));right=f.holder.worldToLocal(center.clone().add(new THREE.Vector3(half,-.06,.02).applyQuaternion(displayQ)));}
  const blendGoal=(side,point)=>local(...rig.hands[side==='left'?0:1].clone().lerp(point,weight).toArray());
- if(r.gesture==='stamp'||r.gesture==='slam'){left.set(-.19,1.02,.29);right.lerp(new THREE.Vector3(-.08,1.19+.23*wind-.16*pulse(t,.23,.40,.56),.31),weight);}
+
  const lh=solveLimb(f,'left','arm',blendGoal('left',left),local(-.70,.85,.08));
  const rh=solveLimb(f,'right','arm',blendGoal('right',right),local(.70,.85,.08));
  const source=rh.clone(),head=local(...rig.head.toArray()),torso=local(0,1.10,.18);
@@ -258,7 +299,7 @@ export function choreograph(world,progress){
  case 'chalk':case 'pen':prop.position.copy(source);prop.rotateZ((r.prop==='chalk'?-.65:-.5)+.75*contact);secondary.position.copy(flying);secondary.scale.setScalar(.45*ramp(t,releaseAt,releaseAt+.035)*(1-ramp(t,hit,hit+.10)));secondary.visible=t>=releaseAt&&t<hit+.10;break;
  case 'open-book':for(const [i,c]of prop.children.entries())c.rotation.y=(i===0?1:-1)*(1-ramp(t,.12,.40))*.85;secondary.visible=false;break;
  case 'praise':prop.position.copy(rh).add(v([0,.14,0]));prop.scale.multiplyScalar(.64);secondary.position.copy(head).add(v([0,.42,0]));break;
- case 'marks':prop.position.copy(rh).add(new THREE.Vector3(0,-.12,0).applyQuaternion(displayQ));prop.scale.multiplyScalar(.85);secondary.position.copy(t<releaseAt?lh:flying);secondary.scale.multiplyScalar(.65*(1-ramp(t,hit,hit+.10)));secondary.visible=t>.19&&t<hit+.10;break;
+ case 'marks':case 'failed':{const p=stampFrame;prop.position.copy(p.stamp);prop.quaternion.copy(p.stampQ);prop.scale.setScalar(p.size*reveal);secondary.position.copy(t<releaseAt?p.paper:flying);secondary.quaternion.copy(p.q);secondary.scale.setScalar(p.scale*reveal*(1-ramp(t,hit,hit+.10)));secondary.visible=t>.12&&t<hit+.10;secondary.getObjectByName('contact print').visible=t>=.385;break;}
  case 'copies':prop.position.copy(lh).add(v([0,.10,0]));prop.scale.multiplyScalar(.70);secondary.position.copy(t<launch?rh:flying);secondary.scale.multiplyScalar(.70*(1-ramp(t,hit,hit+.07)));secondary.visible=t>.20&&t<hit+.07;break;
  case 'decoy':standProp();prop.position.copy(a).addScaledVector(dir,.56).add(v([0,.73,0]));prop.scale.setScalar(.94*ramp(t,.12,.40)*(1-ramp(t,.80,.97)));prop.position.y=a.y+.69*prop.scale.y;secondary.position.copy(prop.position).add(v([0,.81,0]));break;
  case 'group':standProp();prop.position.copy(a).addScaledVector(new THREE.Vector3(dir.z,0,-dir.x),-.83).add(v([0,.47,0]));prop.scale.setScalar(.63*reveal);prop.position.y=a.y+.69*prop.scale.y;secondary.position.copy(lh).add(rh).multiplyScalar(.5).add(v([0,.21,0]));break;
@@ -269,20 +310,20 @@ export function choreograph(world,progress){
  case 'grade':prop.position.copy(t<launch?rh:flying);prop.rotateZ(.18*Math.sin(Math.PI*arrival));prop.scale.multiplyScalar(.62*(1-ramp(t,hit,hit+.065)));prop.visible=t<hit+.065;secondary.visible=false;break;
  case 'storm':{prop.position.copy(dest);const crown=Number.isFinite(world.contactTop)?world.contactTop:targetHead.y+.4,amount=reveal*ramp(t,.20,.40);prop.position.y=crown+(reduced?-.25:.40*amount);prop.scale.setScalar(reduced?.34:.68*amount);const span=prop.position.y-.14-dest.y;secondary.position.copy(dest);secondary.scale.y=span/.56;secondary.position.y+=.38*secondary.scale.y;secondary.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),new THREE.Euler().setFromQuaternion(displayQ,'YXZ').y);secondary.visible=t>=hit&&t<hit+.13;impact.visible=false;break;}
  case 'hood':prop.position.copy(head).add(v([0,.14+.17*(1-ramp(t,.12,.43)),0]));prop.quaternion.copy(f.home.rotation);prop.scale.setScalar(.78*reveal);secondary.visible=false;break;
- case 'jacket':prop.position.copy(lh).add(rh).multiplyScalar(.5).add(v([0,.08+.20*wind,0]));prop.rotateZ(-.12*act);prop.scale.multiplyScalar(.77);secondary.position.copy(head).add(v([0,.38,0]));f.costume??=[];if(!f.costume.length)f.root.traverse(o=>{for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[])if(m.name==='HSG forest green')f.costume.push([m,m.color.clone()]);});if(t>=launch&&t<.90)for(const [m]of f.costume)m.color.set(0xf0ecd9);break;
+ case 'jacket':{const p=jacketFrame;prop.position.copy(lh).add(rh).multiplyScalar(.5);prop.quaternion.copy(f.holder.quaternion);prop.scale.set(.52*p.garment,.52*p.garment,.52*p.garment);prop.visible=p.garment>.001;secondary.position.copy(head).add(v([0,.38,0]));secondary.visible=t>=.37&&t<.68;f.costume??=[];if(!f.costume.length)f.root.traverse(o=>{for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[])if(m.name==='HSG forest green')f.costume.push([m,m.color.clone()]);});for(const [m,c]of f.costume)m.color.copy(c).lerp(new THREE.Color(0xf0ecd9),p.exposure);break;}
  case 'lecture':standProp();prop.position.copy(a).addScaledVector(dir,.90).add(v([0,.66,-.12]));prop.scale.setScalar(.85*reveal);prop.position.y=a.y+.72*prop.scale.y;secondary.position.copy(flying);secondary.scale.multiplyScalar(.65*(1-ramp(t,hit,hit+.08)));secondary.visible=t>=launch&&t<hit+.08;break;
  case 'dance':prop.position.copy(a).addScaledVector(dir,reach);prop.quaternion.identity();prop.scale.setScalar(.90*reveal);secondary.position.copy(head).add(v([0,.28,0]));impact.visible=false;break;
  case 'bouncer':standProp();prop.position.copy(a).add(v([e.actor==='A'?-.40:.40,0,.75]));prop.scale.setScalar(1.35*reveal*ramp(t,.18,.43));prop.position.y=a.y+.69*prop.scale.y;secondary.position.copy(rh);secondary.scale.setScalar(.88*reveal);secondary.visible=t<.49;break;
- case 'water':prop.position.copy(rh).add(v([0,.055,0]));prop.rotateZ(-.20*act);prop.scale.multiplyScalar(.78);secondary.position.copy(prop.position).add(v([0,.24,0]));secondary.visible=t>=hit&&t<.76;break;
+ case 'water':prop.position.copy(drinkFrame.cup);prop.quaternion.copy(drinkFrame.q);prop.scale.setScalar(drinkFrame.size*reveal);secondary.position.copy(prop.position).add(v([0,.24,0]));secondary.visible=t>=hit&&t<.70;break;
  case 'beer':prop.position.copy(t<launch?rh:flying);prop.rotateZ(-arrival*1.05);prop.scale.multiplyScalar(.85*(1-ramp(t,hit,hit+.045)));prop.visible=t<hit+.045;secondary.position.copy(dest);secondary.scale.setScalar(.55*ramp(t,hit,hit+.05)*(1-ramp(t,.72,.82)));secondary.visible=t>=hit&&t<.82;break;
  case 'curve':prop.scale.x*=1-.12*act;secondary.position.copy(prop.position).add(new THREE.Vector3(0,0,.07).applyQuaternion(displayQ));secondary.scale.multiplyScalar(.75);break;
  case 'brian':prop.position.copy(lh).add(v([0,.30,0]));prop.scale.multiplyScalar(.70*ramp(t,.14,.34));secondary.position.copy(rh).add(v([0,.21,0]));break;
- case 'failed':prop.position.copy(rh).add(new THREE.Vector3(0,-.12,0).applyQuaternion(displayQ));prop.scale.multiplyScalar(.70);secondary.position.copy(t<releaseAt?lh:flying);secondary.scale.multiplyScalar(.60*(1-ramp(t,hit,hit+.10)));secondary.visible=t>.19&&t<hit+.10;break;
+
  }
- world.fx.userData.release=(r.gesture==='stamp'||r.gesture==='slam'?lh:source).clone();world.fx.userData.destination=dest.clone();
+ world.fx.userData.release=(stampFrame?stampFrame.paper:source).clone();world.fx.userData.destination=dest.clone();
  world.fx.updateMatrixWorld(true);
  // Stationary solids do not billboard with the camera; only their graphic labels face the audience.
- for(const label of world.fx.userData.labels){const q=label.parent.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(world.camera.quaternion);label.quaternion.copy(q);}
+ for(const label of world.fx.userData.labels){if(label.parent.name==='contact print')continue;const q=label.parent.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(world.camera.quaternion);label.quaternion.copy(q);}
  return {recipe:r,focus:r.mode==='self'?torso:a.clone().lerp(b,.5).add(v([0,1.0,0])),flight,weight:ramp(t,0,.34)*(1-ramp(t,.74,1))};
 }
 
@@ -339,6 +380,7 @@ export class BattleWorld {
     root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=false;o.frustumCulled=false;}});
     this.scene.add(holder);const mixer=new THREE.AnimationMixer(root),actions=new Map(gltf.animations.map(c=>[c.name,mixer.clipAction(c)]));
     this.fighters[team]={root,holder,mixer,actions,clip:null,home:{position:holder.position.clone(),rotation:holder.quaternion.clone(),scale:holder.scale.clone()}};
+    isolateHeldAccessories(this.fighters[team]);
     this.fighters[team].envelope=fighterEnvelope(this.fighters[team]);
     this.play(team,state.teams[team].hp===0?'defeat':'idle');
     if(state.teams[team].hp===0)mixer.update(1.5);
@@ -444,7 +486,7 @@ export class BattleWorld {
   const returnFrom=this.selection?this.camera.position.clone():null;this.selection=null;
   this.active={...event,startedAt:now,hit:false,returnFrom};
   for(const f of Object.values(this.fighters)){restoreFighter(f);f.home??={position:f.holder.position.clone(),rotation:f.holder.quaternion.clone(),scale:f.holder.scale.clone()};}
-  const actor=this.fighters[event.actor];actor.mixer.stopAllAction();actor.current=null;actor.clip=null;actor.sampledPose=null;this.play(event.actor,'idle');actor.current.time=0;actor.mixer.update(0);actor.motionRig=captureMotionRig(actor);actor.hiddenProps=[];actor.root.traverse(o=>{if(o.isMesh&&['warm note paper','annotation blue','red marking ink'].includes(o.material?.name)){actor.hiddenProps.push([o,o.visible]);o.visible=false;}});
+  const actor=this.fighters[event.actor];actor.mixer.stopAllAction();actor.current=null;actor.clip=null;actor.sampledPose=null;this.play(event.actor,'idle');actor.current.time=0;actor.mixer.update(0);actor.motionRig=captureMotionRig(actor);actor.hiddenProps=[];for(const o of isolateHeldAccessories(actor)){actor.hiddenProps.push([o,o.visible]);o.visible=false;}actor.root.traverse(o=>{if(o.isMesh&&['warm note paper','annotation blue','red marking ink'].includes(o.material?.name)){actor.hiddenProps.push([o,o.visible]);o.visible=false;}});
   this.badge.textContent=event.ability.label;this.canvas.dataset.action=event.id;this.canvas.dataset.worldMove=event.move;this.canvas.dataset.actor=event.actor;
   this.fx=createMoveProps(event.ability.label,event.ability.color);this.scene.add(this.fx);this.fx.visible=false;this.propRotation=this.camera.quaternion.clone();this.releasePoint=null;this.contactPoint=null;const receiver=this.fighters[event.target];this.contactTop=receiver.envelope?.max.y??new THREE.Box3().setFromObject(receiver.holder,true).max.y;
   choreograph(this,this.fx.userData.recipe.mode==='melee'?.46:event.ability.launch);this.releasePoint=this.fx.userData.release.clone();this.contactPoint=this.fx.userData.destination.clone();

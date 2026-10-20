@@ -80,3 +80,15 @@ The live game serves this working tree. The feature commit and this narrow polis
 ## Final verified outcome
 
 193 game tests: 184 passed, 9 optional skipped, 0 failed on the final source. Full 288-case mixed-character matrix plus two 96-case targeted regressions passed with no console/page errors; all 24 before/after dense sequences were directly inspected. A real Trischli helper/bar contact was caught by additional body/sight-line probes and fixed, with a dedicated red→green regression. All 48 encoded WebMs decode, seek and retain their natural duration/aspect. Evidence and honest per-clip source provenance are in the final LEDGER.md and MANIFEST.json described above. Public renderer and six dependency assets match the working tree byte-for-byte; no restart or production-room mutation.
+
+
+## Independent-review contact corrections (20 October, follow-up)
+
+The prior 24-move pass received REQUEST CHANGES; its old visual acceptance claims above are historical, not evidence that these four defects were already correct.
+
+- Bad Teacher: split the original exam's 620 charcoal triangles using their exclusive left-hand skin binding. Keep every other charcoal body triangle; hide only this accessory during action, restore on finish/cancel. Isolation occurs before first GPU upload, not as a per-action allocation.
+- Full Marks / Failed: paper is a real upward-tilted actor-relative surface. Stamp underside is normal-aligned; approach .22–.385, contact .385–.415, recoil .415–.46. Only then does a surface-fixed print appear. Report release remains .46, opponent impact .59 and total 2200 ms. Hands solve toward actual paper-edge and stamp-handle points.
+- Take Hoodie Off: no full garment prop until the overhead peel/undershirt handoff. Lower to chest, then reverse through an overhead pull-on before smooth restoration. Theatrical material/rigid-garment transition remains intentional; not cloth simulation.
+- Glass of Water: authored lip socket is the model's Blender mouth relative to head bind, (0,.272,.247) in exported head coordinates. Position the actual near rim at it, tilt .85 radians toward actor along local X, solve hand from glass grip, hold briefly and lower. Neither contact nor tilt depends on camera facing.
+
+Additional regression command: `node --test test/physical-contact.test.mjs` (from game/). Tests evaluate real GLB skin-index triangles, transformed stamp-base vertices, physical glass rim/handle and head socket, print visibility, and dense costume continuity on both sides. Evidence/provenance lives under the existing evidence root's contact-fixes/ directory. Canonical AFTER clips and the gallery manifest are updated after final-source capture; independent rereview remains required.
