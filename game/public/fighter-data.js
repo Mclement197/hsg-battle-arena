@@ -7,7 +7,7 @@ export const STAT_META = Object.freeze({
 });
 const profile = (archetype, attack, defend, heal, special) => Object.freeze({ archetype, stats: Object.freeze({ attack, defend, heal, special }) });
 export const FIGHTER_PROFILES = Object.freeze({
-  'luca-di-grazia': profile('The campus legend · strongest overall', 28, 70, 14, 42),
+  'luca-di-grazia': profile('The campus legend · strongest overall', 50, 100, 20, 50),
   'free-rider': profile('The survivor · guard & recovery', 17, 62, 11, 30),
   'tryhard': profile('The technician · sustained pressure', 25, 42, 8, 36),
   'assessment-hoodie': profile('The comeback kid · recovery specialist', 19, 56, 13, 31),

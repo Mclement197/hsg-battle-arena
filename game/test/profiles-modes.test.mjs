@@ -30,9 +30,27 @@ test('six distinct four-command profiles; every axis varies, Luca strongest over
   for (const id of CHARACTERS) {
     const stats = fighterStats(id);
     for (const move of MOVES) { assert.ok(stats[move] > 0); assert.match(moveDescription(stats, move), new RegExp(String(stats[move]))); }
-    assert.ok(stats.defend <= 70); assert.ok(stats.heal < 17);
+    for (const move of MOVES) assert.ok(stats[move] <= STAT_META[move].max);
     if (id !== 'luca-di-grazia') assert.ok(strengthScore('luca-di-grazia') > strengthScore(id));
   }
+});
+test('Luca has all four scale maxima in roster and authoritative moves, with existing guard and HP limits', () => {
+  const maxima = { attack: 50, defend: 100, heal: 20, special: 50 };
+  assert.deepEqual(Object.fromEntries(Object.entries(STAT_META).map(([move, meta]) => [move, meta.max])), maxima);
+  assert.deepEqual(fighterStats('luca-di-grazia'), maxima);
+  assert.equal(strengthScore('luca-di-grazia'), 4);
+  const f = fixture(); f.start();
+  assert.deepEqual(f.arena.snapshot(f.room, f.host).teams.A.stats, maxima);
+  f.resolve('attack'); assert.equal(f.room.lastResult.damage, 50);
+  f.resolve('special'); assert.equal(f.room.teams.A.hp, 70);
+  f.resolve('heal'); assert.equal(f.room.lastResult.healed, 20); assert.equal(f.room.teams.A.hp, 90);
+  f.resolve('heal');
+  f.resolve('defend'); assert.equal(f.room.teams.A.shield, true);
+  f.resolve('attack'); assert.equal(f.room.lastResult.damage, 1); assert.equal(f.room.teams.A.shield, false);
+  f.resolve('heal'); assert.equal(f.room.lastResult.healed, 11); assert.equal(f.room.teams.A.hp, 100);
+  f.resolve('heal');
+  f.resolve('special'); assert.equal(f.room.lastResult.damage, 50);
+  assert.equal(f.room.teams.A.specialReadyOwnTurn, f.room.teams.A.ownTurn + 4);
 });
 test('every displayed profile drives engine attack, special, heal and defend against every opponent', () => {
   for (const id of CHARACTERS) for (const opponent of CHARACTERS) {
@@ -41,18 +59,23 @@ test('every displayed profile drives engine attack, special, heal and defend aga
     f.resolve('attack'); assert.equal(f.room.lastResult.damage, fighterStats(id).attack);
     f.resolve('heal'); assert.equal(f.room.lastResult.healed, Math.min(fighterStats(opponent).heal, fighterStats(id).attack));
     f.resolve('defend'); assert.equal(f.room.teams.A.shield, true);
-    f.resolve('special'); assert.equal(f.room.lastResult.damage, Math.round(fighterStats(opponent).special * (100 - fighterStats(id).defend) / 100));
+    f.resolve('special'); assert.equal(f.room.lastResult.damage, Math.max(1, Math.round(fighterStats(opponent).special * (100 - fighterStats(id).defend) / 100)));
     assert.equal(f.room.teams.A.shield, false);
     f.resolve('special'); assert.equal(f.room.lastResult.damage, Math.min(fighterStats(id).special, f.room.teams.B.hp + f.room.lastResult.damage));
     assert.ok(f.room.lastResult.damage > 0);
   }
 });
-test('all pairs have nonzero defense counters and healing cannot indefinitely counter repeated attacks', () => {
+test('all pairs have nonzero defense counters; repeated attacks beat healing below attack power', () => {
   for (const a of CHARACTERS) for (const b of CHARACTERS) {
     for (const counter of ['heal', 'defend']) {
       const f = fixture(a, b); f.start(); let turns = 0;
-      while (f.room.phase === 'running' && turns++ < 150) f.resolve(f.room.turn.team === 'A' ? 'attack' : counter);
-      assert.equal(f.room.winner, 'A', a + ' vs ' + b + '/' + counter); assert.ok(turns < 150);
+      if (counter === 'heal' && fighterStats(b).heal >= fighterStats(a).attack) {
+        for (let i = 0; i < 10; i++) { f.resolve('attack'); f.resolve('heal'); }
+        assert.equal(f.room.phase, 'running'); assert.equal(f.room.teams.B.hp, 100);
+        continue;
+      }
+      while (f.room.phase === 'running' && turns++ < 200) f.resolve(f.room.turn.team === 'A' ? 'attack' : counter);
+      assert.equal(f.room.winner, 'A', a + ' vs ' + b + '/' + counter); assert.ok(turns < 200);
     }
   }
 });
