@@ -8,7 +8,9 @@ for body in bpy.data.objects:
  regions=json.loads(body['source_regions']);attr=body.data.attributes['source_region'];rows=[]
  for rid,name in regions.items():
   if 'continuous sleeve shoulder elbow' not in name:continue
-  vs=[v for v in body.data.vertices if attr.data[v.index].value==int(rid)];assert len(vs)==400
+  vs=[v for v in body.data.vertices if attr.data[v.index].value==int(rid)]
+  if not vs:continue # Semantic garment separation retains the shared region-name table.
+  assert len(vs)==400
   rings=[vs[i:i+16] for i in range(0,400,16)];maxstep=0
   for a,b in zip(rings,rings[1:]):
    ca=sum((v.co for v in a),Vector())/16;cb=sum((v.co for v in b),Vector())/16
@@ -20,5 +22,6 @@ for body in bpy.data.objects:
  assert all(math.isfinite(c) for v in body.data.vertices for c in v.co)
  assert body.parent.type=='ARMATURE'
  report.append({'id':body.parent.parent['character_id'],'sleeves':rows,'vertices':len(body.data.vertices),'clips':[t.name for t in body.parent.animation_data.nla_tracks]})
-assert len(report)==6
+assert len({r['id'] for r in report})==6
+for cid in {r['id'] for r in report}:assert sum(len(r['sleeves']) for r in report if r['id']==cid)>=2
 open(sys.argv[-1],'w').write(json.dumps(report,indent=2));print('SURFACE_PASS',len(report))

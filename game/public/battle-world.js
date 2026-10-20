@@ -126,7 +126,7 @@ export function createMoveProps(label,color=0xffcf63) {
  case 'grade':star(prop,.48);text(prop,'A+',.64,.45,'#6b4300','#ffe580').position.z=.10;mesh(secondary,new THREE.TorusGeometry(.54,.035,8,40),0,0,0,0xffcf43);break;
  case 'storm':for(let i=0;i<5;i++)ball(prop,.21,(i-2)*.17,Math.sin(i)*.055,0,0x746da3);tube(secondary,[[.10,.18,0],[-.13,-.06,0],[.09,-.04,0],[-.09,-.38,0]],.047,0xffe88c);for(let i=0;i<7;i++)tube(prop,[[(i-3)*.12,-.23,0],[(i-3)*.12-.05,-.45,0]],.014,0x8ccfff);break;
  case 'hood':{const hood=mesh(prop,new THREE.SphereGeometry(.30,16,10,Math.PI/2+.80,Math.PI*2-1.60,0,Math.PI*.72),0,0,0,0x245b48);hood.scale.z=.78;hood.material.side=THREE.DoubleSide;box(prop,.44,.17,.16,0,-.16,0,0x245b48);break;}
- case 'jacket':box(prop,.49,.56,.15,0,0,0,0x245b48);for(const s of [-1,1])box(prop,.17,.46,.14,s*.33,.10,0,0x245b48).rotation.z=s*.70;mesh(prop,new THREE.TorusGeometry(.13,.06,8,20),0,.31,0,0x245b48);star(secondary,.28);text(secondary,'FREEDOM',.90,.25,'#5f4400','#fff0aa').position.y=.40;break;
+ case 'jacket':star(secondary,.28);text(secondary,'FREEDOM',.90,.25,'#5f4400','#fff0aa').position.y=.40;break;
  case 'lecture':box(prop,1.12,.65,.06,0,.22,0,0x21473b);text(prop,'MATHS A',.98,.26,'#efffee','#21473b').position.y=.30;box(prop,.46,.08,.43,0,-.31,.12,0xb59972);box(prop,.46,.37,.06,0,-.10,-.06,0xb59972);for(const s of [-1,1])box(prop,.055,.38,.055,s*.18,-.53,.12,0x525e63);page(secondary,'ABSENT',.67,.43);break;
  case 'dance':for(let x=-1;x<=1;x++)for(let z=-1;z<=1;z++)box(prop,.42,.025,.42,x*.44,.02,z*.44,[0xff5bca,0x54c8ef,0xffdb72][(x+z+6)%3]);for(const s of [-1,1]){ball(secondary,.09,s*.40,0,0,0xff9be6);tube(secondary,[[s*.40,0,0],[s*.40,.36,0],[s*.22,.29,0]],.025,0xff9be6);}break;
  case 'bouncer':humanoid(prop,0x182431);box(prop,.13,.47,.26,0,.04,.01,0xf5f2e5);box(prop,.07,.34,.04,0,.10,.16,0x262d3c);for(const s of [-1,1]){box(prop,.15,.055,.10,s*.08,.48,.13,0x101624);box(prop,.45,.13,.18,s*.08,.06,.17,0x182431).rotation.z=s*.12;}text(prop,'BOUNCER',.82,.25).position.y=.91;box(secondary,.12,.22,.045,0,0,0,0x182431);box(secondary,.085,.15,.01,0,.01,.027,0x83cbd5);prop.scale.setScalar(1.20);break;
@@ -144,7 +144,28 @@ export function createMoveProps(label,color=0xffcf63) {
 }
 
 function rigOffset(f,name,x=0,y=0,z=0){const bone=f.root.getObjectByName(THREE.PropertyBinding.sanitizeNodeName(name));if(bone)bone.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(x,y,z))).normalize();}
-function restoreFighter(f){if(!f?.home)return;for(const [material,color]of f.costume||[])material.color.copy(color);f.holder.position.copy(f.home.position);f.holder.quaternion.copy(f.home.rotation);f.holder.scale.copy(f.home.scale);}
+function restoreFighter(f){if(!f?.home)return;f.holder.position.copy(f.home.position);f.holder.quaternion.copy(f.home.rotation);f.holder.scale.copy(f.home.scale);}
+
+// Animate the actual authored shell (including embroidery, cuffs and hood), never a second jacket.
+// The fitted undershirt/bare arms remain independently weighted beneath it in the native asset.
+export function prepareGarment(f){
+ if(f.garment)return;const sources=[];f.root.traverse(o=>{if(o.userData.removable_garment)o.traverse(m=>{if(m.isSkinnedMesh)sources.push(m);});});
+ f.garment=sources.map(source=>{const geometry=source.geometry.clone();geometry.deleteAttribute('skinIndex');geometry.deleteAttribute('skinWeight');const cloth=new THREE.Mesh(geometry,source.material);cloth.name='original hoodie handoff';cloth.castShadow=true;cloth.frustumCulled=false;f.holder.add(cloth);return {source,cloth,visible:source.visible};});
+}
+export function restoreGarment(f){for(const {source,cloth,visible}of f.garment||[]){source.visible=visible;cloth.removeFromParent();cloth.geometry.dispose();}f.garment=null;}
+export function moveGarment(f,amount,left,right){
+ if(!f.garment)return;f.holder.updateMatrixWorld(true);const inverse=f.holder.matrixWorld.clone().invert(),l=left.clone().applyMatrix4(inverse),r=right.clone().applyMatrix4(inverse),center=l.clone().add(r).multiplyScalar(.5),span=r.clone().sub(l);
+ for(const {source,cloth}of f.garment){
+  source.visible=false;source.skeleton.update();const positions=cloth.geometry.attributes.position,rest=source.geometry.attributes.position,point=new THREE.Vector3(),fold=new THREE.Vector3();
+  for(let i=0;i<positions.count;i++){
+   source.getVertexPosition(i,point).applyMatrix4(source.matrixWorld).applyMatrix4(inverse);
+   const x=rest.getX(i)/.445,height=rest.getY(i);
+   fold.copy(center).addScaledVector(span,x*.5);fold.y+=(height-2.70)*.42;fold.z+=rest.getZ(i)*.42;
+   point.lerp(fold,amount);positions.setXYZ(i,point.x,point.y,point.z);
+  }
+  positions.needsUpdate=true;cloth.geometry.computeVertexNormals();cloth.geometry.computeBoundingBox();cloth.geometry.computeBoundingSphere();
+ }
+}
 
 // Resolve a two-segment limb in world space, preserving segment lengths and a deliberate bend plane.
 // The shipped rigs have different bind axes; Euler offsets alone cannot place a hand or plant a foot.
@@ -271,10 +292,9 @@ export function choreograph(world,progress){
  }
  if(r.gesture==='undress'){
   // Reverse the same overhead path on recovery; no instant green restoration.
-  const peel=ramp(t,.10,.34),lower=ramp(t,.39,.52),redress=ramp(t,.69,.79),seat=ramp(t,.81,.94);
-  const height=1.14+.68*peel-.64*lower+.64*redress-.68*seat,front=.25+.12*lower-.12*redress;
-  const exposure=ramp(t,.265,.34)*(1-ramp(t,.825,.93));
-  const garment=ramp(t,.27,.345)*(1-ramp(t,.82,.93));jacketFrame={height,front,exposure,garment};
+  const peel=ramp(t,.10,.36),lower=ramp(t,.39,.53),redress=ramp(t,.67,.78),seat=ramp(t,.79,.96);
+  const height=.92+.96*peel-.63*lower+.63*redress-.96*seat,front=.20+.35*ramp(t,.10,.25)*(1-ramp(t,.84,.96));
+  jacketFrame={amount:peel*(1-seat)};
   left.set(-.23,height,front);right.set(.23,height,front);
  }
  if(twoHand){const half=r.prop==='textbook'?.27:.25;left=f.holder.worldToLocal(center.clone().add(new THREE.Vector3(-half,-.06,.02).applyQuaternion(displayQ)));right=f.holder.worldToLocal(center.clone().add(new THREE.Vector3(half,-.06,.02).applyQuaternion(displayQ)));}
@@ -310,7 +330,7 @@ export function choreograph(world,progress){
  case 'grade':prop.position.copy(t<launch?rh:flying);prop.rotateZ(.18*Math.sin(Math.PI*arrival));prop.scale.multiplyScalar(.62*(1-ramp(t,hit,hit+.065)));prop.visible=t<hit+.065;secondary.visible=false;break;
  case 'storm':{prop.position.copy(dest);const crown=Number.isFinite(world.contactTop)?world.contactTop:targetHead.y+.4,amount=reveal*ramp(t,.20,.40);prop.position.y=crown+(reduced?-.25:.40*amount);prop.scale.setScalar(reduced?.34:.68*amount);const span=prop.position.y-.14-dest.y;secondary.position.copy(dest);secondary.scale.y=span/.56;secondary.position.y+=.38*secondary.scale.y;secondary.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),new THREE.Euler().setFromQuaternion(displayQ,'YXZ').y);secondary.visible=t>=hit&&t<hit+.13;impact.visible=false;break;}
  case 'hood':prop.position.copy(head).add(v([0,.14+.17*(1-ramp(t,.12,.43)),0]));prop.quaternion.copy(f.home.rotation);prop.scale.setScalar(.78*reveal);secondary.visible=false;break;
- case 'jacket':{const p=jacketFrame;prop.position.copy(lh).add(rh).multiplyScalar(.5);prop.quaternion.copy(f.holder.quaternion);prop.scale.set(.52*p.garment,.52*p.garment,.52*p.garment);prop.visible=p.garment>.001;secondary.position.copy(head).add(v([0,.38,0]));secondary.visible=t>=.37&&t<.68;f.costume??=[];if(!f.costume.length)f.root.traverse(o=>{for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[])if(m.name==='HSG forest green')f.costume.push([m,m.color.clone()]);});for(const [m,c]of f.costume)m.color.copy(c).lerp(new THREE.Color(0xf0ecd9),p.exposure);break;}
+ case 'jacket':{prop.visible=false;moveGarment(f,jacketFrame.amount,lh,rh);secondary.position.copy(head).add(v([0,.38,0]));secondary.visible=t>=.40&&t<.65;break;}
  case 'lecture':standProp();prop.position.copy(a).addScaledVector(dir,.90).add(v([0,.66,-.12]));prop.scale.setScalar(.85*reveal);prop.position.y=a.y+.72*prop.scale.y;secondary.position.copy(flying);secondary.scale.multiplyScalar(.65*(1-ramp(t,hit,hit+.08)));secondary.visible=t>=launch&&t<hit+.08;break;
  case 'dance':prop.position.copy(a).addScaledVector(dir,reach);prop.quaternion.identity();prop.scale.setScalar(.90*reveal);secondary.position.copy(head).add(v([0,.28,0]));impact.visible=false;break;
  case 'bouncer':standProp();prop.position.copy(a).add(v([e.actor==='A'?-.40:.40,0,.75]));prop.scale.setScalar(1.35*reveal*ramp(t,.18,.43));prop.position.y=a.y+.69*prop.scale.y;secondary.position.copy(rh);secondary.scale.setScalar(.88*reveal);secondary.visible=t<.49;break;
@@ -490,7 +510,7 @@ export class BattleWorld {
   for(const f of Object.values(this.fighters)){restoreFighter(f);f.home??={position:f.holder.position.clone(),rotation:f.holder.quaternion.clone(),scale:f.holder.scale.clone()};}
   const actor=this.fighters[event.actor];actor.mixer.stopAllAction();actor.current=null;actor.clip=null;actor.sampledPose=null;this.play(event.actor,'idle');actor.current.time=0;actor.mixer.update(0);actor.motionRig=captureMotionRig(actor);actor.hiddenProps=[];for(const o of isolateHeldAccessories(actor)){actor.hiddenProps.push([o,o.visible]);o.visible=false;}actor.root.traverse(o=>{if(o.isMesh&&['warm note paper','annotation blue','red marking ink'].includes(o.material?.name)){actor.hiddenProps.push([o,o.visible]);o.visible=false;}});
   this.badge.textContent=event.ability.label;this.canvas.dataset.action=event.id;this.canvas.dataset.worldMove=event.move;this.canvas.dataset.actor=event.actor;
-  this.fx=createMoveProps(event.ability.label,event.ability.color);this.scene.add(this.fx);this.fx.visible=false;this.propRotation=this.camera.quaternion.clone();this.releasePoint=null;this.contactPoint=null;const receiver=this.fighters[event.target];this.contactTop=receiver.envelope?.max.y??new THREE.Box3().setFromObject(receiver.holder,true).max.y;
+  this.fx=createMoveProps(event.ability.label,event.ability.color);if(this.fx.userData.recipe.gesture==='undress')prepareGarment(actor);this.scene.add(this.fx);this.fx.visible=false;this.propRotation=this.camera.quaternion.clone();this.releasePoint=null;this.contactPoint=null;const receiver=this.fighters[event.target];this.contactTop=receiver.envelope?.max.y??new THREE.Box3().setFromObject(receiver.holder,true).max.y;
   choreograph(this,this.fx.userData.recipe.mode==='melee'?.46:event.ability.launch);this.releasePoint=this.fx.userData.release.clone();this.contactPoint=this.fx.userData.destination.clone();
   this.animate(now);
  }
@@ -502,7 +522,7 @@ export class BattleWorld {
   this.direct(t);
   if(t>=1){if(e.defeated&&target.current){target.current.time=target.current.getClip().duration;target.mixer.update(0);}this.finish();this.onComplete?.(e);}
  }
- finish(){for(const f of Object.values(this.fighters)){for(const [mesh,visible]of f.hiddenProps||[])mesh.visible=visible;f.hiddenProps=null;restoreFighter(f);f.sampledPose=null;if(f.clip!=='defeat'){f.mixer.stopAllAction();f.current=null;f.clip=null;f.mixer.update(0);} }this.choreography=null;this.releasePoint=null;this.contactPoint=null;this.contactTop=null;this.propRotation=null;clearTimeout(this.fallbackTimer);this.fallbackLabel?.remove();this.fallbackLabel=null;this.selection=null;if(this.fx){this.scene?.remove(this.fx);release(this.fx);this.fx=null;}this.active=null;for(const [team,f]of Object.entries(this.fighters))if(f.clip!=='defeat'){this.play(team,'idle');f.mixer.update(0);}if(this.badge)this.badge.textContent='';if(this.canvas){this.canvas.dataset.camera='overview';delete this.canvas.dataset.action;}this.overview(true);if(this.renderer)this.renderer.shadowMap.needsUpdate=true;}
+ finish(){for(const f of Object.values(this.fighters)){restoreGarment(f);for(const [mesh,visible]of f.hiddenProps||[])mesh.visible=visible;f.hiddenProps=null;restoreFighter(f);f.sampledPose=null;if(f.clip!=='defeat'){f.mixer.stopAllAction();f.current=null;f.clip=null;f.mixer.update(0);} }this.choreography=null;this.releasePoint=null;this.contactPoint=null;this.contactTop=null;this.propRotation=null;clearTimeout(this.fallbackTimer);this.fallbackLabel?.remove();this.fallbackLabel=null;this.selection=null;if(this.fx){this.scene?.remove(this.fx);release(this.fx);this.fx=null;}this.active=null;for(const [team,f]of Object.entries(this.fighters))if(f.clip!=='defeat'){this.play(team,'idle');f.mixer.update(0);}if(this.badge)this.badge.textContent='';if(this.canvas){this.canvas.dataset.camera='overview';delete this.canvas.dataset.action;}this.overview(true);if(this.renderer)this.renderer.shadowMap.needsUpdate=true;}
  cancel(){this.events.reset();this.finish();for(const [t,f] of Object.entries(this.fighters))this.play(t,this.state?.teams[t].hp===0?'defeat':'idle');}
  disconnect(){this.cancel();if(this.state)this.events.consume(this.state);}
  clear(){this.fallback=false;this.generation++;cancelAnimationFrame(this.raf);this.cancel();this.observer?.disconnect();for(const f of Object.values(this.fighters)){f.mixer.stopAllAction();f.mixer.uncacheRoot(f.root);}release(this.scene);this.renderer?.dispose();this.renderer?.forceContextLoss();this.canvas?.remove();this.badge?.remove();if(this.container)delete this.container.dataset.worldStatus;this.renderer=null;this.scene=null;this.fighters={};this.scope=null;this.camera=null;}

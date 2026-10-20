@@ -32,4 +32,24 @@ All state enumeration: six identities × seven native clips (idle, attack, hit, 
 
 ## Limits
 
-Software Chromium/SwiftShader is not physical phone verification. Fixed-time videos play at natural speed but do not measure real-time GPU performance. Models remain stylized intersecting garment assemblies, not universal collision-free retopology; no facial blendshapes or cloth simulation. Assessment's existing Take Hoodie Off uses a garment handoff/color transition, not simulated cloth removal. Do not call the whole visual pass complete solely from numeric tests; inspect the before/after gallery and exact manifests.
+Software Chromium/SwiftShader is not physical phone verification. Fixed-time videos play at natural speed but do not measure real-time GPU performance. Models remain stylized garment assemblies, not universal collision-free retopology; no facial blendshapes or dynamic cloth simulation. Inspect temporal evidence as well as numeric tests.
+
+## Clothing and completion follow-up
+
+The native Assessie model now separates the original hoodie shell (torso, sleeves, cuffs, hood, pocket and embroidery) from an independently weighted ivory undershirt/bare-arm underlayer. Take Hoodie Off bakes and deforms that actual shell into the two-hand grip, reverses the overhead path to redress, then restores the authored skinned shell. No material recolor or second floating jacket is used; cancellation, repeated use and reentry restore the original surface. This is deterministic authored fabric folding, not a cloth-physics solver.
+
+Trischli's inner tee is now a subdivided surface projected onto the actual torso, with barycentrically transferred torso skin weights and fabric thickness. The former rigid pelvis-bound insert no longer reveals plum torso during the sampled native healing bend. All six skeleton rest transforms and all seven native clips remain exact; the other four GLBs are byte-identical to the prior repaired assets.
+
+Reproduce from the pre-clothing repaired source (not a fresh generator or an already migrated candidate):
+
+~~~sh
+blender -b REPAIRED_BEFORE_CLOTHING.blend -t 2 --python-exit-code 1 --python game/art/characters/v2/clothing-repair.py -- CLOTHING.blend
+blender -b CLOTHING.blend -t 2 --python-exit-code 1 --python game/art/characters/v2/repair/export-refined.py -- OUTPUT_GLB_DIRECTORY
+MODEL_DIR=OUTPUT_GLB_DIRECTORY node --test game/test/clothing.test.mjs
+node --test --test-name-pattern='Hoodie' game/test/physical-contact.test.mjs
+MODEL_DIR=OUTPUT_GLB_DIRECTORY EVIDENCE_DIR=TRANSITION_MEDIA TEST_PORT=19035 node game/test/model-transitions-audit.mjs
+~~~
+
+Authoritative completion evidence is under `complete/` in the evidence root. Matrix: 18 owned mixed-character rooms, all 24 actions × both actors × desktop/phone × Library/Trischli/Mensa B = 288 action/view cases; nine timeline samples each (five raster captures), plus 45 lifecycle/reduced-motion/reset checks, all errors empty. Actual selection, action cancellation/repetition, hit-to-idle, losing combat, victory and replay/reentry were captured for every identity in desktop-host and phone-participant clients: 12 playable lifecycle recordings, 432 sampled frames. Native proof uses the four unchanged `review-final/models` recordings and the two new `complete/models*` recordings: 42 clips plus six turntables. Procedural final recordings use `review-final/actions-first` for Luca/Free-rider, `review-final/actions` for Tryhard/Teacher and `complete/actions` for Assessie/Trischli; stale earlier clothing recordings are not final proof.
+
+All 42 native clip sheets, six 12-angle rotations, 24 dense action sheets, 288 matrix action/view sheets and desktop lifecycle sheets were visually reviewed. Phone victory/reentry views were also inspected. These are sampled visual checks, not a claim of universal self-collision elimination or a physical-device performance guarantee. `complete/contract-provenance.json`, `complete/public-hashes.json`, `complete/video-validation.json` and final test logs identify exact asset/source versions. All six repaired-model portraits were re-rendered through production CharacterStage and the preview manifest refreshed; the four unchanged GLBs had also retained stale pre-repair portrait digests from the earlier surface pass. Arena artwork was preserved.
