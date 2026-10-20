@@ -4,22 +4,22 @@
   "sourceCommit": "96f7431",
   "renderer": "Production CharacterStage / BattleWorld, idle frame 0; environment-only overview",
   "sources": {
-    "art/characters/v2/hsg-characters-v2.blend": "cd5bcbd2fc12b2ca660e0e9bcbe1737a5dddbf976fa19e6db6e78224c0b9192c",
+    "art/characters/v2/hsg-characters-v2.blend": "66c2563fe1e7bde2fd763201cb797c24da6e18d27c62bfec0184b89d583da1fe",
     "art/hsg-library/hsg-library.blend": "a2aed0058a15fe9ba54311e032809eff624f9d244c027f284a5083ff66faf39f",
     "art/trichli/trichli-arena.blend": "545016372c284f03cf5ac9218bfb6ab8e7875e46f24e84d6aa0d80e223be3702",
-    "public/assets/characters/luca-di-grazia.glb": "c423dd9048f5ab3a86ac5bb4283c653e629826e1fdf8bad6accc0f85f18499df",
+    "public/assets/characters/luca-di-grazia.glb": "34a4cb780fcd1648c15a14c86d0c75e18c56bacd464972ea9f9ca54541605dc6",
     "public/assets/characters/free-rider.glb": "ab40b6d7e58326f714fa5f420d356103b4ca2aa47bac14d5c055109c05853e37",
-    "public/assets/characters/tryhard.glb": "933cc0b7d98c8ad15e33964aff39ec1f90829c58e875d8db54fb0d68908405eb",
-    "public/assets/characters/assessment-hoodie.glb": "a847373543a5b12753d169b47801b32aafd8e04cf33a2e973c64222138a972e9",
+    "public/assets/characters/tryhard.glb": "4e8000ac99ecacba3618d3fd46569bbeccde7e9abf2dacd3f17647f1baded734",
+    "public/assets/characters/assessment-hoodie.glb": "a99839bb989110c47be2f63a6d2bc27fea6c1716d51abf231762e349cc42b858",
     "public/assets/characters/trischli-warrior.glb": "55d588822a3dd5c497d9e59ea52108accd842fd4243cbba9161c16a25e0588ae",
-    "public/assets/characters/bad-teacher.glb": "ff55bc60a44e51f381723a75ed84b4ff5a9def2c76659793bef7e15bf189a59d",
+    "public/assets/characters/bad-teacher.glb": "ae5e94033eebd70157a04c2b385ac61656e56a1411e1e1f246e744d9d16c54de",
     "public/assets/arenas/library.glb": "18654a974b2e927696ed12fa3505692250e47c410eb229bfc339ba579343390f",
     "public/assets/arenas/trischli.glb": "7f70f39fd24e10be27ccc5c8d4e5d4ea8c68c42161a2e77fe159574732f52a4d"
   },
   "images": {
     "assets/characters/luca-di-grazia.webp": {
-      "sha256": "59acdbac13a7f0dcb90f5348f47f5885f2ab8649600b6a7fbc2a5a9cc0ddeb7b",
-      "bytes": 27000,
+      "sha256": "8d65d5fedd701487a7a992173d3bc8337a1bdeef473746c2d19b3b5ebaff2ec5",
+      "bytes": 26886,
       "width": 600,
       "height": 700
     },
@@ -30,14 +30,14 @@
       "height": 700
     },
     "assets/characters/tryhard.webp": {
-      "sha256": "274af1ba4c40080ad34cfc06378892c1f4d7baced1004f2be5951afc3b41c1c3",
-      "bytes": 19350,
+      "sha256": "4568c12ec6a49a0627eb2ab47f0848ee7e949ae9de26957b4f9e2d3ad18b4579",
+      "bytes": 18880,
       "width": 600,
       "height": 700
     },
     "assets/characters/assessment-hoodie.webp": {
-      "sha256": "289ae5b0010920a018cf8db4262f87978facf94119d260e9dcb8b1ca1fb1de57",
-      "bytes": 16418,
+      "sha256": "4bc17c6d55c0c6c96a70b4354336c06b6eb7da9e2f00edc1c2cc1ef5c5755e8b",
+      "bytes": 16490,
       "width": 600,
       "height": 700
     },
@@ -48,8 +48,8 @@
       "height": 700
     },
     "assets/characters/bad-teacher.webp": {
-      "sha256": "f9d44cab6a89140c607cad9af6be22618c71a183f6821714f7465bc5cba2914c",
-      "bytes": 15824,
+      "sha256": "4c9f7b470e264a1f85ffbafdeddae5790e203e8b7cbe3020dcb6494158a91c60",
+      "bytes": 15766,
       "width": 600,
       "height": 700
     },
@@ -66,5 +66,6 @@
       "height": 900
     }
   },
-  "clothingRefresh": "2026-10-20: all six current repaired GLB portraits regenerated, including semantic clothing; original generation/base commit retained"
+  "clothingRefresh": "2026-10-20: all six current repaired GLB portraits regenerated, including semantic clothing; original generation/base commit retained",
+  "residualRefresh": "2026-10-20: four repaired collar/hem/hood GLBs; six production portraits refreshed; existing arena images preserved"
 }

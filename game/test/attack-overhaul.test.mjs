@@ -13,8 +13,8 @@ test('every actual roster move has a deliberate unique prop and gesture, no moti
  assert.deepEqual(new Set(Object.keys(MOVE_CHOREOGRAPHY)),new Set(labels));assert.equal(labels.length,24);
  assert.equal(new Set(Object.values(MOVE_CHOREOGRAPHY).map(r=>r.prop)).size,24);
  assert.equal(new Set(Object.values(MOVE_CHOREOGRAPHY).map(r=>r.gesture)).size,24);
- for(const label of labels){const props=createMoveProps(label);assert.ok(props.children.length===3);// Take Hoodie Off deforms the actual authored shell; a second prop would duplicate it.
-  if(props.userData.recipe.prop==='jacket')assert.equal(props.userData.parts.prop.children.length,0,label);else assert.ok(props.userData.parts.prop.children.length>0,label);let geometries=0,materials=0;props.traverse(o=>{if(o.geometry){geometries++;o.geometry.addEventListener('dispose',()=>geometries--);}if(o.material){materials++;o.material.addEventListener('dispose',()=>materials--);}});release(props);assert.equal(geometries,0);assert.ok(materials<=0);}
+ for(const label of labels){const props=createMoveProps(label);assert.ok(props.children.length===3);// Both hoodie moves deform authored cloth; a second prop would duplicate it.
+  if(['jacket','hood'].includes(props.userData.recipe.prop))assert.equal(props.userData.parts.prop.children.length,0,label);else assert.ok(props.userData.parts.prop.children.length>0,label);let geometries=0,materials=0;props.traverse(o=>{if(o.geometry){geometries++;o.geometry.addEventListener('dispose',()=>geometries--);}if(o.material){materials++;o.material.addEventListener('dispose',()=>materials--);}});release(props);assert.equal(geometries,0);assert.ok(materials<=0);}
  assert.throws(()=>createMoveProps('unknown'),/Missing move/);
 });
 async function fighter(id,config,i){
