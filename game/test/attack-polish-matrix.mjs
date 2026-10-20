@@ -11,13 +11,15 @@ const dir=process.env.EVIDENCE_DIR||'/home/mathis/.openclaw/workspace/media/hsg-
 const port=Number(process.env.TEST_PORT||18995),origin='http://127.0.0.1:'+port;
 let clock=Date.now();const arena=new Arena({now:()=>clock,pick:()=>0});
 const game=createGameServer({arena,publicOrigin:origin,autoTick:false,limits:{mutationsPerMinute:2000,createsPerMinute:100}});await new Promise(r=>game.server.listen(port,'127.0.0.1',r));
-const source=await fs.readFile(new URL('../public/battle-world.js',import.meta.url),'utf8'),sourceSha256=createHash('sha256').update(source).digest('hex');
+const source=await fs.readFile(process.env.WORLD_SOURCE||new URL('../public/battle-world.js',import.meta.url),'utf8'),sourceSha256=createHash('sha256').update(source).digest('hex');
+const modelSha256=Object.fromEntries(await Promise.all(CHARACTERS.map(async id=>[id,createHash('sha256').update(await fs.readFile(process.env.MODEL_DIR?process.env.MODEL_DIR+'/'+id+'.glb':new URL('../public/assets/characters/'+id+'.glb',import.meta.url))).digest('hex')])));await fs.writeFile(dir+'/model-hashes.json',JSON.stringify(modelSha256,null,2));
 const errors=[],checks=[];
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_EXECUTABLE,headless:true,args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 async function post(path,body={},token){return new Promise((resolve,reject)=>{const req=http.request(origin+'/game/api/'+path,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})}},res=>{let s='';res.on('data',b=>s+=b);res.on('end',()=>{try{assert.ok(res.statusCode<300,s);resolve(JSON.parse(s));}catch(e){reject(e);}});});req.on('error',reject);req.end(JSON.stringify(body));});}
 async function attach(page,room,role,token){
  page.on('pageerror',e=>errors.push(e.stack));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
  await page.addInitScript(({room,role,token})=>{const fixed=Date.now();Date.now=()=>fixed;sessionStorage.setItem('hsg-arena:v1:'+role+':'+room,token);sessionStorage.setItem('hsg-arena:v1:active',JSON.stringify({room,role}));},{room,role,token});
+ if(process.env.MODEL_DIR)await page.route('**/assets/characters/*.glb',r=>r.fulfill({path:process.env.MODEL_DIR+'/'+new URL(r.request().url()).pathname.split('/').pop(),contentType:'model/gltf-binary'}));
  await page.route('**/battle-world.js?*',route=>route.fulfill({contentType:'text/javascript',body:source}));
  await page.goto(origin+'/game/',{waitUntil:'domcontentloaded'});
  await page.evaluate(async()=>{const {BattleWorld}=await import('./battle-world.js?v=20261020-attacks1');const sync=BattleWorld.prototype.sync;BattleWorld.prototype.sync=function(s){window.__world=this;return sync.call(this,s);};});
@@ -29,18 +31,19 @@ async function capture(page,number,name){
  const out=await page.evaluate(async({name})=>{
   const w=window.__world;cancelAnimationFrame(w.raf);const e=w.events.pending.shift();window.__lastEvent=e;
   const initial=w.renderer.info.memory;const before={...initial},home=Object.fromEntries(Object.entries(w.fighters).map(([t,f])=>[t,f.holder.position.toArray()]));
-  w.begin(e,0);const samples=[];let previous=0;
+  w.begin(e,0);const samples=[],sheet=document.createElement('canvas');sheet.width=1200;sheet.height=400;const ctx=sheet.getContext('2d');let previous=0,cell=0;
   for(const fraction of [0,.20,.32,.46,.59,.63,.76,.89,1]){
    const end=e.ability.duration*fraction;
    for(const [team,f]of Object.entries(w.fighters))if(team!==e.actor&&!w.motion.matches)f.mixer.update((end-previous)/1000);
    if(w.active)w.animate(end);previous=end;
-   const raster=[0,.46,.59,.89,1].includes(fraction);if(raster){w.renderer.shadowMap.needsUpdate=true;w.renderer.render(w.scene,w.camera);}
+   const raster=[0,.46,.59,.89,1].includes(fraction);if(raster){w.renderer.shadowMap.needsUpdate=true;w.renderer.render(w.scene,w.camera);const scale=Math.min(240/w.canvas.width,360/w.canvas.height),width=w.canvas.width*scale,height=w.canvas.height*scale;ctx.drawImage(w.canvas,cell*240+(240-width)/2,20+(360-height)/2,width,height);ctx.fillStyle='white';ctx.font='14px sans-serif';ctx.fillText(String(fraction),cell*240+8,16);cell++; }
    const projected=(w.framingPoints||[]).map(p=>p.clone().project(w.camera).toArray());
    samples.push({fraction,raster,camera:w.camera.position.toArray(),look:w.look.toArray(),fov:w.camera.fov,points:projected,top:w.frameTop??.84,positions:Object.fromEntries(Object.entries(w.fighters).map(([t,f])=>[t,f.holder.position.toArray()]))});
   }
   const after={...w.renderer.info.memory};
-  return {event:{id:e.id,characterId:e.characterId,actor:e.actor,target:e.target,move:e.move,label:e.ability.label},samples,before,after,home,matchup:Object.fromEntries(Object.entries(w.state.teams).map(([t,f])=>[t,f.characterId])),final:Object.fromEntries(Object.entries(w.fighters).map(([t,f])=>[t,f.holder.position.toArray()])),overview:w.config.overview,fx:w.fx===null,sheet:null,overflow:document.documentElement.scrollWidth>innerWidth+1};
+  return {event:{id:e.id,characterId:e.characterId,actor:e.actor,target:e.target,move:e.move,label:e.ability.label},samples,before,after,home,matchup:Object.fromEntries(Object.entries(w.state.teams).map(([t,f])=>[t,f.characterId])),final:Object.fromEntries(Object.entries(w.fighters).map(([t,f])=>[t,f.holder.position.toArray()])),overview:w.config.overview,fx:w.fx===null,sheet:sheet.toDataURL(),overflow:document.documentElement.scrollWidth>innerWidth+1};
  },{name});
+ await fs.writeFile(dir+'/'+name+'.png',Buffer.from(out.sheet.split(',')[1],'base64'));delete out.sheet;
  assert.equal(out.overflow,false,name+' overflow');assert.deepEqual(out.final,out.home,name+' exact home');assert.ok(out.fx,name+' cleanup');assert.deepEqual(out.samples.at(-1).camera,out.overview,name+' camera recovery');assert.deepEqual(out.after,out.before,name+' GPU resources');
  for(const sample of out.samples)for(const [x,y,z]of sample.points){assert.ok(Math.abs(x)<=.881,name+' horizontal '+x);assert.ok(y<=sample.top+.002&&y>=-.782,name+' vertical '+y+' top '+sample.top);assert.ok(z>-1&&z<1,name+' depth '+z);}
 

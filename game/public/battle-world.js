@@ -414,7 +414,9 @@ export class BattleWorld {
   this.frameTop=cards.length?Math.min(.55,1-2*(Math.max(...cards.map(card=>card.offsetTop+card.offsetHeight))+12)/h):.84;
   if(this.active&&this.camera)this.direct((performance.now()-this.active.startedAt)/this.active.ability.duration);else this.idleCamera(performance.now());
  }
- play(team,clip){const f=this.fighters[team],a=f?.actions.get(clip);if(!a)return;if(clip==='idle'&&f.clip==='idle')return;const old=f.current;a.reset().setLoop(clip==='idle'?THREE.LoopRepeat:THREE.LoopOnce,clip==='idle'?Infinity:1);a.clampWhenFinished=clip!=='idle';a.play();if(old&&old!==a)a.crossFadeFrom(old,.1,false);f.current=a;f.clip=clip;}
+ play(team,clip){const f=this.fighters[team],a=f?.actions.get(clip);if(!a)return;if(clip==='idle'&&f.clip==='idle')return;
+  if(!f.onClipFinished){f.onClipFinished=event=>{if(event.action===f.current&&f.clip==='hit')this.play(team,'idle');};f.mixer.addEventListener('finished',f.onClipFinished);}
+  const old=f.current;a.reset().setEffectiveWeight(1).setEffectiveTimeScale(1).setLoop(clip==='idle'?THREE.LoopRepeat:THREE.LoopOnce,clip==='idle'?Infinity:1);a.clampWhenFinished=clip!=='idle';a.play();if(old&&old!==a)a.crossFadeFrom(old,.1,false);f.current=a;f.clip=clip;}
  overview(snap=false){if(!this.camera||!this.config)return;this.goal=v(this.config.overview);this.goalLook=v(this.config.look);if(snap)this.frame(this.goal,this.goalLook);}
  frame(position,look){
   this.camera.position.copy(position);this.look.copy(look);
