@@ -246,7 +246,8 @@ test('actual UI hook: selection/local expiry silent, server result once, mute/un
   };
   let tick;
   const sandbox = {
-    document, window: { AudioContext: function () { return context; } },
+    document, window: { AudioContext: function () { return context; }, addEventListener() {} },
+    performance: { now },
     BattleWorld: class { events = { pending: [] }; sync(state) { this.events.consume?.(state); for (const event of this.events.pending.splice(0)) queueMicrotask(() => this.onComplete?.(event)); } clear() {} disconnect() {} constructor() { this.events = new sandbox.BattleEvents(); } },
     CharacterStage: class { sync() {} play() {} }, modelFor,
     sessionStorage: { getItem: key => key.endsWith('active') ? JSON.stringify({ room: room.id, role: 'player' }) : 'token' },

@@ -87,6 +87,18 @@ export function prebattleLabel(state, now = state.serverNow) {
   return elapsed < 3000 ? String(3 - Math.floor(elapsed / 1000)) : 'READY… FIGHT!';
 }
 
+// Wake at the next actual digit boundary, not at an unrelated polling phase.
+export function countdownDelay(state, now) {
+  if (state.phase === 'countdown' && state.prebattle) {
+    const elapsed = Math.max(0, now - state.prebattle.startedAt);
+    if (elapsed < 3000) return 1000 - elapsed % 1000;
+  } else if (state.phase === 'running' && state.turn) {
+    const left = state.turn.deadline - now;
+    if (left > 0) return left % 1000 || 1000;
+  }
+  return null; // READY/FIGHT and zero wait for authoritative state, not a busy timer.
+}
+
 // Consume server snapshots only, never votes or the presentation countdown.
 export function createActionCue(play) {
   let scope = null, seenNumber = 0;
@@ -230,14 +242,14 @@ export function parseFrames(chunk, state, onState) {
   }
 }
 export class ArenaClient {
-  constructor({ fetcher = (...args) => globalThis.fetch(...args), storage = sessionStorage, onState = () => {}, onConnection = () => {}, onError = () => {}, sleep = (ms, signal) => new Promise(resolve => {
+  constructor({ fetcher = (...args) => globalThis.fetch(...args), storage = sessionStorage, now = () => performance.now(), onState = () => {}, onConnection = () => {}, onError = () => {}, sleep = (ms, signal) => new Promise(resolve => {
     const timer = setTimeout(resolve, ms);
     signal?.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
   }) } = {}) {
     this.fetcher = fetcher; this.storage = storage; this.onState = onState;
     this.onConnection = onConnection; this.onError = onError; this.sleep = sleep;
     this.generation = 0; this.room = null; this.role = null; this.token = null;
-    this.state = null; this.controller = null; this.offset = 0;
+    this.state = null; this.controller = null; this.now = now; this.clock = null;
   }
   key(room, role) { return prefix + role + ':' + room; }
   save(room, role, token) {
@@ -290,8 +302,12 @@ export class ArenaClient {
   accept(state, generation = this.generation) {
     if (generation !== this.generation || state.roomId !== this.room) return;
     if (this.state && state.revision < this.state.revision) return;
+    // Receipt time includes network/stream/main-thread delay. A later snapshot
+    // must not rewind an already-running countdown (even at the same revision).
+    const at = this.now();
+    const projected = this.clock ? this.clock.server + at - this.clock.at : state.serverNow;
+    this.clock = { server: Math.max(projected, state.serverNow), at };
     this.state = state;
-    this.offset = state.serverNow - Date.now();
     this.onState(state);
   }
   async create(setup = {}) {
@@ -326,7 +342,7 @@ export class ArenaClient {
   }
   activate(room, role, token, state) {
     this.stop();
-    this.room = room; this.role = role; this.token = token; this.state = null;
+    this.room = room; this.role = role; this.token = token; this.state = null; this.clock = null;
     if (state) this.accept(state);
     this.listen();
   }
@@ -339,9 +355,12 @@ export class ArenaClient {
     this.accept(result.state, generation);
     return result.state;
   }
+  serverTime() {
+    return this.clock ? this.clock.server + this.now() - this.clock.at : this.state?.serverNow ?? 0;
+  }
   secondsLeft() {
     if (!this.state?.turn) return 0;
-    return Math.max(0, Math.ceil((this.state.turn.deadline - Date.now() - this.offset) / 1000));
+    return Math.max(0, Math.ceil((this.state.turn.deadline - this.serverTime()) / 1000));
   }
   async listen() {
     const generation = this.generation;
@@ -447,12 +466,15 @@ if (typeof document !== 'undefined') (() => {
   let audioActivated = false;
   const activeTones = new Set();
   let currentJoinUrl = '';
-  const setText = (id, value) => { if (value !== undefined && value !== null) $(id).textContent = String(value); };
+  let countdownTimer;
+  const setText = (id, value) => {
+    if (value !== undefined && value !== null && $(id).textContent !== String(value)) $(id).textContent = String(value);
+  };
   function show(screen) {
     if (!screens.includes(screen) || document.body.dataset.screen === screen) return;
     screens.forEach((name) => { $(name + '-screen').hidden = name !== screen; });
     document.body.dataset.screen = screen;
-    if (!['battle', 'player'].includes(screen)) { battleWorld.clear(); actionAudio?.stopPrebattle(); $('prebattle').hidden = true; }
+    if (!['battle', 'player'].includes(screen)) { clearTimeout(countdownTimer); battleWorld.clear(); actionAudio?.stopPrebattle(); $('prebattle').hidden = true; }
     syncMusic();
     characters.sync();
     const heading = $(screen + '-screen').querySelector('h1');
@@ -764,7 +786,7 @@ if (typeof document !== 'undefined') (() => {
       if (setupBusy || pendingSetupRoom) return;
       presentation.consume(state);
       paintState();
-      battleStartCue(state);
+      battleStartCue({ ...state, serverNow: client.serverTime() });
       actionCue(state);
       if (state.you.role === 'host' && $('qr-container').querySelector('img')?.src !== location.origin + '/game/api/rooms/' + state.roomId + '/qr.svg') {
         const qr = document.createElement('img');
@@ -791,11 +813,12 @@ if (typeof document !== 'undefined') (() => {
     if (!client.state || setupBusy || pendingSetupRoom) return;
     const state = presentation.view(client.state);
     const view = present(state, window.ArenaUI.connected, client.secondsLeft());
+    if (state.phase === 'countdown') view.secondsLeft = undefined; // Never flash 0 over an intro digit.
     if (presentation.busy) {
       view.canVote = false; view.turnLabel = 'Resolving move… · next turn clock is live';
       view.playerState = 'Resolving move… The server’s next-turn clock continues.';
     }
-    render(view); renderIdentity(state);
+    render(view); renderIdentity(state); updateCountdown();
     // The world consumes authoritative results, never the staged result/phase.
     battleWorld.sync(client.state);
     if (!presentation.busy) { visualCue(state); victoryCue(state); }
@@ -941,7 +964,7 @@ if (typeof document !== 'undefined') (() => {
       pendingSetupRoom = null; setupBusy = false;
       presentation.consume(client.state); paintState();
       // Baseline setup history even when its SSE snapshots arrived while setupBusy was true.
-      battleStartCue(client.state); actionCue(client.state); visualCue(client.state);
+      battleStartCue({ ...client.state, serverNow: client.serverTime() }); actionCue(client.state); visualCue(client.state);
       $('global-error').hidden = true;
     } catch (error) { reportError(error.message); }
     finally { setupBusy = false; $('selection-next').disabled = false; setText('selection-next', setupMode === 'bot' ? 'Start bot battle' : setupMode === 'friend' ? 'Invite your friend' : 'Open group room'); }
@@ -1014,7 +1037,7 @@ if (typeof document !== 'undefined') (() => {
     updateSolo(state);
   }
   function renderPrebattle(state) {
-    const label = ['battle', 'player'].includes(document.body.dataset.screen) ? prebattleLabel(state, Date.now() + client.offset) : '';
+    const label = ['battle', 'player'].includes(document.body.dataset.screen) ? prebattleLabel(state, client.serverTime()) : '';
     $('prebattle').hidden = !label;
     setText('prebattle-label', label);
     if (label) {
@@ -1022,6 +1045,21 @@ if (typeof document !== 'undefined') (() => {
       setText('player-state', 'Get ready — voting opens after the intro.');
     }
   }
+  function updateCountdown() {
+    clearTimeout(countdownTimer);
+    const state = client.state;
+    if (document.hidden || !state || !['battle', 'player'].includes(document.body.dataset.screen)) return;
+    renderPrebattle(state);
+    if (state.phase === 'running') {
+      const seconds = client.secondsLeft();
+      setText('countdown', seconds); setText('player-countdown', seconds);
+      $('countdown').setAttribute('aria-label', seconds + ' seconds left');
+    }
+    const delay = countdownDelay(state, client.serverTime());
+    if (delay !== null) countdownTimer = setTimeout(updateCountdown, Math.max(1, delay));
+  }
+  document.addEventListener('visibilitychange', updateCountdown);
+  window.addEventListener('pagehide', () => clearTimeout(countdownTimer));
   document.addEventListener('arena:intent', event => { void handleIntent(event.detail); });
   const incomingRoom = roomCode(new URLSearchParams(location.search).get('room'));
   if (validRoom(incomingRoom)) {
@@ -1035,12 +1073,9 @@ if (typeof document !== 'undefined') (() => {
   setInterval(() => {
     syncMusic();
     if (!client.state) return;
-    renderPrebattle(client.state);
     if (client.state.phase !== 'running') return;
     const seconds = client.secondsLeft();
     updateSolo(client.state);
-    setText('countdown', seconds); setText('player-countdown', seconds);
-    $('countdown').setAttribute('aria-label', seconds + ' seconds left');
     const active = client.state.turn?.team === client.state.you.team;
     const canVote = !presentation.busy && window.ArenaUI.connected && active && seconds > 0;
     if (presentation.busy) { setText('player-state', 'Resolving move… Next-turn clock continues.'); setText('turn-label', 'Resolving move… · next turn clock is live'); }
