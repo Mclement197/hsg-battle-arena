@@ -30,6 +30,12 @@ export const ACTION_SOUNDS = Object.freeze({
   special: './assets/audio/special-burst.wav'
 });
 
+// Stable roster/mechanic IDs only; display labels and animation clips never select audio.
+export const THEMED_ACTION_SOUNDS = Object.freeze(Object.fromEntries(
+  Object.keys(CHARACTER_THEMES).flatMap(id => Object.keys(ACTION_SOUNDS).map(move =>
+    [id + ':' + move, './assets/audio/' + id + '-' + move + '.wav']))
+));
+
 export const AUDIO_SOUNDS = Object.freeze({
   ...ACTION_SOUNDS,
   'battle-start': './assets/audio/battle-start.wav',
@@ -113,7 +119,9 @@ export function createActionCue(play) {
     }
     if (number <= seenNumber) return;
     seenNumber = number; // Consume even muted/unavailable cues; never replay them later.
-    if (Object.hasOwn(ACTION_SOUNDS, result.move)) play(result.move);
+    if (Object.hasOwn(ACTION_SOUNDS, result.move)) play(result.move, {
+      characterId: result.actorCharacterId || state.teams?.[result.team]?.characterId
+    });
   };
   consume.reset = () => { scope = null; seenNumber = 0; };
   return consume;
@@ -164,7 +172,7 @@ export class ActionAudio {
   get ready() { return Object.keys(AUDIO_SOUNDS).every(move => ['battle', 'win'].includes(move) || this.buffers.has(move)); }
   async load() {
     if (this.loading) return this.loading;
-    this.loading = Promise.all(Object.entries(AUDIO_SOUNDS).map(async ([move, url]) => {
+    const loadOne = async ([move, url]) => {
       if (this.buffers.has(move)) return;
       try {
         const response = await this.fetcher(url);
@@ -172,7 +180,11 @@ export class ActionAudio {
         const buffer = await this.context.decodeAudioData(await response.arrayBuffer());
         this.buffers.set(move, buffer);
       } catch { /* Missing assets or unsupported audio must not interrupt the game. */ }
-    }));
+    };
+    this.loading = Promise.all(Object.entries(AUDIO_SOUNDS).map(loadOne));
+    // A missing or slow personalized cue must never gate the seven required base WAVs.
+    this.themedLoading ||= Promise.all(Object.entries(THEMED_ACTION_SOUNDS).map(loadOne))
+      .finally(() => { this.themedLoading = null; });
     await this.loading;
     this.loading = null;
   }
@@ -198,9 +210,10 @@ export class ActionAudio {
   stopVictory() {
     this.victory?.stop(); this.victory = null;
   }
-  play(move, { delay = 0, offset = 0, loop = false } = {}) {
+  play(move, { delay = 0, offset = 0, loop = false, characterId } = {}) {
     if (move === 'win') { this.setMusic(null); this.stopVictory(); }
-    const buffer = this.buffers.get(move);
+    const themed = characterId + ':' + move;
+    const buffer = (Object.hasOwn(THEMED_ACTION_SOUNDS, themed) && this.buffers.get(themed)) || this.buffers.get(move);
     // Never queue a stale action while loading or waiting for a user gesture.
     if (!buffer || this.context.state !== 'running') return false;
     const source = this.context.createBufferSource();

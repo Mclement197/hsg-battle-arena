@@ -198,3 +198,157 @@ Seven WAVs and the requested battle and victory WebM/Opus recordings now preload
 - **SHA-256 (download and included file):** `f0cf0be0c1cb3e061e12957d34300a49f24e5918feea6eb10e963997968046b7`.
 - **Acquisition:** existing yt-dlp runner, metadata dump followed by `--compat-options no-certifi --no-playlist -f 251`, honoring the runner CA. No login/cookies, access-control bypass, payments, new dependency or service.
 - **Playback:** only a live authoritative running → finished edge in the same room/match plays the complete source once on host and players. Battle music stops before victory starts. The synthesized win cue is removed; the final authoritative attack effect is retained. Victory uses Music (0.45 source gain × current Music slider), not SFX; battle-only 0.5 multiplier remains unchanged, as do lobby/countdown/SFX levels, default ON preference and exact labels/hint. Initial/reload/reconnect/duplicate/regressive/historical finished snapshots never replay it. Reset creates a new match and re-arms. Mute, suspension, disconnect, reset and leaving stop the active source. No load/unmute/gesture callback starts a skipped victory later. Optional victory fetch/decode failure leaves base audio ready, showing a separate unavailable hint without silently disabling lobby, battle or action audio. Native browser verification covers actual buffers/graph on desktop and touch-emulated Chromium; physical speakers and Safari remain unverified. No server restart, config change, deployment or live room mutation was performed.
+
+## Approved named-action candidate (2026-10-20)
+
+Philippe approved name-related action sounds with a cohesive tactile/foley/electronic
+hybrid; 8-bit is optional. These are **procedural material metaphors, not real foley
+recordings**. Brian AI means the online learning platform: its cue uses original
+learning-interface taps and a correct-answer chime, not a robot voice or copied
+brand notification. Reuse between moves is permitted when it fits; event
+deduplication is separate and remains mandatory. This candidate uses 24 rendered
+files; unique file hashes are not an acceptance requirement.
+
+### Per-sound mapping and provenance
+
+For **every entry** below, author/source is OpenClaw game-sound-designer's original
+`buildNamedSound(characterId, move)` branch in `generate.mjs`, created 2026-10-20.
+These are newly synthesized originals with no external samples, recordings, source
+URL, third-party license/version or attribution obligations. No external clearance
+or separate CC0/distribution license is asserted; maintainers determine terms of
+this original contribution. Common DSP settings below and the exact branch are
+the reproducible recipe. No paid service, installation or new dependency.
+
+Each table row defines four separate destinations, in **attack / defend / heal /
+special** order: `<stable-character-id>-attack.wav`, `-defend.wav`, `-heal.wav`,
+`-special.wav`, all in this directory. Labels describe the approved current
+checkout; they are not routing keys and are not rewritten by this candidate.
+
+| Stable character ID | Attack | Defend | Heal | Special | Lengths (ms), same order |
+| --- | --- | --- | --- | --- | --- |
+| `luca-di-grazia` | Golden Chalk: striated chalk noise, 700 Hz contact, 1550→1300 Hz gold glint | Open Book: two page swishes and 600/900 Hz binding resonances | Good Work: approval tap, C5/E5/G5 rise | Full Marks: 500→1600 Hz shimmer, stamp, high glass partials and paper release | 240 / 340 / 520 / 700 |
+| `free-rider` | Copy / Paste: 900 Hz repeated digital clicks, stronger second click at 65 ms | Paper Decoy: fluttering thin-paper noise and hollow double lock | Group Credit: E5/G5/C6 contributions converge on a shared reward | AI Slop: accelerating computation, irregular stepped pulses and garbled noise splat | 260 / 340 / 560 / 700 |
+| `tryhard` | Formula: tight 700/1050/700 Hz calculator triplet, dry answer | Textbook: heavy cover clap, 480 Hz body, 1000 Hz binding catch | Extra Credit: accelerating D5/F-sharp5/A5 point increments | A+: 800→1800 Hz score preparation, bright emphatic grade ping | 240 / 320 / 520 / 660 |
+| `assessment-hoodie` | Bad Luck: unstable 950→380 Hz fall and electrical noise crack | Hood Up: low fabric swish, paired 650/850 Hz protective tucks | Take Hoodie Off: fabric peel opens into 450/675/900 Hz airy recovery | Skip Maths A Lecture: classroom ticks give way to syncopated 800/1050/1400 Hz exit accents | 280 / 340 / 560 / 700 |
+| `trischli-warrior` | Dance Off: syncopated 520/750 Hz footwork plus compact clap | Call the Bouncer: two call chirps answered by weighty 500/750 Hz guard lock | Glass of Water: three downward-curving 600/800/1000 Hz droplets and glass glint | Throw a Beer: 500→1500 Hz fizzy flight, broad splash, bouncing bubbles | 300 / 360 / 540 / 720 |
+| `bad-teacher` | Red Pen: high-mid scratch and clipped 1400→650 Hz correction stroke | Curved Exam: paper flex, 650→950→650 Hz bowed locking accents | Brian AI: soft 650/850 Hz learning taps, then reassuring rising E5/G-sharp5/C-sharp6 answer | Failed: 500→1200 Hz tension cut by rejection stamp and descending 700→350 Hz buzzer | 240 / 360 / 560 / 680 |
+
+Common generation: 24 kHz mono PCM16, xorshift32 seed `0x485347` reset per cue,
+sine/modal resonances and finite-harmonic pulses, band-shaped noise with 350 Hz
+bass rejection and per-layer lowpass/texture modulation. Each layer has its own
+attack, exponential decay and release. Whole-cue DC removal, `tanh(2.2 x/peak)`
+soft shaping, DC-blocking `y[n]=.99(y[n-1]+x[n]-x[n-1])`, 3 ms fade-in and
+25 ms fade-out, then scaling to at most 0.8 peak and 0.28 maximum sliding 50 ms
+RMS. First/last frames are zero. This is offline level control, not a mixer change.
+Reproduce all action WAVs with `node public/assets/audio/generate.mjs`; the four
+existing generic recipes produce their original byte-identical outputs.
+
+24 new WAVs total **530,976 bytes (518.53 KiB)**, duration **11.04 s** combined.
+Decoded mono float data is about 2.12 MB at 48 kHz, excluding object/decoder overhead.
+Measured PCM peaks span **0.4164–0.6364** (worst −3.93 dBFS); maximum sliding
+50 ms RMS is approximately **−11.057 dBFS** for each. Matching this window metric
+does not establish equal perceived loudness, masking performance or name recognition.
+
+### Audio-only routing and integration
+
+`THEMED_ACTION_SOUNDS` in `public/app.js` maps stable character/mechanic IDs to flat
+WAV URLs. `createActionCue()` forwards `lastResult.actorCharacterId` first, falling
+back to the acting team's identity only when the result lacks one. An unknown
+explicit result identity deliberately uses the generic action, not another fighter.
+The existing one cue subscriber, authoritative `lastResult` timing, room/match/turn
+high-water tracking and history consumption are unchanged. No animation-contact
+delay, action-selection playback or extra hit/turn/UI cues are introduced.
+
+Themed preloads run separately from the base readiness promise. Missing, corrupt
+or still-loading themed cues use the decoded generic category immediately. A late
+decode never plays/replays that consumed event. Default ON, mute/suspend/gesture,
+sliders, seven required WAVs and optional battle/victory handling remain intact.
+All old nine media files, including the four generic action WAVs, remain byte-identical.
+Action gain 0.45, lobby 0.45, battle 0.225, victory 0.9 and countdown 0.9 remain
+unchanged, as do their buses, phase timing and user controls.
+
+This branch starts at `5030ed7`, not the shared dirty renderer/name work. Current
+approved labels (AI Slop, Take Hoodie Off, Skip Maths A Lecture, Call the Bouncer,
+Glass of Water, Throw a Beer, Curved Exam, Brian AI) require the already-existing
+colleagues' label changes. Integrate **only this audio diff** into that intended
+base; do not replace `app.js` wholesale or revert current roster/arena/accessibility
+edits. No backend, mechanics, animation, HTML, CSS or deployment change is included.
+The existing flat WAV route is sufficient.
+
+### Candidate verification scope
+
+`test/audio.test.mjs` covers all 24 routes on both acting sides, identity precedence,
+legacy/unknown fallback, optional fetch/decode/slow-loading failure, deadline-only
+playback, duplicate/reconnect/mute/suspension consumption, deterministic rendering,
+PCM size/DC/boundaries/headroom and protected media/code hashes. Native coverage in
+`test/audio-browser.test.mjs` includes a renderer-independent native SSE/audio-hook matrix and
+48/96 kHz decode/one-action-plus-music bounds plus optional themed decode fallback.
+
+Chromium 153.0.8010.12 (installed build 1243), Linux x64, decoded all 24 named WAVs
+at 48 and 96 kHz on desktop and Chromium iPhone 13/iPad gen 7 emulation. Maximum
+named decoded peak was 0.64656. Conservative sum-of-individual-peak bounds at both
+sliders 100% were at most 0.55691 for battle + one named action and 0.41139 for
+victory + one named action; battle + any generic fallback remained below 0.63694.
+At defaults, battle + one named action stayed below 0.32585. These are native
+resampling/peak bounds, not standardized true-peak certification, listening tests
+or a guarantee for arbitrary concurrent voices. Optional named decode failure kept
+base readiness and ON labels and immediately played the generic heal at the
+unchanged SFX gain on all three browser profiles.
+
+Physical speaker listening, actual iPhone/iPad hardware and real Safari/iOS remain
+unverified. Independent QA must review the candidate and baseline dispositions
+before any publication. No deployment, push, service restart or live-room mutation
+is part of sound production.
+
+Final targeted results for this candidate:
+
+- `node --test test/audio.test.mjs`: **24/24 pass**, including nine protected asset
+  hashes and unchanged intro/control code. Also **24/24 pass** in a disposable
+  integration snapshot containing colleagues' current label/renderer/arena edits.
+- Native focused command below: **5/5 pass**. The renderer-independent matrix
+  checks **144 named playbacks** (24 moves × both acting sides × three browser
+  profiles), correct decoded-buffer fingerprints, unchanged 0.45/SFX routing,
+  immediate source scheduling, silent selections/unresolved zero, duplicate SSE,
+  mute, suspension/trusted-gesture recovery and reconnect history. It passed again
+  in the disposable combined-checkout snapshot. It exercises production
+  ArenaClient/createActionCue/ArenaUI.cue/ActionAudio and native graph, **not** the
+  full battle rendering/onState presentation path. The normal page client is not
+  joined in this harness; only the test client subscribes to its local room.
+- Matched full nonbrowser suite at base `5030ed7`: **155 passed, 2 failed, 9 skipped
+  (166 total)**. Candidate: **161 passed, the same 2 failed, 11 skipped (174 total)**.
+  Both exit 1: missing `createMensa` export in `attack-overhaul.test.mjs`, and
+  `Missing move choreography: GOLDEN CHALK` in `battle-world.test.mjs`. These
+  defects reproduce without the audio change; they were not patched here.
+- The untouched base's full native run was also not green: 158 passed, 6 failed,
+  1 cancelled, 1 skipped. Existing desktop/touch fixtures run out of HP; intro,
+  battle lifecycle and victory fixtures also fail/time out. A full native run
+  against the larger current-checkout snapshot hit the **600 s overall bound**
+  after dense choreography tests and existing audio-fixture failures; no complete
+  score or full-current-suite green claim is made.
+- An attempted full battle-UI named matrix also timed out at the initial action.
+  Its cause is unresolved; the passing renderer-independent test is deliberately
+  narrower, not proof of that full integration. Independent QA must finish real
+  battle UI validation before publication. No renderer fixes or protective timing
+  changes were made to force a passing result.
+
+Normal commands, from `game/` with dependencies available:
+
+```sh
+node public/assets/audio/generate.mjs
+node --test test/audio.test.mjs
+node --test --test-concurrency=1 test/*.test.mjs
+PLAYWRIGHT_MODULE=/path/to/playwright-core/index.mjs \
+CHROMIUM_EXECUTABLE=/path/to/chrome \
+node --test --test-concurrency=1 \
+  --test-name-pattern='fresh sound preference|optional WebM decode|optional victory codec|named' \
+  test/audio-browser.test.mjs
+```
+
+The isolated-worktree runs used Node 24.21.0 with
+`--import /tmp/hsg-named-sfx-resolver.mjs`, a read-only `registerHooks` fallback to
+the existing shared `game/node_modules`; no package or dependency symlink was
+installed. Existing browser module:
+`/home/mathis/.npm-global/lib/node_modules/openclaw/node_modules/playwright-core/index.mjs`;
+executable: `/home/mathis/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome`.
+Raw logs and the captured integration overlay are under
+`/tmp/hsg-named-sfx-evidence/`; these are local QA artifacts, not shipped assets.

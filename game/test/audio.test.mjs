@@ -7,8 +7,8 @@ import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 import {modelFor} from '../public/characters.js';
-import { ACTION_SOUNDS, AUDIO_SOUNDS, ActionAudio, createActionCue, createBattleStartCue, createVictoryCue, ArenaClient } from '../public/app.js';
-import { buildSound } from '../public/assets/audio/generate.mjs';
+import { ACTION_SOUNDS, AUDIO_SOUNDS, THEMED_ACTION_SOUNDS, ActionAudio, createActionCue, createBattleStartCue, createVictoryCue, ArenaClient } from '../public/app.js';
+import { buildSound, buildNamedSound, NAMED_DURATIONS } from '../public/assets/audio/generate.mjs';
 import { Arena, MOVES } from '../src/engine.mjs';
 import { createGameServer } from '../src/server.mjs';
 
@@ -161,7 +161,7 @@ test('native playback caches all mapped buffers, stops on mute and never queues 
   });
   assert.equal(player.play('attack'), false);
   await player.load(); await player.load();
-  assert.deepEqual(urls, Object.values(AUDIO_SOUNDS));
+  assert.deepEqual(urls, [...Object.values(AUDIO_SOUNDS), ...Object.values(THEMED_ACTION_SOUNDS)]);
   assert.equal(context.starts.length, 0, 'loading must not replay a skipped action');
   for (const move of MOVES) {
     assert.equal(player.play(move), true);
@@ -198,7 +198,7 @@ async function serve(t, options = {}) {
 
 test('all mapped audio URLs serve with their audio MIME over HTTP, including HEAD; source/docs stay private', async t => {
   const get = await serve(t);
-  for (const url of Object.values(AUDIO_SOUNDS)) {
+  for (const url of [...Object.values(AUDIO_SOUNDS), ...Object.values(THEMED_ACTION_SOUNDS)]) {
     const route = '/game/' + url.slice(2);
     const response = await get(route);
     assert.equal(response.status, 200);
@@ -518,4 +518,138 @@ test('help credits the exact replacement source without inventing rights clearan
   const help = html.match(/<section id="help-screen"[\s\S]*?<\/section>/)[0];
   assert.match(help, /https:\/\/www.youtube.com\/watch\?v=N2uyNC-Xz98/);
   assert.match(help, /SOUND EFFECTS HD/); assert.match(help, /disclaims ownership; redistribution rights are unverified/);
+});
+
+test('24 original named mappings are deterministic, compact, click-free and energy balanced', async () => {
+  const levels = [], rows = []; let totalBytes = 0;
+  assert.equal(Object.keys(THEMED_ACTION_SOUNDS).length, 24);
+  for (const [key, url] of Object.entries(THEMED_ACTION_SOUNDS)) {
+    const [id, move] = key.split(':'), wav = await readFile(new URL('../public/' + url, import.meta.url));
+    assert.deepEqual(wav, buildNamedSound(id, move));
+    assert.equal(wav.toString('ascii', 0, 4), 'RIFF');
+    assert.equal(wav.toString('ascii', 8, 16), 'WAVEfmt ');
+    assert.equal(wav.readUInt16LE(20), 1); assert.equal(wav.readUInt16LE(22), 1);
+    assert.equal(wav.readUInt32LE(24), 24000); assert.equal(wav.readUInt16LE(34), 16);
+    assert.equal(wav.readUInt32LE(4), wav.length - 8); assert.equal(wav.readUInt32LE(40), wav.length - 44);
+    assert.equal((wav.length - 44) / 48000, NAMED_DURATIONS[id][MOVES.indexOf(move)]);
+    assert.equal(wav.readInt16LE(44), 0); assert.equal(wav.readInt16LE(wav.length - 2), 0);
+    const samples = Array.from({ length: (wav.length - 44) / 2 }, (_, i) => wav.readInt16LE(44 + i * 2) / 32768);
+    let peak = 0, sum = 0, energy = 0, maxWindow = 0;
+    for (let i = 0; i < samples.length; i++) {
+      const v = samples[i]; peak = Math.max(peak, Math.abs(v)); sum += v;
+      energy += v * v; if (i >= 1200) energy -= samples[i - 1200] ** 2;
+      if (i >= 1199) maxWindow = Math.max(maxWindow, energy / 1200);
+    }
+    const db = 10 * Math.log10(maxWindow); levels.push(db); totalBytes += wav.length;
+    assert.ok(peak > .35 && peak <= .8, key + ' safe sample headroom');
+    assert.ok(Math.abs(sum / samples.length) < .006, key + ' negligible DC');
+    assert.ok(db > -15 && db < -10.9, key + ' controlled 50 ms RMS: ' + db);
+    rows.push({ key, bytes: wav.length, peak, max50msDb: Number(db.toFixed(3)) });
+  }
+  assert.equal(totalBytes, 530976); // Reuse is allowed; route identity, not unique hashes, is the contract.
+  assert.ok(Math.max(...levels) - Math.min(...levels) < 4, 'objective short-window balance, not a listening claim');
+  assert.throws(() => buildNamedSound('unknown', 'attack'), /Unknown named sound/);
+  assert.throws(() => buildNamedSound('tryhard', 'unknown'), /Unknown named sound/);
+  console.log('NAMED_PCM ' + JSON.stringify({ totalBytes, rows }));
+});
+
+test('all 24 named moves on both acting sides select only their authoritative actor buffer once', async () => {
+  const context = audioContext(), audio = new ActionAudio(context, async url => ({ ok: true, arrayBuffer: async () => new TextEncoder().encode(url).buffer }));
+  await audio.load(); await audio.themedLoading;
+  for (const id of Object.keys(NAMED_DURATIONS)) for (const move of MOVES) for (const side of ['A', 'B']) {
+    const { arena, room, host, player, at } = fixture();
+    arena.configure(room, host, { arenaId: 'library', characterA: side === 'A' ? id : 'tryhard', characterB: side === 'B' ? id : 'free-rider' });
+    const cue = createActionCue((move, options) => audio.play(move, options));
+    const accept = () => cue(arena.snapshot(room, host));
+    accept(); arena.start(room, host, {}); accept(); at(room.prebattle.deadline); arena.advance(room); accept();
+    if (side === 'B') { arena.vote(room, player, { turnId: room.turn.id, move: 'defend' }); at(room.turn.deadline); arena.advance(room); accept(); }
+    const before = context.starts.length;
+    const voter = [...room.players.values()].find(p => p.team === side);
+    arena.vote(room, { role: 'player', player: voter }, { turnId: room.turn.id, move }); accept();
+    at(room.turn.deadline - 1); assert.equal(arena.advance(room), false); accept();
+    at(room.turn.deadline); accept(); assert.equal(context.starts.length, before, 'selection/local zero silent');
+    assert.equal(arena.advance(room), true); accept(); accept();
+    assert.equal(context.starts.length, before + 1);
+    assert.equal(context.starts.at(-1).buffer, audio.buffers.get(id + ':' + move), side + ' ' + id + ' ' + move);
+    assert.equal(new TextDecoder().decode(context.starts.at(-1).buffer.bytes), THEMED_ACTION_SOUNDS[id + ':' + move]);
+    audio.stop();
+  }
+});
+
+test('actor result identity beats team identity; legacy, unknown and missing identities fall back safely', async () => {
+  const context = audioContext(), audio = new ActionAudio(context, async url => ({ ok: true, arrayBuffer: async () => new TextEncoder().encode(url).buffer }));
+  await audio.load(); await audio.themedLoading;
+  const cue = createActionCue((move, options) => audio.play(move, options));
+  const state = { roomId: 'one', match: 1, teams: { A: { characterId: 'tryhard' }, B: { characterId: 'free-rider' } }, lastResult: null };
+  cue(state);
+  const resolve = (number, actorCharacterId, team = 'A') => cue({ ...state, lastResult: { number, team, move: 'heal', actorCharacterId } });
+  resolve(1, 'bad-teacher'); assert.equal(context.starts.at(-1).buffer, audio.buffers.get('bad-teacher:heal'));
+  resolve(2, undefined); assert.equal(context.starts.at(-1).buffer, audio.buffers.get('tryhard:heal'));
+  resolve(3, undefined, 'B'); assert.equal(context.starts.at(-1).buffer, audio.buffers.get('free-rider:heal'));
+  for (const id of ['unknown', '__proto__', 'constructor']) {
+    resolve(context.starts.length + 1, id); assert.equal(context.starts.at(-1).buffer, audio.buffers.get('heal'));
+  }
+  cue({ roomId: 'one', match: 1, lastResult: { number: 7, move: 'heal' } });
+  assert.equal(context.starts.at(-1).buffer, audio.buffers.get('heal'));
+});
+
+test('optional named fetch/decode failure and slow loading never gate base readiness or replay fallback events', { timeout: 5000 }, async () => {
+  for (const failure of ['fetch', 'decode', 'slow']) {
+    const context = audioContext(); let release;
+    const pending = new Promise(resolve => { release = resolve; });
+    const decode = context.decodeAudioData;
+    context.decodeAudioData = async bytes => { if (new TextDecoder().decode(bytes) === 'broken') throw Error('bad optional WAV'); return decode(bytes); };
+    const audio = new ActionAudio(context, async url => {
+      if (Object.values(THEMED_ACTION_SOUNDS).includes(url)) {
+        if (failure === 'fetch') throw Error('offline');
+        if (failure === 'slow') await pending;
+        if (failure === 'decode') return { ok: true, arrayBuffer: async () => new TextEncoder().encode('broken').buffer };
+      }
+      return { ok: true, arrayBuffer: async () => new TextEncoder().encode(url).buffer };
+    });
+    await audio.load(); assert.equal(audio.ready, true);
+    if (failure !== 'slow') await audio.themedLoading;
+    const cue = createActionCue((move, options) => audio.play(move, options));
+    const state = n => ({ roomId: 'one', match: 1, lastResult: n ? { number: n, move: 'attack', actorCharacterId: 'tryhard' } : null });
+    cue(state(0)); cue(state(1)); assert.equal(context.starts.length, 1);
+    assert.equal(context.starts[0].buffer, audio.buffers.get('attack'));
+    const loaded = audio.themedLoading; release(); await loaded; cue(state(1));
+    assert.equal(context.starts.length, 1, 'late decode never replays consumed fallback');
+    cue(state(2)); assert.equal(context.starts.length, 2);
+    assert.equal(context.starts[1].buffer, audio.buffers.get(failure === 'slow' ? 'tryhard:attack' : 'attack'));
+  }
+});
+
+test('named muted/suspended results and reconnect history remain consumed across recovery', async () => {
+  const context = audioContext(), audio = new ActionAudio(context, async url => ({ ok: true, arrayBuffer: async () => new TextEncoder().encode(url).buffer }));
+  await audio.load(); await audio.themedLoading; let muted = false;
+  const cue = createActionCue((move, options) => { if (!muted) audio.play(move, options); });
+  const state = n => ({ roomId: 'one', match: 1, lastResult: { number: n, move: 'special', actorCharacterId: 'free-rider' } });
+  cue(state(0)); muted = true; cue(state(1)); muted = false; cue(state(1));
+  context.state = 'suspended'; cue(state(2)); context.state = 'running'; cue(state(2));
+  assert.equal(context.starts.length, 0); cue(state(3)); assert.equal(context.starts.length, 1);
+  cue.reset(); cue(state(4)); cue(state(4)); assert.equal(context.starts.length, 1);
+  cue(state(5)); assert.equal(context.starts.length, 2); assert.equal(context.starts.at(-1).buffer, audio.buffers.get('free-rider:special'));
+});
+
+
+test('all nine protected media files and intro/control code remain byte-identical', async () => {
+  const hashes = {
+  "attack-impact.wav": "add8e33ebafea2f33fd6abf8ee9a82ca62c1067c12f74f900e2244f4943a8483",
+  "defend-shield.wav": "8c133d14ca3ca9b03c74c864425d88ebbc3e936ee1aae807b2c86653328a3cce",
+  "heal-chime.wav": "16bf3294544bfcbb1a389222573fbe5db9127bd9f5478f7d9a69eebc2a2ed2fe",
+  "special-burst.wav": "10b3f039563d61b8d2d1a6dbb43a35e92fb253c58c81ca183829d49e98505b9b",
+  "lobby-loop.wav": "393273797bd9c6bc198bd5fd1d84f22686986701423d1b2f24772dbb0a864ec4",
+  "battle-loop.webm": "0a1b4014e7d01ebf9a7de30e267e58def9a1f950c5ccd9e9759282f5ec9e7e4b",
+  "victory.webm": "f0cf0be0c1cb3e061e12957d34300a49f24e5918feea6eb10e963997968046b7",
+  "countdown.wav": "bf73b879881d7edc70a7071323f0549630769430bb48b39d86fe3a5f050ff493",
+  "battle-start.wav": "ac1753b0c966a04b728a6d76f6650078654049337eeb152fbfc3b2fecc308925"
+};
+  for (const [file, expected] of Object.entries(hashes)) {
+    const bytes = await readFile(new URL('../public/assets/audio/' + file, import.meta.url));
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), expected, file);
+  }
+  const source = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  assert.equal(createHash('sha256').update(source.slice(source.indexOf('// Arm only on a live edge.'), source.indexOf('// Consume server snapshots only'))).digest('hex'), '3957b37c13b353cdfd79277d548dd31ba48dd668f0aa8a206ac1b29e8cbc3687');
+  assert.equal(createHash('sha256').update(source.slice(source.indexOf('  function soundReady()'), source.indexOf('  function cue(kind'))).digest('hex'), '385d818a741ac1c85675825efdab24774e4acf5a91238a97fba9e1738419c9b7');
 });

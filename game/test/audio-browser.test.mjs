@@ -51,7 +51,7 @@ function observeAudio() {
         const start = source.start.bind(source);
         source.start = (...params) => {
           const activeLoops = probe.starts.filter(s => s.loop && !s.stopped).length;
-          probe.starts.push({ activeLoops, duration: source.buffer.duration, loop: source.loop, state: this.state, when: params[0] ?? this.currentTime, at: this.currentTime, offset: params[1] || 0, stopped: false, sourceGain: source.probeGain?.requestedValue, musicBus: source.probeGain?.probeTarget === probe.gains[0], sfxBus: source.probeGain?.probeTarget === probe.gains[1], loopStart: source.loopStart, loopEnd: source.loopEnd });
+          probe.starts.push({ activeLoops, duration: source.buffer.duration, loop: source.loop, state: this.state, when: params[0] ?? this.currentTime, at: this.currentTime, offset: params[1] || 0, stopped: false, signature: [42,113,207,367,557].map(i => source.buffer.getChannelData(0)[i].toFixed(6)).join(','), sourceGain: source.probeGain?.requestedValue, musicBus: source.probeGain?.probeTarget === probe.gains[0], sfxBus: source.probeGain?.probeTarget === probe.gains[1], loopStart: source.loopStart, loopEnd: source.loopEnd });
           const record = probe.starts.at(-1);
           source.addEventListener('ended', () => { record.ended = true; });
           const stop = source.stop.bind(source);
@@ -125,7 +125,7 @@ test('fresh sound preference is ON before any gesture', { skip: !enabled, timeou
     assert.equal(await tab.evaluate(() => audioProbe.resumes.length), resumes, input + ': mute never resumes');
     assert.equal(await tab.evaluate(() => audioProbe.contexts[0].state), 'suspended');
     await (input === 'touch' ? tab.locator('#how-to').tap() : tab.locator('#how-to').click());
-    await tab.waitForFunction(() => audioProbe.decoded === 9);
+    await tab.waitForFunction(() => audioProbe.decoded === 33);
     assert.equal(await tab.locator('#mute').textContent(), 'sound is off');
     assert.equal(await tab.evaluate(() => audioProbe.resumes.length), resumes);
     assert.equal(await tab.evaluate(() => audioProbe.starts.length), 0);
@@ -178,7 +178,7 @@ for (const mobile of [false, true]) {
       // A failed native asset decode must never advertise sound readiness.
       const failedAudio = await page({}, true);
       await failedAudio.locator('#how-to').click();
-      await failedAudio.waitForFunction(() => audioProbe.decoded === 8);
+      await failedAudio.waitForFunction(() => audioProbe.decoded === 32);
       await failedAudio.waitForFunction(() => document.querySelector('#mute').dataset.audioState === 'error');
       assert.equal(await failedAudio.locator('#mute').textContent(), 'sound is on');
       assert.match(await failedAudio.locator('#sound-hint').textContent(), /could not load/);
@@ -204,7 +204,7 @@ for (const mobile of [false, true]) {
       assert.match(await keyboard.locator('#sound-hint').textContent(), /Loading/);
       await keyboard.locator('#mute').click();
       releaseAssets();
-      await keyboard.waitForFunction(() => audioProbe.decoded === 9);
+      await keyboard.waitForFunction(() => audioProbe.decoded === 33);
       await keyboard.locator('#how-to').click();
       assert.equal(await keyboard.locator('#mute').textContent(), 'sound is off', 'ordinary clicks preserve explicit mute');
       assert.equal(await keyboard.evaluate(() => audioProbe.starts.length), 0, 'late load cannot reverse mute');
@@ -236,8 +236,8 @@ for (const mobile of [false, true]) {
       };
       // First ordinary host/player interaction activates audio, without a sound-button detour.
       for (const page of pages) {
-        await page.waitForFunction(() => document.querySelector('#mute').dataset.audioState === 'ready');
-        assert.equal(await page.evaluate(() => audioProbe.decoded), 9);
+        await page.waitForFunction(() => document.querySelector('#mute').dataset.audioState === 'ready' && audioProbe.decoded === 33);
+        assert.equal(await page.evaluate(() => audioProbe.decoded), 33);
         assert.equal(await page.evaluate(() => audioProbe.contexts[0].state), 'running');
         assert.ok(await page.evaluate(() => audioProbe.resumes.some(Boolean)));
         assert.equal(await page.evaluate(() => audioProbe.starts.filter(start => !start.loop).length), 0);
@@ -374,13 +374,13 @@ test('live read-only frontend decodes WAVs and enables native audio on desktop/p
       assert.equal(await page.locator('#mute').textContent(), 'sound is on');
       assert.equal(await page.locator('#mute').isVisible(), true);
       await (device ? page.locator('#how-to').tap() : page.locator('#how-to').click());
-      await page.waitForFunction(() => document.querySelector('#mute').dataset.audioState === 'ready' && audioProbe.peak > .01);
+      await page.waitForFunction(() => document.querySelector('#mute').dataset.audioState === 'ready' && audioProbe.peak > .01 && audioProbe.decoded === 33);
       assert.equal(await page.evaluate(() => audioProbe.contexts[0].state), 'running');
-      assert.equal(await page.evaluate(() => audioProbe.decoded), 9);
+      assert.equal(await page.evaluate(() => audioProbe.decoded), 33);
       assert.ok(await page.evaluate(() => audioProbe.resumes.some(Boolean)));
-      assert.deepEqual(assets, [200, 200, 200, 200, 200, 200, 200, 200, 200]);
+      assert.deepEqual(assets, Array(33).fill(200));
       assert.deepEqual(errors, []);
-      console.log('LIVE ' + (device || 'desktop') + ': 9 audio assets=200, decoded=9, state=running, graph peak=' +
+      console.log('LIVE ' + (device || 'desktop') + ': 33 audio assets=200, decoded=33, state=running, graph peak=' +
         await page.evaluate(() => audioProbe.peak));
       await context.close();
     }
@@ -714,7 +714,7 @@ test('optional WebM decode failure preserves actual lobby graph after first ordi
       await page.goto('http://127.0.0.1:' + game.server.address().port + '/game/');
       assert.equal(await page.locator('#mute').textContent(), 'sound is on');
       await (device ? page.locator('#how-to').tap() : page.locator('#how-to').click());
-      await page.waitForFunction(() => audioProbe.decoded === 8 && audioProbe.peak > .01 && document.querySelector('#mute').dataset.audioState === 'ready');
+      await page.waitForFunction(() => audioProbe.decoded === 32 && audioProbe.peak > .01 && document.querySelector('#mute').dataset.audioState === 'ready');
       assert.match(await page.locator('#sound-hint').textContent(), /Battle music unavailable.*other game sounds remain enabled/);
       assert.ok(await page.evaluate(() => audioProbe.starts.some(s => s.loop && !s.stopped && s.musicBus && s.duration < 100)));
       await page.locator('#mute').click();
@@ -760,7 +760,7 @@ test('exact victory native graph: full source once on host/players, history/load
     }
     const pages = [host, ...players];
     for (const page of pages) {
-      await page.waitForFunction(() => document.querySelector('#connection').textContent === 'Connected' && audioProbe.decoded === 9);
+      await page.waitForFunction(() => document.querySelector('#connection').textContent === 'Connected' && audioProbe.decoded === 33);
       await page.locator('.audio-settings summary').click();
       await page.locator('#volume-sfx').fill('0'); await page.locator('#volume-sfx').dispatchEvent('input');
       await page.locator('#volume-music').fill('42'); await page.locator('#volume-music').dispatchEvent('input');
@@ -811,7 +811,7 @@ test('exact victory native graph: full source once on host/players, history/load
     }
     // Full reload into finished state is historical, even after audio activation.
     await players[0].reload(); await players[0].locator('#connection').click();
-    await players[0].waitForFunction(() => document.querySelector('#connection').textContent === 'Connected' && audioProbe.decoded === 9);
+    await players[0].waitForFunction(() => document.querySelector('#connection').textContent === 'Connected' && audioProbe.decoded === 33);
     assert.equal((await wins(players[0])).length, 0);
     await reset(); await start();
     // Explicit mute consumes this finish, and unmute never plays it later.
@@ -825,7 +825,7 @@ test('exact victory native graph: full source once on host/players, history/load
     await host.waitForFunction(() => audioProbe.starts.filter(s => Math.abs(s.duration - 5.4683125) < .001).length === 2);
     await players[0].waitForFunction(() => document.body.dataset.screen === 'victory');
     await players[0].locator('#mute').click(); release();
-    await players[1].waitForFunction(() => audioProbe.decoded === 9);
+    await players[1].waitForFunction(() => audioProbe.decoded === 33);
     assert.equal((await wins(players[0])).length, 0); assert.equal((await wins(players[1])).length, 0, 'late preload never plays skipped win');
     await players[1].unroute('**/*.{wav,webm}');
     // Reset while the host source is active stops it and re-arms the next match.
@@ -854,11 +854,155 @@ test('optional victory codec failure preserves native lobby/action graph and ON 
       const page = await context.newPage();
       await page.route('**/victory.webm', route => route.fulfill({ status: 200, contentType: 'audio/webm', body: 'bad codec' }));
       await page.goto('http://127.0.0.1:' + game.server.address().port + '/game/'); await page.locator('#how-to').click();
-      await page.waitForFunction(() => audioProbe.decoded === 8 && audioProbe.peak > .01 && document.querySelector('#mute').dataset.audioState === 'ready');
+      await page.waitForFunction(() => audioProbe.decoded === 32 && audioProbe.peak > .01 && document.querySelector('#mute').dataset.audioState === 'ready');
       assert.equal(await page.locator('#mute').textContent(), 'sound is on');
       assert.match(await page.locator('#sound-hint').textContent(), /Victory sound unavailable.*other game sounds remain enabled/);
       await page.evaluate(() => ArenaUI.cue('attack'));
       assert.ok(await page.evaluate(() => audioProbe.starts.some(s => !s.loop && s.sfxBus && s.duration < 1)));
       await context.close();
+    }
+  });
+
+test('named native authoritative audio hook: 24 moves both sides on desktop/phone/tablet, renderer-independent',
+  { skip: !enabled, timeout: 180000 }, async t => {
+    const { chromium, devices } = await import(process.env.PLAYWRIGHT_MODULE);
+    const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_EXECUTABLE, headless: true, args: ['--autoplay-policy=document-user-activation-required'] });
+    let clock = Date.now(); const arena = new Arena({ now: () => clock, pick: () => 0 });
+    const reservation = http.createServer(); await new Promise(resolve => reservation.listen(0, '127.0.0.1', resolve));
+    const port = reservation.address().port; await new Promise(resolve => reservation.close(resolve));
+    const game = createGameServer({ arena, autoTick: false, publicOrigin: 'http://127.0.0.1:' + port });
+    await new Promise(resolve => game.server.listen(port, '127.0.0.1', resolve));
+    t.after(async () => { await Promise.all([browser.close(), game.close()]); });
+    const room = arena.create(), hostViewer = { role: 'host' };
+    const a = arena.join(room, { nickname: 'Named audio A' }), b = arena.join(room, { nickname: 'Named audio B' });
+    arena.configure(room, hostViewer, { arenaId: 'library', characterA: 'luca-di-grazia', characterB: 'luca-di-grazia' });
+    const pages = [], errors = [];
+    for (const [i, device] of [null, 'iPhone 13', 'iPad (gen 7)'].entries()) {
+      const context = await browser.newContext({ ...(device ? devices[device] : {}), reducedMotion: 'reduce' });
+      context.setDefaultTimeout(10000); await context.addInitScript(observeAudio);
+      const page = await context.newPage(); page.on('pageerror', e => errors.push(e.message));
+      await page.goto('http://127.0.0.1:' + port + '/game/');
+      await page.locator('#connection').click();
+      await page.waitForFunction(() => audioProbe.decoded === 33 && document.querySelector('#mute').dataset.audioState === 'ready');
+      await page.evaluate(async () => {
+        const { THEMED_ACTION_SOUNDS, ACTION_SOUNDS } = await import([...document.scripts].find(s => s.src.includes('/app.js')).src);
+        const offline = new OfflineAudioContext(1, 1, audioProbe.contexts[0].sampleRate);
+        window.expectedNamedSignatures = {};
+        for (const [key, url] of Object.entries({ ...ACTION_SOUNDS, ...THEMED_ACTION_SOUNDS })) {
+          const buffer = await offline.decodeAudioData(await (await fetch(url)).arrayBuffer());
+          expectedNamedSignatures[key] = [42,113,207,367,557].map(i => buffer.getChannelData(0)[i].toFixed(6)).join(',');
+        }
+      });
+      // Exercise the production SSE parser/cue/mixer without the independently changing renderer.
+      // The ordinary page client is not joined to any room; this is the sole room subscriber.
+      await page.evaluate(async ({ room, role, token }) => {
+        const { ArenaClient, createActionCue } = await import([...document.scripts].find(s => s.src.includes('/app.js')).src);
+        const cue = createActionCue((move, options) => ArenaUI.cue(move, options));
+        window.matrixConnection = 'initial';
+        window.matrixClient = new ArenaClient({ storage: sessionStorage, onState: cue,
+          onConnection: status => { if (status !== 'connected') cue.reset(); matrixConnection = status; } });
+        matrixClient.activate(room, role, token);
+      }, { room: room.id, role: i ? 'player' : 'host', token: i === 0 ? room.hostToken : i === 1 ? a.playerToken : b.playerToken });
+      await page.waitForFunction(() => matrixConnection === 'connected', undefined, { polling: 50 });
+      pages.push(page);
+    }
+    const broadcast = () => { for (const stream of room.streams) stream.res.write('event: state\ndata: ' + JSON.stringify(arena.snapshot(room, stream.viewer)) + '\n\n'); };
+    const count = page => page.evaluate(() => audioProbe.starts.filter(s => !s.loop && s.duration < 1).length);
+    const counts = () => Promise.all(pages.map(count));
+    const baseline = await counts(); assert.deepEqual(baseline, [0,0,0]);
+    const ids = ['luca-di-grazia','free-rider','tryhard','assessment-hoodie','trischli-warrior','bad-teacher'];
+    let expected = 0;
+    for (const id of ids) {
+      if (room.phase !== 'lobby') arena.reset(room, hostViewer, {});
+      arena.configure(room, hostViewer, { arenaId: 'library', characterA: id, characterB: id }); broadcast();
+      arena.start(room, hostViewer, {}); broadcast(); clock = room.prebattle.deadline; game.tick();
+      for (const move of ['attack','defend','heal','special']) for (const side of ['A','B']) {
+        assert.equal(room.turn.team, side); room.teams.A.hp = room.teams.B.hp = 100;
+        arena.vote(room, { role: 'player', player: side === 'A' ? a.player : b.player }, { turnId: room.turn.id, move }); broadcast();
+        clock = room.turn.deadline; broadcast(); await pages[0].waitForTimeout(40);
+        assert.deepEqual(await counts(), [expected, expected, expected], 'vote and unresolved zero remain silent');
+        game.tick(); expected++;
+        for (const page of pages) {
+          await page.waitForFunction(n => audioProbe.starts.filter(s => !s.loop && s.duration < 1).length === n, expected, { polling: 50, timeout: 10000 });
+          const played = await page.evaluate(key => {
+            const s = audioProbe.starts.filter(s => !s.loop && s.duration < 1).at(-1);
+            return { correct: s.signature === expectedNamedSignatures[key], gain: s.sourceGain, sfx: s.sfxBus, immediate: Math.abs(s.when - s.at) < .005 };
+          }, id + ':' + move);
+          assert.deepEqual(played, { correct: true, gain: .45, sfx: true, immediate: true }, id + ':' + move + ' ' + side);
+        }
+        broadcast(); await pages[0].waitForTimeout(20); assert.deepEqual(await counts(), [expected,expected,expected], 'duplicate SSE silent');
+      }
+    }
+    const resolve = async () => { room.teams.A.hp = room.teams.B.hp = 100; clock = room.turn.deadline; game.tick(); await pages[0].waitForTimeout(100); };
+    for (const page of pages) await page.locator('#mute').click();
+    await resolve(); assert.deepEqual(await counts(), [48,48,48]);
+    for (const page of pages) { await page.locator('#mute').click(); await page.waitForFunction(() => document.querySelector('#mute').dataset.audioState === 'ready'); }
+    assert.deepEqual(await counts(), [48,48,48], 'unmute never replays named cue');
+    for (const page of pages) await page.evaluate(() => audioProbe.contexts[0].suspend());
+    await resolve(); assert.deepEqual(await counts(), [48,48,48]);
+    for (const page of pages) {
+      assert.equal(await page.locator('#mute').textContent(), 'sound is on');
+      await page.locator('#connection').click(); await page.waitForFunction(() => document.querySelector('#mute').dataset.audioState === 'ready');
+      assert.ok(await page.evaluate(() => audioProbe.resumes.at(-1)));
+    }
+    broadcast(); assert.deepEqual(await counts(), [48,48,48], 'gesture recovery never replays named cue');
+    let release; const held = new Promise(resolve => { release = resolve; });
+    for (const page of pages) await page.route('**/events', async route => { await held; await route.continue(); });
+    for (const stream of [...room.streams]) stream.res.end();
+    for (const page of pages) await page.waitForFunction(() => matrixConnection !== 'connected');
+    await resolve(); release();
+    for (const page of pages) await page.waitForFunction(() => matrixConnection === 'connected');
+    assert.deepEqual(await counts(), [48,48,48], 'reconnect history consumed');
+    await resolve(); for (const page of pages) await page.waitForFunction(() => audioProbe.starts.filter(s => !s.loop && s.duration < 1).length === 49);
+    assert.deepEqual(errors, [], 'native production audio hook and SSE; renderer not exercised');
+    console.log('NAMED_NATIVE ' + JSON.stringify({ browser: browser.version(), devices: ['Linux desktop host-role hook','Chromium iPhone 13 player-role hook','Chromium iPad gen7 player-role hook'], rendererIndependent: true, matrix: 144, recovery: true, pageErrors: errors }));
+  });
+
+test('named assets native 48/96 kHz headroom and optional-decode fallback on desktop/phone/tablet',
+  { skip: !enabled, timeout: 60000 }, async t => {
+    const { chromium, devices } = await import(process.env.PLAYWRIGHT_MODULE);
+    const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_EXECUTABLE, headless: true });
+    const game = createGameServer({ autoTick: false }); await new Promise(resolve => game.server.listen(0, '127.0.0.1', resolve));
+    t.after(async () => { await browser.close(); await game.close(); });
+    const origin = 'http://127.0.0.1:' + game.server.address().port;
+    for (const device of [null, 'iPhone 13', 'iPad (gen 7)']) {
+      const context = await browser.newContext(device ? devices[device] : {}); await context.addInitScript(observeAudio);
+      const page = await context.newPage(); await page.goto(origin + '/game/'); await page.locator('#how-to').click();
+      await page.waitForFunction(() => audioProbe.decoded === 33 && document.querySelector('#mute').dataset.audioState === 'ready');
+      const metrics = await page.evaluate(async () => {
+        const { THEMED_ACTION_SOUNDS, ACTION_SOUNDS, AUDIO_SOUNDS } = await import([...document.scripts].find(s => s.src.includes('/app.js')).src);
+        const bytes = Object.fromEntries(await Promise.all(Object.entries({ ...THEMED_ACTION_SOUNDS, ...ACTION_SOUNDS, battle: AUDIO_SOUNDS.battle, win: AUDIO_SOUNDS.win }).map(async ([key,url]) => [key,await (await fetch(url)).arrayBuffer()])));
+        const rates = [];
+        for (const rate of [48000,96000]) {
+          const offline = new OfflineAudioContext(1,1,rate), peaks = {};
+          for (const [key,data] of Object.entries(bytes)) {
+            const buffer = await offline.decodeAudioData(data.slice(0)); let peak = 0;
+            for (let ch = 0; ch < buffer.numberOfChannels; ch++) for (const v of buffer.getChannelData(ch)) peak = Math.max(peak,Math.abs(v));
+            peaks[key] = peak;
+          }
+          const namedPeak = Math.max(...Object.keys(THEMED_ACTION_SOUNDS).map(key => peaks[key]));
+          const anyActionPeak = Math.max(namedPeak,...Object.keys(ACTION_SOUNDS).map(key => peaks[key]));
+          rates.push({ rate,namedPeak,anyActionPeak,battlePeak:peaks.battle,victoryPeak:peaks.win,
+            battleNamedMax: .225 * peaks.battle + .45 * namedPeak,
+            battleAnyMax: .225 * peaks.battle + .45 * anyActionPeak,
+            victoryNamedMax: .9 * peaks.win + .45 * namedPeak,
+            battleNamedDefaults: .225 * .35 * peaks.battle + .45 * .8 * namedPeak });
+        }
+        return rates;
+      });
+      for (const row of metrics) { assert.ok(row.namedPeak < .8); assert.ok(row.battleAnyMax < 1); assert.ok(row.victoryNamedMax < 1); }
+      console.log('NAMED_HEADROOM ' + JSON.stringify({ browser: browser.version(), device: device || 'Linux desktop', metrics }));
+      await context.close();
+      const broken = await browser.newContext(device ? devices[device] : {}); await broken.addInitScript(observeAudio);
+      const fallback = await broken.newPage();
+      await fallback.route('**/bad-teacher-heal.wav', route => route.fulfill({ status: 200,contentType:'audio/wav',body:'bad optional named WAV' }));
+      await fallback.goto(origin + '/game/'); await fallback.locator('#how-to').click();
+      await fallback.waitForFunction(() => audioProbe.decoded === 32 && document.querySelector('#mute').dataset.audioState === 'ready');
+      assert.equal(await fallback.locator('#mute').textContent(),'sound is on');
+      await fallback.evaluate(() => ArenaUI.cue('heal',{characterId:'bad-teacher'}));
+      const played = await fallback.evaluate(() => audioProbe.starts.filter(s => !s.loop).at(-1));
+      assert.ok(Math.abs(played.duration - .6) < .001, 'failed named heal immediately uses generic heal');
+      assert.equal(played.sfxBus,true); assert.equal(played.sourceGain,.45);
+      await broken.close();
     }
   });
