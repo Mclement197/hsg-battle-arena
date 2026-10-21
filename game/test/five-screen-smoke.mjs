@@ -70,10 +70,10 @@ try {
   await screen(host, 'menu');
   for (const page of [host, mobile]) {
     const menu = await page.evaluate(() => ({ background: getComputedStyle(document.body, '::before').backgroundImage, foregroundOpacity: getComputedStyle(document.querySelector('.menu-copy')).opacity, buttons: ['play-friend','play-bot','play-groups'].map(id => { const r = document.getElementById(id).getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }) }));
-    assert.match(menu.background, /hsg-learning-center\.webp/); assert.equal(menu.foregroundOpacity, '1'); assert.deepEqual(menu.buttons, [true,true,true]);
+    assert.match(menu.background, /arena-library\.webp/); assert.equal(menu.foregroundOpacity, '1'); assert.deepEqual(menu.buttons, [true,true,true]);
   }
   await shot(host, 'desktop-menu'); await shot(mobile, 'mobile-menu');
-  checks.push('user-supplied building photo on desktop/phone main menu, background-only green tint, all three mode buttons in viewport');
+  checks.push('current library photo on desktop/phone main menu, background-only green tint, all three mode buttons in viewport');
   await host.locator('#how-to').click(); await screen(host, 'help'); await host.locator('#help-back').click();
   if (!process.env.PHONE_FLOW) {
   await select(host, 'bot'); await screen(host, 'battle');
