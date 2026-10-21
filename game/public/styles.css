@@ -409,3 +409,72 @@ body[data-screen=character] .selection-footer{margin-top:.4rem;padding-top:.4rem
  body[data-screen=character] .character-option .stat-bars{display:none}
  body[data-screen=character] .selection-info summary{min-height:44px}
 }
+
+/* Combat-only shell: retain the full game viewport, with controls inside its arena. */
+body[data-screen=battle]{grid-template-rows:auto minmax(0,1fr)}
+body[data-screen=battle] #sound-hint{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);margin:0;padding:0}
+body[data-screen=battle] .topbar{min-height:44px;padding-block:2px;gap:.6rem}
+body[data-screen=battle] .topbar .brand img{width:24px;height:24px}
+body[data-screen=battle] .topbar .brand{font-size:.75rem}
+body[data-screen=battle] .topbar-actions{gap:.35rem}
+body[data-screen=battle] .audio-settings summary{min-height:44px}
+body[data-screen=battle] .battle-screen{width:100%;max-width:none;height:100%;min-height:0;display:flex;flex-direction:column;padding:0 max(4px,env(safe-area-inset-right)) max(2px,env(safe-area-inset-bottom)) max(4px,env(safe-area-inset-left))}
+body[data-screen=battle] .battle-screen>h1{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);margin:0;padding:0}
+body[data-screen=battle] .fight-stage{flex:1 1 auto;width:100%;height:auto!important;min-height:0!important;margin:0;padding:0;display:flex;align-items:flex-start;gap:0;border:1px solid #5b9471;overflow:hidden}
+body[data-screen=battle] .fight-stage .fighter{position:absolute;top:48px;width:calc(50% - 8px);max-width:440px;z-index:2}
+body[data-screen=battle] .fight-stage .ace-fighter{left:8px}
+body[data-screen=battle] .fight-stage .dynamo-fighter{right:8px}
+body[data-screen=battle] .fight-stage .health{width:100%;padding:3px 7px;min-height:41px}
+body[data-screen=battle] .fight-stage .health>div{font-size:clamp(.67rem,1.8vw,.9rem);line-height:1.1;align-items:center}
+body[data-screen=battle] .fight-stage .health>div span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body[data-screen=battle] .fight-stage .health strong{font-size:.72rem}
+body[data-screen=battle] .fight-stage .health progress{height:7px;margin-top:4px}
+body[data-screen=battle] .fighter-caption{display:none}
+body[data-screen=battle] .battle-top{position:absolute;inset:0 0 auto;min-height:44px;z-index:4;display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.4rem;align-items:center;padding:2px 8px;background:#031910ed}
+body[data-screen=battle] .battle-top .turn-label{font-size:clamp(.75rem,2.4vw,.98rem);line-height:1.15;max-width:none;min-width:0}
+body[data-screen=battle] .battle-top .timer{gap:.2rem;padding:2px .45rem}
+body[data-screen=battle] .battle-top .timer strong{font-size:1.65rem}
+body[data-screen=battle] .battle-top .timer span{font-size:.62rem}
+body[data-screen=battle] .battle-top .round-label{font-size:.86rem;grid-column:auto;grid-row:auto;white-space:nowrap}
+body[data-screen=battle] .battle-bottom{position:absolute;bottom:0;inset-inline:0;z-index:4;margin:0;padding:5px 8px;background:#031910ed;border:0;border-top:1px solid #3e6b50}
+body[data-screen=battle] .battle-bottom .result-strip{flex-direction:row;align-items:center;gap:.4rem;font-size:.8rem;line-height:1.15}
+body[data-screen=battle] .battle-bottom #battle-message{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body[data-screen=battle] .battle-bottom .vote-tally{margin-top:3px;gap:.5rem;font-size:.7rem;flex-wrap:wrap}
+body[data-screen=battle] .battle-bottom .vote-tally b{padding:0 .25rem}
+body[data-screen=battle] .solo-controls{position:absolute;inset-inline:0;bottom:var(--battle-results-height,32px);z-index:5;margin:0;padding:4px 8px 6px;background:linear-gradient(transparent,#031910 14%)}
+body[data-screen=battle] .solo-controls>p{margin:0 0 3px;font-size:.78rem;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body[data-screen=battle] .solo-moves{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+body[data-screen=battle] .solo-moves button{height:auto;min-height:54px;padding:4px 7px;gap:1px;justify-content:center;clip-path:none;background:#103f2aee}
+body[data-screen=battle] .solo-moves strong{font-size:clamp(.9rem,2vw,1.12rem);line-height:1.05;white-space:normal;overflow-wrap:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+body[data-screen=battle] .solo-moves small{font-size:clamp(.64rem,1.4vw,.76rem);line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%}
+body[data-screen=battle] .solo-moves button:focus-visible{outline-offset:-4px;outline-color:#fff}
+body[data-screen=battle] .world-action-label{bottom:calc(var(--battle-results-height,32px) + var(--battle-controls-height,0px) + 10px);max-width:90%;white-space:normal;text-align:center}
+body[data-screen=battle] .host-bar{flex:none;min-height:30px;margin:0;padding:0 5px}
+body[data-screen=battle] .host-bar button{min-height:30px;padding:0 4px;font-size:.72rem}
+@media(max-width:600px){
+ body[data-screen=battle] .topbar .brand{display:none}
+ body[data-screen=battle] .topbar{min-height:44px;padding-inline:6px;justify-content:space-between}
+ body[data-screen=battle] .topbar-actions{margin-left:0}
+ body[data-screen=battle] .battle-top{grid-template-columns:minmax(0,1fr) auto auto}
+ body[data-screen=battle] .battle-top .timer span{display:none}
+ body[data-screen=battle] .fight-stage .health>div{display:block}
+ body[data-screen=battle] .fight-stage .health strong{display:block;font-size:.66rem}
+ body[data-screen=battle] .fight-stage .fighter{top:45px}
+ body[data-screen=battle] .solo-moves{grid-template-columns:repeat(2,minmax(0,1fr))}
+ body[data-screen=battle] .solo-moves button{min-height:52px}
+ body[data-screen=battle] .solo-moves strong{font-size:.88rem}
+ body[data-screen=battle] .solo-moves small{font-size:.68rem}
+}
+@media(max-height:430px) and (orientation:landscape){
+ body[data-screen=battle] .topbar{min-height:36px;height:36px}
+ body[data-screen=battle] .topbar .quiet-button,body[data-screen=battle] .topbar .audio-settings summary{min-height:36px}
+ body[data-screen=battle] .host-bar{min-height:25px}
+ body[data-screen=battle] .host-bar button{min-height:25px}
+ body[data-screen=battle] .fight-stage .fighter{top:40px;width:calc(50% - 10px)}
+ body[data-screen=battle] .battle-top{min-height:38px}
+ body[data-screen=battle] .solo-controls{padding-block:2px}
+ body[data-screen=battle] .solo-controls>p{display:none}
+ body[data-screen=battle] .solo-moves{grid-template-columns:repeat(4,minmax(0,1fr))}
+ body[data-screen=battle] .solo-moves button{min-height:44px}
+ body[data-screen=battle] .battle-bottom{padding:2px 7px}
+}

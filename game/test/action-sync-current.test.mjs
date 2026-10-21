@@ -8,9 +8,9 @@ import {ABILITIES,ARENA_WORLDS,BattleEvents,actionSoundTiming} from '../public/b
 
 test('entrypoint, app/world and both contract imports share the new cache generation',async()=>{
  const [html,app,world]=await Promise.all(['index.html','app.js','battle-world.js'].map(f=>readFile(new URL('../public/'+f,import.meta.url),'utf8')));
- const version='20261020-action-sync-current1';
- assert.ok(html.includes('./app.js?v='+version));
- assert.ok(app.includes('./battle-world.js?v='+version));
+ const version='20261020-action-sync-current1',viewport='20261021-battle-viewport1';
+ assert.ok(html.includes('./app.js?v='+viewport));
+ assert.ok(app.includes('./battle-world.js?v='+viewport));
  for(const source of [app,world]){assert.ok(source.includes('./battle-contract.js?v='+version));assert.ok(!source.includes('battle-contract.js?v=20261019-mensa1'));}
 });
 

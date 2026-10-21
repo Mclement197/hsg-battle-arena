@@ -1,4 +1,4 @@
-import { BattleWorld } from './battle-world.js?v=20261020-action-sync-current1';
+import { BattleWorld } from './battle-world.js?v=20261021-battle-viewport1';
 import { CharacterStage, modelFor } from './characters.js?v=20261018-previews';
 import { FIGHTER_PROFILES, STAT_META, fighterStats, moveDescription } from './fighter-data.js?v=20261020-luca-max';
 import { ABILITIES, BattlePresentation, moveLabel, actionSoundTiming, actionEventId } from './battle-contract.js?v=20261020-action-sync-current1';

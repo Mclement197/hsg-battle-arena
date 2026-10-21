@@ -27,11 +27,14 @@ export function actionCamera(config, event, progress, aspect = 1) {
 }
 
 // Held opposing three-quarter shots, not a continuous orbit. Main action choreography stays unchanged.
-export function selectionCamera(config, team = 'A') {
+export function selectionCamera(config, team = 'A', aspect = 1.6) {
  const side = team === 'A' ? -1 : 1;
  const position = v(config.overview);
- position.x = side * (config === ARENA_WORLDS.library ? 3.3 : 1.6);
- position.z -= config === ARENA_WORLDS.library ? 2.0 : 1.8;
+ // Keep opposing fighters at comparable apparent depth in the larger shared viewport.
+ // The action director still supplies its own authored close-up shots.
+ const portrait=1-ease((aspect-.65)/.6);
+ position.x = side * THREE.MathUtils.lerp(1.4,1.0,portrait);
+ position.z -= THREE.MathUtils.lerp(.8,.3,portrait);
  position.y -= .35;
  return { position, look: v(config.look), phase: 'selection-' + team };
 }
@@ -427,7 +430,7 @@ export class BattleWorld {
    this.canvas=this.renderer.domElement;this.canvas.className='battle-world-canvas';this.canvas.setAttribute('aria-hidden','true');
    this.canvas.addEventListener('webglcontextlost',event=>{if(generation!==this.generation)return;event.preventDefault();cancelAnimationFrame(this.raf);this.cancel();this.fallback=true;this.events.consume(this.state);this.container.dataset.worldStatus='error';this.onSkip?.();});this.canvas.addEventListener('webglcontextrestored',()=>{if(generation!==this.generation)return;const current=this.state;this.clear();if(current)this.sync(current);});this.container.prepend(this.canvas);
    this.badge=document.createElement('span');this.badge.className='world-action-label';this.badge.setAttribute('aria-hidden','true');this.container.append(this.badge);
-   this.observer=new ResizeObserver(()=>this.layout());this.observer.observe(this.container);this.layout();
+   this.observer=new ResizeObserver(()=>this.layout());this.observer.observe(this.container);for(const selector of ['.fighter .health','.battle-top','.battle-bottom','.solo-controls'])for(const element of this.container.querySelectorAll(selector))this.observer.observe(element);this.layout();
    this.container.dataset.worldStatus='ready';this.container.dataset.worldArena=state.arenaId;
    this.fallback=false;
    let last=performance.now();const tick=now=>{if(generation!==this.generation)return;this.raf=requestAnimationFrame(tick);if(document.hidden||now-last<1000/30)return;const dt=Math.min((now-last)/1000,.25);last=now;
@@ -450,8 +453,17 @@ export class BattleWorld {
  layout(){
   if(!this.renderer)return;const w=this.container.clientWidth,h=Math.max(this.container.clientHeight,1);
   this.renderer.setSize(w,h);this.camera.aspect=w/h;
-  const cards=[...this.container.querySelectorAll('.fighter')];
-  this.frameTop=cards.length?Math.min(.55,1-2*(Math.max(...cards.map(card=>card.offsetTop+card.offsetHeight))+12)/h):.84;
+  // Frame within the visible region between the actual top and bottom HUD.
+  const host=this.container.classList.contains('fight-stage'),origin=this.container.getBoundingClientRect();
+  const top=[...this.container.querySelectorAll('.fighter .health,.battle-top')].filter(el=>el.getClientRects().length);
+  const bottom=[...this.container.querySelectorAll('.battle-bottom,.solo-controls')].filter(el=>el.getClientRects().length);
+  const topEdge=top.length?Math.max(...top.map(el=>el.getBoundingClientRect().bottom-origin.top))+8:0;
+  const bottomEdge=bottom.length?Math.min(...bottom.map(el=>el.getBoundingClientRect().top-origin.top))-8:h;
+  this.frameTop=host?1-2*topEdge/h:.84;this.frameBottom=host?1-2*bottomEdge/h:-.78;
+  const result=this.container.querySelector('.battle-bottom');
+  if(result)this.container.style.setProperty('--battle-results-height',result.offsetHeight+'px');
+  const controls=this.container.querySelector('.solo-controls');
+  if(controls)this.container.style.setProperty('--battle-controls-height',controls.hidden?'0px':controls.offsetHeight+'px');
   if(this.active&&this.camera)this.direct((performance.now()-this.active.startedAt)/this.active.ability.duration);else this.idleCamera(performance.now());
  }
  play(team,clip){const f=this.fighters[team],a=f?.actions.get(clip);if(!a)return;if(clip==='idle'&&f.clip==='idle')return;
@@ -460,10 +472,10 @@ export class BattleWorld {
  overview(snap=false){if(!this.camera||!this.config)return;this.goal=v(this.config.overview);this.goalLook=v(this.config.look);if(snap)this.frame(this.goal,this.goalLook);}
  frame(position,look){
   this.camera.position.copy(position);this.look.copy(look);
-  // Host health cards occupy the upper quarter; all framing stays below them.
+  // Framing tracks measured health, status, and action controls.
   const host=this.container?.classList.contains('fight-stage');
   this.camera.lookAt(this.look);this.camera.updateMatrixWorld(true);
-  const inverse=this.camera.matrixWorldInverse,top=this.frameTop??(host?.43:.84),bottom=-.78;
+  const inverse=this.camera.matrixWorldInverse,top=this.frameTop??(host?.43:.84),bottom=this.frameBottom??-.78;
   let tangent=Math.tan(THREE.MathUtils.degToRad(24/2)),minY=Infinity,maxY=-Infinity;
   const framePoints=[];
   for(const f of Object.values(this.fighters)){
@@ -512,7 +524,7 @@ export class BattleWorld {
   if(this.motion.matches||this.state?.phase!=='running'){this.overview(true);return;}
   const team=this.state.turn?.team||'A', key=this.state.turn?.id;
   if(!this.selection||this.selection.key!==key)this.selection={key,startedAt:now,from:this.camera.position.clone(),look:this.look.clone()};
-  const shot=selectionCamera(this.config,team),t=ease((now-this.selection.startedAt)/650);
+  const shot=selectionCamera(this.config,team,this.camera.aspect),t=ease((now-this.selection.startedAt)/650);
   this.frame(this.selection.from.clone().lerp(shot.position,t),this.selection.look.clone().lerp(shot.look,t));
   this.canvas.dataset.camera=shot.phase;
  }
