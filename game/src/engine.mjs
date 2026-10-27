@@ -17,19 +17,27 @@ export function fields(body, keys) {
 }
 const token = () => randomBytes(32).toString('base64url');
 const id = () => randomBytes(6).toString('hex');
+const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const roomCode = () => Array.from({ length: 4 }, () => ROOM_ALPHABET[randomInt(ROOM_ALPHABET.length)]).join('');
 const teamState = () => ({ hp: RULES.maxHp, shield: false, ownTurn: 0, specialReadyOwnTurn: 0 });
 
 // Inject clock and unbiased index picker for deterministic tests, not through HTTP.
 export class Arena {
-  constructor({ now = Date.now, pick = size => randomInt(size), maxRooms = 50, maxPlayers = 200,
+  constructor({ now = Date.now, pick = size => randomInt(size), newRoomCode = roomCode, maxRooms = 50, maxPlayers = 200,
     idleMs = 3600000, lifetimeMs = 21600000 } = {}) {
-    Object.assign(this, { now, pick, maxRooms, maxPlayers, idleMs, lifetimeMs });
+    Object.assign(this, { now, pick, newRoomCode, maxRooms, maxPlayers, idleMs, lifetimeMs });
     this.rooms = new Map();
   }
   create() {
     if (this.rooms.size >= this.maxRooms) fail(503, 'room_capacity', 'Room capacity reached');
+    let roomId;
+    for (let attempt = 0; attempt < 32; attempt++) {
+      const candidate = this.newRoomCode();
+      if (!this.rooms.has(candidate)) { roomId = candidate; break; }
+    }
+    if (!roomId) fail(503, 'room_code_exhausted', 'Could not allocate a room code; try again');
     const createdAt = this.now();
-    const room = { id: id(), hostToken: token(), createdAt, touchedAt: createdAt, revision: 0,
+    const room = { id: roomId, hostToken: token(), createdAt, touchedAt: createdAt, revision: 0,
       mode: 'online', arenaId: 'library', phase: 'lobby', match: 0, winner: null, teams: { A: teamState(), B: teamState() },
       players: new Map(), credentials: new Map(), turn: null, lastResult: null, recentResults: [], streams: new Set(), mutationRates: new Map() };
     this.rooms.set(room.id, room);

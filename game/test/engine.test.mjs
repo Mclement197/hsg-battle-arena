@@ -183,3 +183,31 @@ test('nickname boundary validation and public state never contain credentials', 
   }
   assert.throws(() => f.arena.authenticate(f.room, 'x'.repeat(43)), error('unauthorized', 401));
 });
+
+test('four-character crypto room codes keep long capabilities and player IDs', () => {
+  const arena = new Arena();
+  for (let i = 0; i < 50; i++) {
+    const room = arena.create();
+    assert.match(room.id, /^[A-HJ-NP-Z2-9]{4}$/);
+    assert.match(room.hostToken, /^[A-Za-z0-9_-]{43}$/);
+    const joined = arena.join(room, { nickname: 'Student' });
+    assert.match(joined.player.id, /^[a-f0-9]{12}$/);
+    assert.match(joined.playerToken, /^[A-Za-z0-9_-]{43}$/);
+    assert.notEqual(joined.playerToken, room.hostToken);
+    assert.throws(() => arena.authenticate(room, room.id), error('unauthorized', 401));
+  }
+  assert.equal(arena.rooms.size, 50);
+});
+
+test('room code collisions retry, exhaustion is bounded and never overwrites a room', () => {
+  const codes = ['K7MP', 'K7MP', 'R8TW'];
+  const arena = new Arena({ newRoomCode: () => codes.shift() });
+  const first = arena.create(), second = arena.create();
+  assert.equal(first.id, 'K7MP'); assert.equal(second.id, 'R8TW');
+  let attempts = 0;
+  arena.newRoomCode = () => { attempts++; return first.id; };
+  assert.throws(() => arena.create(), error('room_code_exhausted', 503));
+  assert.equal(attempts, 32); assert.equal(arena.rooms.size, 2);
+  assert.equal(arena.rooms.get(first.id), first);
+  assert.equal(arena.rooms.get(second.id), second);
+});

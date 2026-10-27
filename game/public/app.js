@@ -264,10 +264,13 @@ export class ActionAudio {
 }
 
 // Same-origin transport only. Capabilities are never placed in URLs or DOM.
-const ROOM_RE = /^[a-f0-9]{12}$/;
+const ROOM_RE = /^(?:[A-HJ-NP-Z2-9]{4}|[a-f0-9]{12})$/i;
 const prefix = 'hsg-arena:v1:';
 export const validRoom = room => ROOM_RE.test(room || '');
-export const roomCode = value => String(value || '').trim().toLowerCase();
+export const roomCode = value => {
+  const code = String(value || '').trim();
+  return code.length === 4 ? code.toUpperCase() : code.toLowerCase();
+};
 export function parseFrames(chunk, state, onState) {
   state.buffer = (state.buffer + chunk).replace(/\r\n/g, '\n');
   if (state.buffer.length > 262144) throw new Error('Event stream frame too large');
@@ -323,8 +326,8 @@ export class ArenaClient {
     this.controller = null;
   }
   base(room = this.room) {
-    if (!validRoom(room)) throw new Error('Enter a 12-character room code');
-    return '/game/api/rooms/' + room;
+    if (!validRoom(room)) throw new Error('Enter a 4-character room code');
+    return '/game/api/rooms/' + roomCode(room);
   }
   async request(path, { method = 'GET', body, token = this.token, signal } = {}) {
     const headers = {};
@@ -359,6 +362,7 @@ export class ArenaClient {
     return result;
   }
   async join(room, nickname) {
+    room = roomCode(room);
     const result = await this.request(this.base(room) + '/join', { method: 'POST', body: { nickname: nickname.trim() }, token: null });
     this.save(room, 'player', result.playerToken);
     this.activate(room, 'player', result.playerToken, result.state);
@@ -555,7 +559,7 @@ if (typeof document !== 'undefined') (() => {
     event.preventDefault();
     const code = roomCode($('join-code').value);
     const nickname = $('nickname').value.trim();
-    if (!validRoom(code) || !nickname) { setText('join-error', 'Enter a 12-character room code and a nickname.'); $('join-error').hidden = false; return; }
+    if (!validRoom(code) || !nickname) { setText('join-error', 'Enter a 4-character room code and a nickname.'); $('join-error').hidden = false; return; }
     $('join-error').hidden = true;
     intent('join', { code, nickname });
   });
@@ -739,7 +743,7 @@ if (typeof document !== 'undefined') (() => {
       window.ArenaUI.connected = view.connection === 'connected';
     }
     if (view.error !== undefined) { $('join-error').hidden = !view.error; setText('join-error', view.error || ''); }
-    if (view.roomCode !== undefined) setText('room-code', view.roomCode || '-----');
+    if (view.roomCode !== undefined) setText('room-code', view.roomCode || '----');
     if (view.joinUrl !== undefined) {
       currentJoinUrl = view.joinUrl || '';
       setText('join-url', currentJoinUrl || 'Waiting for join link');

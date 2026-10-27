@@ -168,7 +168,8 @@ export function createGameServer({ arena, publicOrigin = 'http://127.0.0.1:3210'
       if (!req.url || req.url.length > 1024 || !req.url.startsWith('/')) fail(400, 'invalid_path', 'Invalid request path');
       const [pathname, query] = req.url.split('?');
       if (pathname.startsWith('/game/api/') && query !== undefined) fail(400, 'query_forbidden', 'API query parameters are not accepted');
-      const route = /^\/game\/api\/rooms\/([a-f0-9]{12})\/(join|reconnect|state|events|start|reset|configure|play|vote|qr\.svg)$/.exec(pathname);
+      const route = /^\/game\/api\/rooms\/([A-HJ-NP-Za-hj-np-z2-9]{4}|[a-fA-F0-9]{12})\/(join|reconnect|state|events|start|reset|configure|play|vote|qr\.svg)$/.exec(pathname);
+      if (route) route[1] = route[1].length === 4 ? route[1].toUpperCase() : route[1].toLowerCase();
       const publicRead = (req.method === 'GET' || req.method === 'HEAD') &&
         (pathname === '/game' || publicStaticPath(pathname) || route?.[2] === 'qr.svg');
       // Public pages/assets/QR carry no capabilities or private state. Links and QR

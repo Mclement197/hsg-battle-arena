@@ -485,3 +485,43 @@ test('HTTP start exposes prebattle, rejects votes until full intro completes and
   assert.equal(running.turn.number, 1); assert.equal(running.turn.totalVotes, 0);
   assert.equal((await f.post(url + '/vote', { turnId: running.turn.id, move: 'attack' }, a.playerToken)).status, 200);
 });
+
+test('short codes normalize across all routes without weakening bearer authorization or quotas', async t => {
+  const f = await fixture(t, { arenaOptions: { newRoomCode: () => 'K7MP' } });
+  const room = await f.create(); assert.equal(room.roomId, 'K7MP');
+  const lower = '/game/api/rooms/k7mp', upper = '/game/api/rooms/K7MP';
+  const a = await f.post(lower + '/join', { nickname: 'A' });
+  const b = await f.post(upper + '/join', { nickname: 'B' });
+  assert.equal(a.status, 201); assert.equal(b.status, 201);
+  assert.equal(a.data.state.roomId, room.roomId);
+  const qr = await f.raw(lower + '/qr.svg');
+  assert.equal(qr.status, 200);
+  assert.equal(qr.text, await QRCode.toString(room.joinUrl, { type: 'svg', errorCorrectionLevel: 'M', margin: 4, width: 256 }));
+  assert.equal((await f.raw(lower + '/state')).status, 401);
+  assert.equal((await f.post(lower + '/start', {}, room.roomId)).status, 401);
+  assert.equal((await f.post(lower + '/reset', {}, a.data.playerToken)).status, 403);
+  const started = await f.post(lower + '/start', {}, room.hostToken); assert.equal(started.status, 200);
+  const stream = await sse(f.base, 'k7mp', room.hostToken); t.after(stream.close);
+  assert.equal((await stream.next()).roomId, room.roomId);
+  assert.equal((await f.post(lower + '/vote', { turnId: started.data.state.turn.id, move: 'attack' }, a.data.playerToken)).status, 200);
+  assert.equal((await f.post(lower + '/reconnect', {}, a.data.playerToken)).data.playerId, a.data.playerId);
+  assert.equal((await f.raw(lower + '/state', { headers: { Authorization: 'Bearer ' + room.hostToken } })).status, 200);
+  const collision = await f.post('/game/api/rooms');
+  assert.equal(collision.status, 503); assert.equal(collision.data.error.code, 'room_code_exhausted');
+  assert.equal(f.arena.rooms.size, 1);
+  assert.equal((await f.post(lower + '/reset', {}, room.hostToken)).status, 200);
+  for (const invalid of ['I0O1', 'K7M', 'K7MPP', 'abcdabcdabcdx'])
+    assert.equal((await f.raw('/game/api/rooms/' + invalid + '/qr.svg')).status, 404);
+});
+
+test('legacy long room links, QR, bearer sessions and reconnect still work', async t => {
+  const f = await fixture(t); const room = f.arena.create();
+  f.arena.rooms.delete(room.id); room.id = 'abcdef123456'; f.arena.rooms.set(room.id, room);
+  const url = '/game/api/rooms/ABCDEF123456';
+  const joined = await f.post(url + '/join', { nickname: 'Legacy' }); assert.equal(joined.status, 201);
+  const reconnect = await f.post(url + '/reconnect', {}, joined.data.playerToken);
+  assert.equal(reconnect.status, 200); assert.equal(reconnect.data.playerId, joined.data.playerId);
+  assert.equal((await f.raw(url + '/state', { headers: { Authorization: 'Bearer ' + room.hostToken } })).data.state.roomId, room.id);
+  const qr = await f.raw(url + '/qr.svg'); assert.equal(qr.status, 200);
+  assert.equal(qr.text, await QRCode.toString(ORIGIN + '/game/?room=' + room.id, { type: 'svg', errorCorrectionLevel: 'M', margin: 4, width: 256 }));
+});
