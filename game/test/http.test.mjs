@@ -525,3 +525,107 @@ test('legacy long room links, QR, bearer sessions and reconnect still work', asy
   const qr = await f.raw(url + '/qr.svg'); assert.equal(qr.status, 200);
   assert.equal(qr.text, await QRCode.toString(ORIGIN + '/game/?room=' + room.id, { type: 'svg', errorCorrectionLevel: 'M', margin: 4, width: 256 }));
 });
+
+
+test('reaction HTTP boundary, exact cooldown and live SSE expiry preserve voting', { timeout: 10000 }, async t => {
+  const f = await fixture(t);
+  const created = await f.post('/game/api/rooms', { mode: 'groups' });
+  const room = created.data, url = '/game/api/rooms/' + room.roomId;
+  const a = await f.join(room, 'A'), b = await f.join(room, 'B');
+  assert.deepEqual(created.data.state.reactions, { enabled: true, recent: [] });
+  assert.equal((await f.post(url + '/react', { reaction: '😂' })).status, 401);
+  assert.equal((await f.post(url + '/react', { reaction: '😂' }, 'x'.repeat(43))).status, 401);
+  assert.equal((await f.post(url + '/react', { reaction: '😂' }, room.hostToken)).status, 403);
+  assert.equal((await f.post(url + '/react', { reaction: '😂' }, a.playerToken)).status, 409);
+  const start = await f.post(url + '/start', {}, room.hostToken);
+  const stateBefore = start.data.state;
+  for (const invalid of [{}, { reaction: '😀' }, { reaction: ['🔥'] }, { reaction: '👏', team: 'B' }, { emoji: '😂' }])
+    assert.equal((await f.post(url + '/react', invalid, a.playerToken)).status, 400);
+  assert.equal((await f.post(url + '/react', { reaction: '😂' }, a.playerToken, { Origin: 'https://evil.example' })).status, 403);
+  assert.equal((await f.raw(url + '/react', { headers: { Authorization: 'Bearer ' + a.playerToken } })).status, 404);
+  const stream = await sse(f.base, room.roomId, room.hostToken); t.after(stream.close);
+  await stream.next();
+  const reacted = await f.post(url + '/react', { reaction: '😂' }, a.playerToken);
+  assert.equal(reacted.status, 200);
+  const reaction = reacted.data.state.reactions.recent[0];
+  assert.equal(reaction.playerId, a.playerId); assert.equal(reaction.team, 'A');
+  assert.equal(reaction.emoji, '😂'); assert.equal(reaction.at, stateBefore.serverNow);
+  assert.deepEqual(reacted.data.state.turn, stateBefore.turn);
+  assert.deepEqual(reacted.data.state.teams, stateBefore.teams);
+  assert.equal((await f.post(url + '/react', { reaction: '🔥' }, b.playerToken)).status, 200);
+  const published = await stream.until(s => s.reactions.recent.length === 2);
+  assert.deepEqual(published.reactions.recent.map(r => r.emoji), ['😂', '🔥']);
+  f.setTime(reaction.at + 999);
+  const cooldown = await f.post(url + '/react', { reaction: '💀' }, a.playerToken);
+  assert.equal(cooldown.status, 429); assert.equal(cooldown.data.error.code, 'reaction_cooldown');
+  assert.equal(cooldown.headers.get('retry-after'), '1');
+  assert.equal((await f.post(url + '/vote', { turnId: stateBefore.turn.id, move: 'heal' }, a.playerToken)).status, 200);
+  f.setTime(reaction.at + 1000);
+  assert.equal((await f.post(url + '/react', { reaction: '💀' }, a.playerToken)).status, 200);
+  f.setTime(reaction.at + 2000); f.tick();
+  const expiredFirst = await stream.until(s => s.reactions.recent.length === 1 && s.reactions.recent[0].emoji === '💀');
+  assert.equal(expiredFirst.turn.voteCounts.heal, 1); assert.equal(expiredFirst.turn.id, stateBefore.turn.id);
+  f.setTime(reaction.at + 3000); f.tick();
+  await stream.until(s => s.reactions.recent.length === 0);
+  assert.equal(f.arena.rooms.get(room.roomId).recentReactions.length, 0);
+  const reset = await f.post(url + '/reset', {}, room.hostToken);
+  assert.deepEqual(reset.data.state.reactions, { enabled: true, recent: [] });
+});
+
+test('reaction floods spend neither gameplay mutation nor gameplay all-request quota', async t => {
+  const f = await fixture(t, { limits: { requestsPerMinute: 3, mutationsPerMinute: 1 } });
+  const room = await f.create(), url = '/game/api/rooms/' + room.roomId;
+  const a = await f.join(room, 'A'); await f.join(room, 'B');
+  const start = await f.post(url + '/start', {}, room.hostToken);
+  assert.equal(start.status, 200);
+  assert.equal((await f.post(url + '/react', { reaction: '🔥' }, a.playerToken)).status, 200);
+  for (let i = 0; i < 2; i++) {
+    const result = await f.post(url + '/react', { reaction: '🔥' }, a.playerToken);
+    assert.equal(result.status, 429); assert.equal(result.data.error.code, 'reaction_cooldown');
+  }
+  const requestLimited = await f.post(url + '/react', { reaction: '🔥' }, a.playerToken);
+  assert.equal(requestLimited.status, 429); assert.equal(requestLimited.data.error.code, 'rate_limit');
+  const stored = f.arena.rooms.get(room.roomId);
+  assert.equal(stored.mutationRates.has(a.playerId), false);
+  assert.equal(stored.requestRates.has(a.playerId), false);
+  assert.equal(stored.reactionRequestRates.size, 1); assert.equal(stored.recentReactions.length, 1);
+  const vote = await f.post(url + '/vote', { turnId: start.data.state.turn.id, move: 'attack' }, a.playerToken);
+  assert.equal(vote.status, 200); assert.equal(vote.data.state.turn.voteCounts.attack, 1);
+  const limitedVote = await f.post(url + '/vote', { turnId: start.data.state.turn.id, move: 'heal' }, a.playerToken);
+  assert.equal(limitedVote.status, 429); assert.equal(limitedVote.data.error.code, 'rate_limit');
+});
+
+test('HTTP host toggle stays lobby-only and friend host/guest reactions work on either turn, never in bot mode', async t => {
+  const f = await fixture(t);
+  const created = await f.post('/game/api/rooms', { mode: 'friend' });
+  const room = created.data, url = '/game/api/rooms/' + room.roomId;
+  const guest = await f.join(room, 'Friend');
+  assert.equal((await f.post(url + '/configure', { reactionsEnabled: false }, guest.playerToken)).status, 403);
+  assert.equal((await f.post(url + '/configure', { reactionsEnabled: 'false' }, room.hostToken)).status, 400);
+  const off = await f.post(url + '/configure', { reactionsEnabled: false }, room.hostToken);
+  assert.equal(off.status, 200); assert.equal(off.data.state.reactions.enabled, false);
+  await f.post(url + '/start', {}, room.hostToken);
+  for (const credential of [room.hostToken, guest.playerToken]) {
+    const disabled = await f.post(url + '/react', { reaction: '👏' }, credential);
+    assert.equal(disabled.status, 409); assert.equal(disabled.data.error.code, 'reactions_disabled');
+  }
+  assert.equal((await f.post(url + '/configure', { reactionsEnabled: true }, room.hostToken)).status, 409);
+  const reset = await f.post(url + '/reset', {}, room.hostToken);
+  assert.equal(reset.data.state.reactions.enabled, false);
+  assert.equal((await f.post(url + '/configure', { reactionsEnabled: true }, room.hostToken)).status, 200);
+  const start = await f.post(url + '/start', {}, room.hostToken);
+  for (const credential of [room.hostToken, guest.playerToken])
+    assert.equal((await f.post(url + '/react', { reaction: '😱' }, credential)).status, 200);
+  assert.equal((await f.post(url + '/play', { turnId: start.data.state.turn.id, move: 'attack' }, room.hostToken)).status, 200);
+  f.setTime(start.data.state.serverNow + 1000);
+  const hostReact = await f.post(url + '/react', { reaction: '🤡' }, room.hostToken);
+  assert.equal(hostReact.status, 200); assert.equal(hostReact.data.state.turn.team, 'B');
+  const guestReact = await f.post(url + '/react', { reaction: '💀' }, guest.playerToken);
+  assert.equal(guestReact.status, 200);
+  assert.deepEqual(guestReact.data.state.reactions.recent.map(r => r.team), ['A', 'B', 'A', 'B']);
+  const bot = (await f.post('/game/api/rooms', { mode: 'bot' })).data;
+  const botUrl = '/game/api/rooms/' + bot.roomId;
+  await f.post(botUrl + '/start', {}, bot.hostToken);
+  const rejected = await f.post(botUrl + '/react', { reaction: '😂' }, bot.hostToken);
+  assert.equal(rejected.status, 409); assert.equal(rejected.data.error.code, 'invalid_mode');
+});

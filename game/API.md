@@ -14,6 +14,7 @@ Room IDs for new rooms are **four uppercase easy-read characters**, drawn unifor
 - `POST /game/api/rooms/ROOM_ID/start`, body `{}`, host bearer → **200** `{state}`. Lobby only; at least one member on each team. Enters countdown; Team A starts only after the full intro.
 - `POST /game/api/rooms/ROOM_ID/reset`, body `{}`, host bearer → **200** `{state}`. Any phase → lobby, preserves players/tokens/teams, restores HP/shields/cooldowns, clears votes/results, increments match; start explicitly again.
 - `POST /game/api/rooms/ROOM_ID/vote`, player bearer, body `{turnId, move}` → **200** `{state}`. `move` exactly `attack|defend|heal|special`. Replace own vote until cutoff. Server derives team from token; no team/player fields accepted. Old match/turn rejected, wrong team rejected, cooldown special rejected.
+- `POST /game/api/rooms/ROOM_ID/react`, body `{reaction}` with a human player bearer → **200** `{state}`. `reaction` is exactly one of `😂|🔥|💀|😱|👏|🤡`; reactions are available while running, independently of whose turn it is. Groups accepts player capabilities; Friend accepts both human players (including the host’s host bearer); Bot rejects reactions. Each room defaults reactions on; the host may toggle them only in the lobby with `POST /configure` body `{reactionsEnabled:boolean}`. A player may react once per 1000ms; the endpoint returns **429** with `Retry-After: 1` during cooldown.
 - `GET`/`HEAD /game/api/rooms/ROOM_ID/qr.svg` → public local SVG for student join URL only.
 - `GET`/`HEAD /game` → **308** `/game/` (preserves query); `GET`/`HEAD /game/` and `/game/index.html`, `/game/app.js`, `/game/styles.css`, `/game/fighter-data.js`, `/game/assets/NAME.EXT` → allowlisted local frontend files if present (backend does not create them). Asset names: simple ASCII letters/digits/underscore/hyphen, extensions svg/png/webp/jpg/ico/woff2/mp3/wav/ogg. No nested paths, symlinks, dotfiles, traversal, arbitrary files.
 
@@ -34,6 +35,7 @@ Unknown fields rejected on every POST. Empty bodies are not `{}`. Responses use 
   "players":[{"id":"opaque player id","nickname":"Alex","team":"A","connected":true}],
   "turn":null,
   "lastResult":null,
+  "reactions":{"enabled":true,"recent":[{"id":"opaque reaction id","playerId":"opaque player id","team":"A","emoji":"🔥","at":1700000000000}]},
   "you":{"role":"player","playerId":"opaque player id","team":"A","vote":null}
 }
 ```
@@ -68,6 +70,10 @@ Existing empty-body create/join/start/reset/vote/SSE contracts remain valid as l
 ## Prebattle phase
 
 New starts in all modes return phase countdown, turn: null and prebattle: {startedAt, readyAt, deadline} (epoch ms). readyAt = startedAt + 3000; deadline = startedAt + 7157. Votes/direct moves are rejected with 409 invalid_phase throughout. The authoritative tick opens Team A turn 1 only at/after deadline, using the tick time as startedAt and a full 15000 ms deadline; a delayed tick never skips or shortens turn one. Reset clears prebattle. Other phases expose prebattle: null. Clients display 3/2/1 then READY… FIGHT! from server-clock offset, independent of mute. No new endpoint or client-controlled timing fields.
+
+### Emoji reaction snapshots
+
+Snapshots expose the current room toggle and a transient `reactions.recent` queue. Entries contain an opaque `id`, player identity, derived team, allowlisted emoji and server timestamp; entries expire after 2 seconds, are bounded, and are not replay history or persistent storage. Clients should baseline/reconcile snapshots and render only newly observed entries. Reactions do not alter turns, votes or combat.
 
 ### Cinematic presentation history
 

@@ -77,6 +77,10 @@ Without these environment variables, native-browser tests are explicitly skipped
 
 State is memory-only. Restart or TTL expires rooms/capabilities. No analytics, database, nickname logs, or external media. Anyone with the student link can occupy a slot; anyone may create a room within limits. This is a public classroom game, not identity/roster verification. Lost tokens cannot be recovered.
 
+## Emoji reactions
+
+During a running multiplayer battle, players can send six transient reactions: 😂, 🔥, 💀, 😱, 👏 and 🤡. Groups allows either team to react at any time; Friend allows both human players, including the host; Bot mode has no reactions. The lobby toggle defaults on and is host-controlled before start. Reactions use the authenticated `POST /game/api/rooms/ROOM_ID/react` endpoint with `{reaction}`, a separate 1000 ms per-player cooldown (429 with `Retry-After: 1`), and short-lived snapshot entries rather than persistent history. See [Exact HTTP/SSE API](API.md).
+
 ## Resolved-move visuals
 
 The browser maps authoritative lastResult moves to four bounded CSS effects in public/app.js and public/styles.css: opponent slash for attack, actor shield for defend, actor healing glow for heal, and opponent energy burst for special. Presenter effects overlay the affected fighter; phone and victory screens show a compact result stamp where the opposing fighter is not displayed. Votes and local timer expiry never trigger effects. First snapshots on join/reconnect are history; room/match/turn-number deduplication consumes repeat snapshots. Effects clean up after 850 ms; reduced-motion mode uses a stationary fading cue. No new assets or dependencies.

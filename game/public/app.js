@@ -286,6 +286,32 @@ export function parseFrames(chunk, state, onState) {
     if (type === 'state' && data) onState(JSON.parse(data));
   }
 }
+export const REACTION_EMOJIS = Object.freeze(['😂', '🔥', '💀', '😱', '👏', '🤡']);
+
+// A cleared stream baselines its first fresh snapshot; cached disconnect paints never enter here.
+export function createReactionTracker() {
+  let seen = null;
+  return {
+    reset() { seen = null; },
+    consume(recent = [], serverNow = 0) {
+      const entries = recent.slice(-40);
+      const next = new Set(entries.map(item => item.id));
+      if (seen === null) { seen = next; return []; }
+      const fresh = entries.filter(item => !seen.has(item.id) && ['A', 'B'].includes(item.team) &&
+        REACTION_EMOJIS.includes(item.emoji) && serverNow - item.at < 2000);
+      seen = next;
+      return fresh;
+    }
+  };
+}
+
+// Aggregation windows never extend past two seconds, even with continuous traffic.
+export function reactionWindow(previous, added, now) {
+  return previous && now - previous.at < 2000
+    ? { at: previous.at, count: previous.count + added }
+    : { at: now, count: added };
+}
+
 export class ArenaClient {
   constructor({ fetcher = (...args) => globalThis.fetch(...args), storage = sessionStorage, now = () => performance.now(), onState = () => {}, onConnection = () => {}, onError = () => {}, sleep = (ms, signal) => new Promise(resolve => {
     const timer = setTimeout(resolve, ms);
@@ -394,8 +420,8 @@ export class ArenaClient {
   }
   async mutate(action, body = {}) {
     if (!this.room || !this.token) throw new Error('Join a room first');
-    if (!['start', 'reset', 'configure', 'play', 'vote'].includes(action)) throw new Error('Invalid action');
-    if ((action === 'vote') !== (this.role === 'player')) throw new Error('Not allowed for this role');
+    if (!['start', 'reset', 'configure', 'play', 'vote', 'react'].includes(action)) throw new Error('Invalid action');
+    if (action === 'react' ? !(this.role === 'player' || (this.role === 'host' && this.state?.mode === 'friend')) : (action === 'vote') !== (this.role === 'player')) throw new Error('Not allowed for this role');
     const generation = this.generation;
     const result = await this.request(this.base() + '/' + action, { method: 'POST', body });
     this.accept(result.state, generation);
@@ -503,6 +529,7 @@ if (typeof document !== 'undefined') (() => {
   const screens = ['menu', 'arena', 'character', 'help', 'entry', 'lobby', 'battle', 'player', 'victory'];
   let setupBusy = false;
   const moves = ['attack', 'defend', 'heal', 'special'];
+  const emojis = REACTION_EMOJIS;
   let audioContext;
   let actionAudio;
   let actionCue;
@@ -565,6 +592,7 @@ if (typeof document !== 'undefined') (() => {
   });
   $('create-room').addEventListener('click', () => beginSetup('groups'));
   $('start-game').addEventListener('click', () => intent('start'));
+  $('reactions-enabled').addEventListener('change', () => intent('configure-reactions', { enabled: $('reactions-enabled').checked }));
   $('reset-game').addEventListener('click', () => { if (window.confirm('Reset this match for everyone?')) intent('reset'); });
   $('replay-game').addEventListener('click', () => intent('replay'));
   $('copy-link').addEventListener('click', async () => {
@@ -578,6 +606,97 @@ if (typeof document !== 'undefined') (() => {
     intent('vote', { move: button.dataset.move });
     setText('vote-feedback', 'Sending your vote…');
   }));
+  for (const id of ['host-reactions', 'player-reactions']) {
+    const bar = $(id);
+    const label = document.createElement('span'); label.textContent = 'REACT'; label.className = 'reaction-bar-label';
+    const buttons = document.createElement('div'); buttons.className = 'reaction-buttons';
+    buttons.setAttribute('role', 'group'); buttons.setAttribute('aria-label', 'Send an emoji reaction');
+    const names = ['Laugh', 'Fire', 'Skull', 'Surprised', 'Clap', 'Clown'];
+    emojis.forEach((emoji, index) => {
+      const button = document.createElement('button'); button.type = 'button'; button.textContent = emoji;
+      button.dataset.reaction = emoji; button.setAttribute('aria-label', 'React ' + names[index]);
+      button.addEventListener('click', () => { if (!button.disabled) intent('react', { emoji }); });
+      buttons.append(button);
+    });
+    const status = document.createElement('span'); status.className = 'reaction-status'; status.setAttribute('role', 'status');
+    bar.append(label, buttons, status);
+  }
+  const reactionTracker = createReactionTracker();
+  let reactionScope = null, reactionCooldown = 0, reactionPending = false, reactionTimer;
+  function clearReactions() {
+    document.querySelectorAll('.reaction-floats').forEach(layer => layer.replaceChildren());
+    reactionTracker.reset(); reactionScope = null;
+  }
+  function resetReactionSession() {
+    clearTimeout(reactionTimer);
+    reactionCooldown = 0; reactionPending = false;
+    clearReactions();
+  }
+  function setReactionCooldown(ms) {
+    clearTimeout(reactionTimer);
+    reactionCooldown = Date.now() + ms;
+    reactionTimer = setTimeout(() => { if (client.state) syncReactions(client.state); }, ms + 10);
+  }
+  function reactionLayer(team, parent) {
+    if (!parent) return null;
+    let layer = parent.querySelector('.reaction-floats[data-team="' + team + '"]');
+    if (!layer) {
+      layer = document.createElement('div'); layer.className = 'reaction-floats'; layer.dataset.team = team;
+      layer.setAttribute('aria-hidden', 'true'); parent.append(layer);
+    }
+    return layer;
+  }
+  function floatReaction(team, emoji, count) {
+    const stage = reactionLayer(team, $('battle-screen').querySelector('.fight-stage'));
+    const preview = reactionLayer(team, $('player-world'));
+    for (const layer of [stage, preview]) {
+      if (!layer) continue;
+      let badge = [...layer.children].find(node => node.dataset.emoji === emoji);
+      const window = reactionWindow(badge && { at: Number(badge.dataset.startedAt), count: Number(badge.dataset.count) }, count, Date.now());
+      if (!badge || Number(badge.dataset.startedAt) !== window.at) {
+        badge?.remove();
+        badge = document.createElement('span'); badge.className = 'reaction-float'; badge.dataset.emoji = emoji;
+        if (layer.children.length >= 6) layer.firstElementChild.remove();
+        layer.append(badge);
+        badge.expiry = setTimeout(() => badge.remove(), 2000);
+      }
+      badge.dataset.startedAt = window.at;
+      badge.dataset.count = window.count; badge.textContent = emoji + (window.count > 1 ? ' ×' + window.count : '');
+      badge.style.setProperty('--burst-grow', Math.min(1.1, Math.log2(window.count) * .18) + 'rem');
+    }
+  }
+  function syncReactions(state, fresh = false) {
+    // Timers and cached connection paints must not baseline a disconnected stream.
+    if (!window.ArenaUI.connected && !fresh) {
+      for (const id of ['host-reactions', 'player-reactions']) $(id).hidden = true;
+      return;
+    }
+    const enabled = state.reactions?.enabled !== false;
+    const visible = enabled && state.phase === 'running' && ['online', 'groups', 'friend'].includes(state.mode);
+    const canReact = visible && window.ArenaUI.connected && (state.you.role === 'player' || (state.mode === 'friend' && state.you.role === 'host'));
+    const scope = state.roomId + ':' + state.match;
+    if (scope !== reactionScope) resetReactionSession();
+    $('reactions-enabled').checked = enabled;
+    $('reactions-enabled').disabled = state.phase !== 'lobby' || !window.ArenaUI.connected;
+    for (const id of ['host-reactions', 'player-reactions']) {
+      const bar = $(id);
+      bar.hidden = !canReact || (id === 'host-reactions' ? state.you.role !== 'host' : state.you.role !== 'player');
+      bar.querySelectorAll('button').forEach(button => button.disabled = !canReact || reactionPending || Date.now() < reactionCooldown);
+    }
+    if (scope !== reactionScope || !visible) {
+      clearReactions(); reactionScope = scope;
+      if (!visible) return;
+      // Initial/reconnected snapshots are history, not a new live burst.
+      reactionTracker.consume(state.reactions?.recent || [], state.serverNow);
+      return;
+    }
+    const bursts = new Map();
+    for (const item of reactionTracker.consume(state.reactions?.recent || [], state.serverNow)) {
+      const key = item.team + ':' + item.emoji;
+      bursts.set(key, (bursts.get(key) || 0) + 1);
+    }
+    for (const [key, count] of bursts) floatReaction(key[0], key.slice(2), count);
+  }
   function soundReady() {
     return !muted && audioContext?.state === 'running' && actionAudio?.ready;
   }
@@ -850,6 +969,7 @@ if (typeof document !== 'undefined') (() => {
       actionCue(state);
       presentation.consume(state);
       paintState();
+      syncReactions(state, true);
       battleStartCue({ ...state, serverNow: client.serverTime() });
       if (state.you.role === 'host' && $('qr-container').querySelector('img')?.src !== location.origin + '/game/api/rooms/' + state.roomId + '/qr.svg') {
         const qr = document.createElement('img');
@@ -859,9 +979,16 @@ if (typeof document !== 'undefined') (() => {
       }
     },
     onConnection(status) {
-      if (status !== 'connected') { battleStartCue.reset(); actionCue.reset(); victoryCue.reset(); battleWorld.disconnect(); presentation.reset(); }
+      if (status !== 'connected') {
+        clearReactions();
+        for (const id of ['host-reactions', 'player-reactions']) $(id).hidden = true;
+        battleStartCue.reset(); actionCue.reset(); victoryCue.reset(); battleWorld.disconnect(); presentation.reset();
+      }
       render({ connection: status });
-      if (client.state && !setupBusy && !pendingSetupRoom) { presentation.consume(client.state); paintState(); }
+      if (client.state && !setupBusy && !pendingSetupRoom) {
+        presentation.consume(client.state); paintState();
+        if (status === 'connected') syncReactions(client.state);
+      }
     },
     onError(error) {
       reportError(error.message);
@@ -899,12 +1026,31 @@ if (typeof document !== 'undefined') (() => {
     presentation.reset();
     if (client.state) { presentation.consume(client.state); paintState(); }
   };
-  async function handleIntent({ type, code, nickname, move }) {
+  async function handleIntent({ type, code, nickname, move, emoji, enabled }) {
     try {
       if (type === 'join') {
         $('join-form').querySelector('button[type="submit"]').disabled = true;
         await client.join(code, nickname);
         $('join-form').querySelector('button[type="submit"]').disabled = false;
+      } else if (type === 'react') {
+        if (!client.state || client.state.phase !== 'running' || !window.ArenaUI.connected || reactionPending || Date.now() < reactionCooldown) return;
+        const generation = client.generation;
+        reactionPending = true; syncReactions(client.state);
+        try {
+          await client.mutate('react', { reaction: emoji });
+          if (generation !== client.generation) return;
+          setReactionCooldown(1000);
+          $(client.role === 'host' ? 'host-reactions' : 'player-reactions').querySelector('.reaction-status').textContent = '';
+        } catch (error) {
+          if (generation !== client.generation) return;
+          const bar = $(client.role === 'host' ? 'host-reactions' : 'player-reactions');
+          bar.querySelector('.reaction-status').textContent = error.status === 429 ? 'Wait a moment before reacting again.' : error.message;
+          if (error.status === 429 && generation === client.generation) setReactionCooldown(Math.max(1000, (error.retryAfter || 0) * 1000));
+        } finally { if (generation === client.generation) { reactionPending = false; if (client.state) syncReactions(client.state); } }
+        return;
+      } else if (type === 'configure-reactions') {
+        if (client.role !== 'host' || client.state?.phase !== 'lobby') return;
+        await client.mutate('configure', { reactionsEnabled: enabled });
       } else if (type === 'vote') {
         if (presentation.busy || !client.state?.turn || !window.ArenaUI.connected) return;
         await client.mutate('vote', { turnId: client.state.turn.id, move });
@@ -932,7 +1078,7 @@ if (typeof document !== 'undefined') (() => {
   function reportError(message) { setText('global-error', message); $('global-error').hidden = false; }
   function mainMenu() {
     pendingSetupRoom = null;
-    client.stop();
+    client.stop(); resetReactionSession();
     render({ connection: 'disconnected' });
     $('resume-game').hidden = !client.remembered();
     $('global-error').hidden = true;
@@ -952,7 +1098,7 @@ if (typeof document !== 'undefined') (() => {
   $('character-back').addEventListener('click', () => show('arena'));
   for (const team of ['A', 'B']) $('pick-' + team.toLowerCase()).addEventListener('click', () => { selectedTeam = team; drawCharacters(); });
   function beginSetup(mode) {
-    client.stop(); client.state = null;
+    client.stop(); resetReactionSession(); client.state = null;
     pendingSetupRoom = null;
     setupMode = mode; selectedTeam = 'A';
     $('global-error').hidden = true;

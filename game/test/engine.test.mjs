@@ -211,3 +211,108 @@ test('room code collisions retry, exhaustion is bounded and never overwrites a r
   assert.equal(arena.rooms.get(first.id), first);
   assert.equal(arena.rooms.get(second.id), second);
 });
+
+
+test('reactions use exact allowlist and independent player cooldown without changing the turn', () => {
+  const f = fixture(); f.room.mode = 'groups';
+  assert.deepEqual(f.arena.snapshot(f.room, f.host).reactions, { enabled: true, recent: [] });
+  assert.throws(() => f.arena.react(f.room, f.viewers.A, { reaction: '😂' }), error('invalid_phase', 409));
+  f.start(); f.vote('heal');
+  const before = JSON.stringify({ teams: f.room.teams, turn: f.arena.snapshot(f.room, f.host).turn, result: f.room.lastResult });
+  for (const reaction of ['', '😀', '🔥️', ' 😂', '😂😂', null, 1, ['😂']])
+    assert.throws(() => f.arena.react(f.room, f.viewers.A, { reaction }), error('invalid_reaction', 400));
+  assert.throws(() => f.arena.react(f.room, f.viewers.A, { reaction: '😂', playerId: f.b.player.id }), error('invalid_body', 400));
+  assert.throws(() => f.arena.react(f.room, f.host, { reaction: '😂' }), error('role_required', 403));
+  for (const [i, emoji] of ['😂', '🔥', '💀', '😱', '👏', '🤡'].entries()) {
+    f.setTime(107157 + i * 1000);
+    f.arena.react(f.room, f.viewers.A, { reaction: emoji });
+    f.arena.react(f.room, f.viewers.B, { reaction: emoji }); // Inactive side is equally eligible.
+    const reaction = f.arena.snapshot(f.room, f.host).reactions.recent.at(-1);
+    assert.deepEqual({ ...reaction, id: undefined }, { id: undefined, playerId: f.b.player.id, team: 'B', emoji, at: 107157 + i * 1000 });
+    assert.match(reaction.id, /^[a-f0-9]{12}$/);
+    const revision = f.room.revision;
+    assert.throws(() => f.arena.react(f.room, f.viewers.A, { reaction: emoji }), error('reaction_cooldown', 429));
+    f.setTime(107157 + i * 1000 + 999);
+    assert.throws(() => f.arena.react(f.room, f.viewers.A, { reaction: emoji }), error('reaction_cooldown', 429));
+    assert.equal(f.room.revision, revision);
+  }
+  assert.equal(JSON.stringify({ teams: f.room.teams, turn: f.arena.snapshot(f.room, f.host).turn, result: f.room.lastResult }), before);
+  assert.equal(f.room.mutationRates.size, 0);
+  assert.equal(f.room.reactionTimes.size, 2);
+  f.resolve();
+  assert.equal(f.room.turn.team, 'B');
+  f.arena.react(f.room, f.viewers.A, { reaction: '👏' });
+  f.arena.react(f.room, f.viewers.B, { reaction: '🔥' });
+});
+
+test('host reaction toggle validates atomically, is lobby-only and survives reset while transient state clears', () => {
+  const f = fixture();
+  const selection = { arenaId: 'trischli', characterA: 'tryhard', characterB: 'bad-teacher' };
+  for (const reactionsEnabled of [null, 'false', 0, [], {}]) {
+    assert.throws(() => f.arena.configure(f.room, f.host, { ...selection, reactionsEnabled }), error('invalid_setting', 400));
+    assert.equal(f.room.arenaId, 'library');
+    assert.equal(f.room.reactionsEnabled, true);
+  }
+  assert.throws(() => f.arena.configure(f.room, f.viewers.A, { reactionsEnabled: false }), error('role_required', 403));
+  assert.throws(() => f.arena.configure(f.room, f.host, { arenaId: 'library', reactionsEnabled: false }), error('invalid_body', 400));
+  assert.throws(() => f.arena.configure(f.room, f.host, { reactionsEnabled: false, hp: 1 }), error('invalid_body', 400));
+  f.arena.configure(f.room, f.host, { ...selection, reactionsEnabled: false });
+  f.arena.configure(f.room, f.host, selection);
+  assert.equal(f.room.reactionsEnabled, false);
+  f.start();
+  assert.throws(() => f.arena.react(f.room, f.viewers.B, { reaction: '😂' }), error('reactions_disabled', 409));
+  assert.throws(() => f.arena.configure(f.room, f.host, { reactionsEnabled: true }), error('invalid_phase', 409));
+  f.arena.reset(f.room, f.host, {});
+  assert.equal(f.arena.snapshot(f.room, f.host).reactions.enabled, false);
+  f.arena.configure(f.room, f.host, { reactionsEnabled: true });
+  f.start(); f.arena.react(f.room, f.viewers.A, { reaction: '😂' });
+  f.arena.reset(f.room, f.host, {});
+  assert.equal(f.room.reactionTimes.size, 0);
+  assert.deepEqual(f.arena.snapshot(f.room, f.host).reactions, { enabled: true, recent: [] });
+  f.start(); f.arena.react(f.room, f.viewers.A, { reaction: '😂' });
+});
+
+test('reaction queue is bounded, expires exactly at 2000ms and ticks publish expiry without advancing gameplay', () => {
+  const f = fixture();
+  const viewers = [f.viewers.A, f.viewers.B];
+  for (let i = 0; i < 100; i++) viewers.push(f.arena.authenticate(f.room, f.arena.join(f.room, { nickname: 'Guest ' + i }).playerToken));
+  f.start();
+  for (const viewer of viewers) f.arena.react(f.room, viewer, { reaction: '🔥' });
+  assert.equal(f.room.recentReactions.length, 64);
+  assert.equal(f.room.reactionTimes.size, 102);
+  assert.equal(new Set(f.room.recentReactions.map(r => r.id)).size, 64);
+  const turnId = f.room.turn.id, revision = f.room.revision;
+  for (let i = 0; i < 1000; i++) assert.throws(() => f.arena.react(f.room, f.viewers.A, { reaction: '🔥' }), error('reaction_cooldown'));
+  assert.equal(f.room.revision, revision); assert.equal(f.room.recentReactions.length, 64);
+  f.setTime(109156); assert.equal(f.arena.advance(f.room), false);
+  assert.equal(f.arena.snapshot(f.room, f.host).reactions.recent.length, 64);
+  f.setTime(109157); assert.deepEqual(f.arena.snapshot(f.room, f.host).reactions.recent, []);
+  assert.equal(f.arena.advance(f.room), true); assert.equal(f.room.recentReactions.length, 0);
+  assert.equal(f.room.turn.id, turnId); assert.equal(f.room.revision, revision + 1);
+  assert.equal(f.arena.advance(f.room), false);
+});
+
+test('friend host and guest can react on either turn; bot mode and non-running phases cannot react', () => {
+  let time = 0;
+  const arena = new Arena({ now: () => time, pick: () => 0 });
+  const room = arena.create(); arena.enableFriend(room);
+  const host = arena.authenticate(room, room.hostToken);
+  const guest = arena.authenticate(room, arena.join(room, { nickname: 'Friend' }).playerToken);
+  arena.start(room, host, {});
+  assert.throws(() => arena.react(room, guest, { reaction: '💀' }), error('invalid_phase', 409));
+  time = room.prebattle.deadline; arena.advance(room);
+  arena.react(room, host, { reaction: '😂' }); arena.react(room, guest, { reaction: '🔥' });
+  arena.play(room, host, { turnId: room.turn.id, move: 'attack' }); arena.advance(room);
+  time += 1000;
+  assert.equal(room.turn.team, 'B');
+  arena.react(room, host, { reaction: '👏' }); arena.react(room, guest, { reaction: '🤡' });
+  assert.deepEqual(room.recentReactions.map(r => r.team), ['A', 'B', 'A', 'B']);
+  room.phase = 'finished';
+  assert.throws(() => arena.react(room, host, { reaction: '💀' }), error('invalid_phase', 409));
+  const bot = arena.create(); arena.enableBot(bot);
+  const botHost = arena.authenticate(bot, bot.hostToken);
+  arena.start(bot, botHost, {}); time = bot.prebattle.deadline; arena.advance(bot);
+  assert.throws(() => arena.react(bot, botHost, { reaction: '😂' }), error('invalid_mode', 409));
+  assert.throws(() => arena.react(bot, { role: 'player', player: [...bot.players.values()][1] }, { reaction: '😂' }), error('invalid_mode', 409));
+  assert.deepEqual(bot.recentReactions, []);
+});
