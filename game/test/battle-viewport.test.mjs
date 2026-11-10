@@ -20,7 +20,7 @@ test('battle screen persists after sound hint is hidden and camera frames measur
   assert.match(css, /body\[data-screen=battle\]\{grid-template-rows:auto minmax\(0,1fr\)\}/);
   assert.match(css, /body\[data-screen=battle\] #sound-hint\{position:absolute/);
   assert.match(css, /body\[data-screen=battle\] \.battle-screen\{[^}]*height:100%/);
-  assert.match(world, /this\.frameBottom=host\?1-2\*bottomEdge\/h:-\.78/);
+  assert.match(world, /this\.frameBottom=host\|\|bottom\.length\?1-2\*bottomEdge\/h:-\.78/);
   assert.match(world, /this\.frameBottom\?\?-\.78/);
 });
 

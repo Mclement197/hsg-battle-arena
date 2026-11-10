@@ -1,4 +1,4 @@
-import { BattleWorld } from './battle-world.js?v=20261021-battle-viewport1';
+import { BattleWorld } from './battle-world.js?v=20261110-win-celebration1';
 import { CharacterStage, modelFor } from './characters.js?v=20261018-previews';
 import { FIGHTER_PROFILES, STAT_META, fighterStats, moveDescription } from './fighter-data.js?v=20261020-luca-max';
 import { ABILITIES, BattlePresentation, moveLabel, actionSoundTiming, actionEventId } from './battle-contract.js?v=20261020-action-sync-current1';
@@ -918,16 +918,17 @@ if (typeof document !== 'undefined') (() => {
   });
   battleWorld.onPresent = (event, frame) => actionCue.present(event, frame);
   const skipKOButton = $('skip-ko');
-  battleWorld.onKOStart = () => { skipKOButton.hidden = false; };
+  battleWorld.onKOStart = () => { skipKOButton.hidden = (typeof client !== 'undefined' && (client.role !== 'host' || document.body?.dataset.screen !== 'battle')); };
   battleWorld.onKO = event => {
     if (soundReady() && window.ArenaUI.connected && !document.hidden && presentation.pending.some(item => item.id === event.id) &&
         actionAudio.play('ko', { soundKey: 'attack', actionId: 'ko:' + event.id })) event.koAudioAt = performance.now();
   };
   skipKOButton.addEventListener('click', () => {
+    if ((typeof client !== 'undefined' && (client.role !== 'host' || document.body?.dataset.screen !== 'battle'))) return;
     const event = battleWorld.active, remaining = event?.koAudioAt ? Math.max(0, 220 - (performance.now() - event.koAudioAt)) : 0;
     if (remaining) {
       const generation = battleWorld.generation;skipKOButton.disabled = true;
-      setTimeout(() => { skipKOButton.disabled = false;if (battleWorld.generation === generation && battleWorld.active === event && !document.hidden) battleWorld.skipKO(); }, remaining);
+      setTimeout(() => { skipKOButton.disabled = false;if (battleWorld.generation === generation && battleWorld.active === event && !document.hidden && (typeof client === 'undefined' || (client.role === 'host' && document.body?.dataset.screen === 'battle'))) battleWorld.skipKO(); }, remaining);
     } else if (battleWorld.skipKO()) skipKOButton.hidden = true;
   });
   battleWorld.onCancel = options => { skipKOButton.hidden = true;skipKOButton.disabled = false; actionCue.cancel(options); };

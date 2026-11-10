@@ -16,7 +16,7 @@ function probe(kind){
  let now=1000,id=0,muted=false;const jobs=new Map(),starts=[],button={hidden:true,disabled:false,addEventListener(t,fn){this[t]=fn;}},listeners={};
  const timer=(fn,ms=0)=>{jobs.set(++id,{at:now+ms,fn});return id;};
  const advance=to=>{while(true){const row=[...jobs].filter(([,x])=>x.at<=to).sort((a,b)=>a[1].at-b[1].at)[0];if(!row)break;const [i,x]=row;jobs.delete(i);now=x.at;x.fn();}now=to;};
- const document={hidden:false,createElement:()=>({classList:{add(){}},remove(){}}),addEventListener:(t,f)=>{listeners[t]=f;}};
+ const document={hidden:false,createElement:()=>({classList:{add(){},remove(){}},style:{setProperty(){}},remove(){}}),addEventListener:(t,f)=>{listeners[t]=f;}};
  globalThis.document=document;globalThis.performance={now:()=>now};globalThis.setTimeout=timer;globalThis.clearTimeout=i=>jobs.delete(i);globalThis.requestAnimationFrame=fn=>timer(()=>fn(now),16);globalThis.cancelAnimationFrame=i=>jobs.delete(i);
  const ctx={state:'running',get currentTime(){return now/1000;},destination:{},createGain:()=>({gain:{setValueAtTime(v){this.value=v;}},connect(t){this.target=t;return t;},disconnect(){}}),createBufferSource:()=>({connect(g){this.gain=g;return g;},disconnect(){},start(){this.at=now;starts.push(this);this.end=timer(()=>{this.ended=true;this.onended?.();},this.buffer.duration*1000);},stop(){this.stopped=true;jobs.delete(this.end);this.onended?.();}})};
  const audio=new ActionAudio(ctx);for(const k of Object.keys(AUDIO_SOUNDS))audio.buffers.set(k,{key:k,duration:k==='attack'?.22:k==='win'?3:.7});
@@ -44,7 +44,7 @@ function probe(kind){
  else {assert.equal(ko().length,1,'KO once');assert.equal(ko()[0].gain.target,audio.sfxGain,'SFX bus');assert.equal(ko()[0].gain.gain.value,.45);}
  if(kind==='skip'){button.click();advance(3435);assert.equal(starts.filter(x=>x.buffer.key==='win').length,0);advance(3436);assert.equal(starts.filter(x=>x.buffer.key==='win').length,1);assert.ok(ko()[0].ended&&!ko()[0].stopped,'full 220ms KO before victory');}
  else if(kind==='reset'||kind==='hide'||kind==='reconnect'||kind==='skipReset'||kind==='skipHide'){if(kind.startsWith('skip'))button.click();if(kind==='hide'||kind==='skipHide')document.hidden=true;w.disconnect();advance(7000);assert.equal(starts.filter(x=>x.buffer.key==='win').length,0);assert.ok(ko()[0].stopped);assert.equal(button.hidden,true);assert.equal(w.active,null);w.events.consume(final);assert.equal(w.events.pending.length,0,'same snapshot not replayed');}
- else {advance(5200);assert.equal(starts.filter(x=>x.buffer.key==='win').length,1,'victory after full KO');if(ko().length)assert.ok(ko()[0].ended&&!ko()[0].stopped);}
+ else {advance(9000);assert.equal(starts.filter(x=>x.buffer.key==='win').length,1,'victory after full KO and celebration');if(ko().length)assert.ok(ko()[0].ended&&!ko()[0].stopped);}
  rows.push({kind,starts:starts.map(x=>({key:x.buffer.key,at:x.at,ended:!!x.ended,stopped:!!x.stopped,bus:x.gain.target===audio.sfxGain?'sfx':'music'})),koDone:event.koSoundDone});
 }
 test('ActionAudio/BattleEvents preserve KO sound gates, buses, and lifecycle',()=>{try{for(const kind of ['normal','skip','muted','suspended','missing','disconnected','sfx0','reset','hide','reconnect','skipReset','skipHide'])probe(kind);assert.equal(rows.length,12);}finally{Object.assign(globalThis,real);}});
@@ -68,7 +68,7 @@ try{
   await post('rooms/'+id+'/configure',{arenaId:'library',characterA:'tryhard',characterB:'free-rider'},room.hostToken);
   const context=await browser.newContext({viewport:{width:1280,height:900},reducedMotion:'reduce'});await context.addInitScript(observe);await context.addInitScript(({id,token})=>{sessionStorage.setItem('hsg-arena:v1:host:'+id,token);sessionStorage.setItem('hsg-arena:v1:active',JSON.stringify({room:id,role:'host'}));},{id,token:room.hostToken});
   const page=await context.newPage();page.setDefaultTimeout(15000);const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(base+'/game/');
-  await page.evaluate(async()=>{const {BattleWorld}=await import('./battle-world.js?v=20261020-action-sync-current1');const sync=BattleWorld.prototype.sync;BattleWorld.prototype.sync=function(s){window.world=this;return sync.call(this,s);};});
+  await page.evaluate(async()=>{const {BattleWorld}=await import('./battle-world.js?v=20261110-win-celebration1');const sync=BattleWorld.prototype.sync;BattleWorld.prototype.sync=function(s){window.world=this;return sync.call(this,s);};});
   await page.mouse.click(10,10);await page.waitForFunction(()=>document.querySelector('#mute').dataset.audioState==='ready');
   await page.evaluate(()=>window.ArenaUI.render({screen:'lobby'}));
   const s=await post('rooms/'+id+'/start',{},room.hostToken);now=s.state.prebattle.deadline;game.tick();
@@ -83,7 +83,7 @@ try{
   await page.waitForFunction(()=>document.body.dataset.screen==='victory');await page.waitForTimeout(300);
   const sources=await page.evaluate(()=>window.probe),ko=sources.filter(x=>Math.abs(x.duration-.22)<.001),wins=sources.filter(x=>x.duration>1&&!x.loop);
   if(kind==='muted'){assert.equal(ko.length,0);await page.locator('#mute').click();await page.waitForTimeout(300);assert.equal(await page.evaluate(()=>window.probe.filter(x=>Math.abs(x.duration-.22)<.001).length),0);}
-  else {assert.equal(ko.length,1,kind+' generic KO once');assert.ok(ko[0].endedAt&&!ko[0].stoppedAt,kind+' KO not truncated');const win=sources.find(x=>x.at>ko[0].at+100&&x.duration>1&&!x.loop);assert.ok(win,kind+' victory follows');assert.ok(win.at-ko[0].at>=215,kind+' victory respects 220ms audio guard');}
+  else {assert.equal(ko.length,1,kind+' generic KO once');assert.ok(ko[0].endedAt&&!ko[0].stoppedAt,kind+' KO not truncated');const win=sources.find(x=>x.at>ko[0].at+100&&x.duration>1&&!x.loop);assert.ok(win,kind+' victory follows');if(kind==='skip'){assert.ok(win.at-ko[0].at>=215,'existing victory cue guard lets KO SFX finish');assert.ok(win.at-ko[0].at<3900,'host skip bypasses both remaining tails');}else assert.ok(win.at-ko[0].at>=3900,kind+' victory waits through full KO and celebration tails');}
   assert.deepEqual(errors,[]);output.push({kind,sources,errors});
   if(kind==='normal'){await page.reload();await page.waitForFunction(()=>document.body.dataset.screen==='victory');await page.waitForTimeout(400);assert.equal(await page.evaluate(()=>window.probe.filter(x=>!x.loop).length),0,'finished reconnect no KO/victory replay');output.push({kind:'reconnect',nonLoopStarts:0});}
   await context.close();

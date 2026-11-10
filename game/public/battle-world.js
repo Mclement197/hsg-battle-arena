@@ -3,6 +3,7 @@ import { loadModel, modelFor, release } from './characters.js?v=20261018-preview
 import { ARENA_WORLDS, BattleEvents, actionSoundTiming } from './battle-contract.js?v=20261020-action-sync-current1';
 const v = a => new THREE.Vector3(...a);
 export const KO_DURATION = 2000;
+export const CELEBRATION_DURATION = 2000;
 export function koPhase(ms){return ms<350?'stagger':ms<850?'knees':ms<1460?'fall':'flat';}
 
 
@@ -506,7 +507,7 @@ export class BattleWorld {
    this.container.dataset.worldStatus='ready';this.container.dataset.worldArena=state.arenaId;
    this.fallback=false;
    let last=performance.now();const tick=now=>{if(generation!==this.generation)return;this.raf=requestAnimationFrame(tick);if(document.hidden||now-last<1000/30)return;const dt=Math.min((now-last)/1000,.25);last=now;
-    for(const [team,f] of Object.entries(this.fighters))if(!this.motion.matches&&team!==this.active?.actor)f.mixer.update(dt);
+    for(const [team,f] of Object.entries(this.fighters))if(!this.motion.matches&&team!==this.active?.actor&&!(this.active?.koStartedAt&&team===this.active.target))f.mixer.update(dt);
     // KO dedup: existing BattleEvents consumes each authoritative result once per room/match.
     if(!this.active&&this.events.pending.length)this.begin(this.events.pending.shift(),now);
     const presentationNow=this.active?this.presentationTime(now):now;
@@ -541,7 +542,7 @@ export class BattleWorld {
   const bottom=[...this.container.querySelectorAll('.battle-bottom,.solo-controls')].filter(el=>el.getClientRects().length);
   const topEdge=top.length?Math.max(...top.map(el=>el.getBoundingClientRect().bottom-origin.top))+8:0;
   const bottomEdge=bottom.length?Math.min(...bottom.map(el=>el.getBoundingClientRect().top-origin.top))-8:h;
-  this.frameTop=host?1-2*topEdge/h:.84;this.frameBottom=host?1-2*bottomEdge/h:-.78;
+  this.frameTop=host?1-2*topEdge/h:.84;this.frameBottom=host||bottom.length?1-2*bottomEdge/h:-.78;
   const result=this.container.querySelector('.battle-bottom');
   if(result)this.container.style.setProperty('--battle-results-height',result.offsetHeight+'px');
   const controls=this.container.querySelector('.solo-controls');
@@ -564,6 +565,15 @@ export class BattleWorld {
    const box=f.envelope||new THREE.Box3().setFromObject(f.holder);
    if(box.isEmpty())continue;
    let points=f.framePoints||[box.min,box.max];
+   if(this.active?.celebrationStartedAt&&f===this.fighters[this.active.actor]&&f.celebrationFrames){
+    // Bracket the current pose with premeasured jump/turn bounds, never scan skin on RAF.
+    const frames=f.celebrationFrames,time=f.celebrationTime??0;
+    let next=frames.findIndex(sample=>sample.time>=time);if(next<0)next=frames.length-1;
+    const bounds=frames[Math.max(0,next-1)].box.clone().union(frames[next].box);
+    if(this.motion.matches)bounds.union(f.reducedCelebrationBox);
+    bounds.expandByScalar(.12);
+    points=[];for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z])points.push(new THREE.Vector3(x,y,z));
+   }
    if(this.choreography&&!this.motion.matches){
     f.holder.updateMatrixWorld(true);const live=new THREE.Box3().setFromObject(f.holder,true).expandByScalar(.07),corners=[];
     for(const x of [live.min.x,live.max.x])for(const y of [live.min.y,live.max.y])for(const z of [live.min.z,live.max.z])corners.push(new THREE.Vector3(x,y,z));
@@ -616,13 +626,30 @@ export class BattleWorld {
   if(this.container){this.fallbackLabel=document.createElement('span');this.fallbackLabel.className='world-action-label';this.fallbackLabel.textContent=event.ability.label;this.container.append(this.fallbackLabel);}
   const generation=this.generation;
   if(this.container)this.fallbackRaf=requestAnimationFrame(()=>{if(generation===this.generation&&this.active===event&&!event.koStartedAt&&!document.hidden)this.onPresent?.(event,{fallback:true});});
-  // Same completion contract and ability duration without a WebGL renderer.
+  // Each tail starts on its own actual presented frame, even after a late timer.
+  const tail=(phase,duration,next)=>{
+   this.fallbackRaf=requestAnimationFrame(()=>{
+    if(generation!==this.generation||this.active!==event||(typeof document!=='undefined'&&document.hidden))return;
+    const first=performance.now();
+    if(phase==='ko'){
+     event.koStartedAt=first;this.container.dataset.koLoser=event.target;
+     this.fallbackLabel.textContent='K.O.!';this.fallbackLabel.classList.add('ko-slam');this.onKOStart?.(event);
+     this.onKO?.(event);event.koSoundDone=true;
+    }else{
+     event.celebrationStartedAt=first;this.container.dataset.winPhase='celebration';
+     this.fallbackLabel.classList.remove('ko-slam');this.fallbackLabel.textContent='SIUUU!';this.fallbackLabel.classList.add('win-siuuu');this.fallbackLabel.style.setProperty('--win-label-left',event.actor==='A'?'73%':'27%');
+    }
+    this.fallbackTimer=setTimeout(()=>{
+     if(generation!==this.generation||this.active!==event||(typeof document!=='undefined'&&document.hidden))return;
+     if(next)next();else{this.finish();this.onComplete?.(event);this.pumpFallback();}
+    },duration);
+   });
+  };
   this.fallbackTimer=setTimeout(()=>{
    if(generation!==this.generation||this.active!==event||(typeof document!=='undefined'&&document.hidden))return;
-   if(event.defeated){if(this.container?.dataset)this.container.dataset.koLoser=event.target;if(this.fallbackLabel){this.fallbackLabel.textContent='K.O.!';this.fallbackLabel.classList.add('ko-slam');}event.koStartedAt=performance.now();this.onKOStart?.(event);this.fallbackRaf=requestAnimationFrame(()=>{if(generation===this.generation&&this.active===event&&!document.hidden&&!event.koSoundDone&&performance.now()-event.koStartedAt<=180){event.koSoundDone=true;this.onKO?.(event);}});this.fallbackTimer=setTimeout(()=>{if(generation!==this.generation||this.active!==event||(typeof document!=='undefined'&&document.hidden))return;this.finish();this.onComplete?.(event);this.pumpFallback();},KO_DURATION);}
+   if(event.defeated)tail('ko',KO_DURATION,()=>tail('celebration',CELEBRATION_DURATION));
    else{this.finish();this.onComplete?.(event);this.pumpFallback();}
   },event.ability.duration);
-
  }
  begin(event,now){
   if(this.active)this.finish();
@@ -646,11 +673,35 @@ export class BattleWorld {
  animate(now){
   const e=this.active;if(!e)return;
   if(e.koStartedAt){
-   const target=this.fighters[e.target],elapsed=Math.max(0,now-e.koStartedAt);
-   this.poseKnockout(target,elapsed);
-   tintDefeated(target,this.motion.matches?1:ease(elapsed/1400));
-   this.container.dataset.koPhase=koPhase(elapsed);this.overview(true);
-   if(elapsed>=KO_DURATION){this.finish(true);this.onComplete?.(e);}return;
+   if(e.celebrationStartedAt){
+    const elapsed=Math.max(0,now-e.celebrationStartedAt);
+    this.poseCelebration(this.fighters[e.actor],elapsed);
+    this.container.dataset.winPhase=elapsed<1300?'jump':'landing';
+    this.badge.textContent=elapsed>=1300?'SIUUU!':'';
+    this.badge.classList.toggle('win-siuuu',elapsed>=1300);this.badge.style.setProperty('--win-label-left',e.actor==='A'?'73%':'27%');
+    this.overview(true);
+    if(elapsed>=CELEBRATION_DURATION){
+     if(e.celebrationEndFrame){this.finish(true);this.onComplete?.(e);}
+     else e.celebrationEndFrame=true;
+    }
+   }else{
+    const elapsed=Math.max(0,now-e.koStartedAt);
+    this.poseKnockout(this.fighters[e.target],Math.min(elapsed,KO_DURATION));
+    tintDefeated(this.fighters[e.target],this.motion.matches?1:ease(elapsed/1400));
+    this.container.dataset.koPhase=koPhase(elapsed);this.overview(true);
+    if(elapsed>=KO_DURATION){
+     if(e.koEndFrame){
+      delete this.container.dataset.koPhase;
+      this.badge.classList.remove('ko-slam');this.badge.textContent='';
+      const preparingAt=performance.now();
+      this.prepareCelebration(this.fighters[e.actor],this.fighters[e.target]);
+      this.poseCelebration(this.fighters[e.actor],0);
+      // Preparation can take several frames on a phone; the full two-second victory begins after it.
+      e.celebrationStartedAt=now+(performance.now()-preparingAt);this.container.dataset.winPhase='jump';this.overview(true);
+     }else e.koEndFrame=true;
+    }
+   }
+   return;
   }
   const t=now===e.markerTime?e.markerPhase:THREE.MathUtils.clamp((now-e.startedAt)/e.ability.duration,0,1),target=this.fighters[e.target];
   this.choreography=choreograph(this,t);
@@ -659,12 +710,71 @@ export class BattleWorld {
   if(t>=1){
    if(e.defeated){
     if(target.current){target.current.time=target.current.getClip().duration;target.mixer.update(0);}
-    this.prepareFallen(target);e.koStartedAt=now;
+    this.prepareFallen(target);
+    // Freeze the winner in its neutral sampled pose before the full KO begins.
+    const winner=this.fighters[e.actor];for(const [bone,p,q,scale] of winner.motionRig.pose){bone.position.copy(p);bone.quaternion.copy(q);bone.scale.copy(scale);}
+    restoreFighter(winner);e.koStartedAt=now;
     this.badge.textContent='K.O.!';this.badge.classList.add('ko-slam');this.onKOStart?.(e);this.container.dataset.koPhase='stagger';
     if(this.motion.matches){this.poseFallen(target,1);tintDefeated(target,1);}
     this.fx.visible=false;this.choreography=null;this.overview(true);return;
    }
    this.finish();this.onComplete?.(e);
+  }
+ }
+ prepareCelebration(f,loser){
+  f.winDirection=loser.home.position.clone().sub(f.home.position).setY(0).normalize();
+  const dust=new THREE.Group(),geometry=new THREE.SphereGeometry(.055,6,4),material=new THREE.MeshBasicMaterial({color:0xd6c5a6,transparent:true,opacity:.72,depthWrite:false});
+  for(let i=0;i<8;i++){const particle=new THREE.Mesh(geometry,material);particle.userData.angle=i*Math.PI/4;dust.add(particle);}
+  this.scene.add(dust);this.winDust=dust;dust.visible=false;
+  // Sample exact skinned bounds once on KO→victory, including translation, half-spin and peak jump.
+  // Adjacent samples are bracketed in frame(); no per-frame vertex walk.
+  f.celebrationFrames=[0,250,500,750,850,900,950,1050,1300,1600,2000].map(time=>{
+   this.poseCelebration(f,time,false);return {time,box:fighterBounds(f.holder)};
+  });
+  // Reduced motion can be toggled at any point: its audience-facing pose must be in every bracket.
+  this.poseCelebration(f,1000,true);f.reducedCelebrationBox=fighterBounds(f.holder);
+  this.poseCelebration(f,0);
+ }
+ poseCelebration(f,elapsed,reduced=this.motion.matches){
+  f.celebrationTime=THREE.MathUtils.clamp(elapsed,0,CELEBRATION_DURATION);
+  const t=f.celebrationTime/CELEBRATION_DURATION;
+  for(const [bone,p,q,scale] of f.motionRig.pose){bone.position.copy(p);bone.quaternion.copy(q);bone.scale.copy(scale);}
+  restoreFighter(f);
+  f.holder.position.addScaledVector(f.winDirection,reduced?0:.34*ease(t/.25));
+  const flight=reduced?0:Math.sin(Math.PI*THREE.MathUtils.clamp((t-.25)/.40,0,1));
+  f.holder.position.y+=.72*flight;
+  f.holder.quaternion.copy(f.home.rotation).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),Math.PI*(reduced?0:ease((t-.25)/.40))));
+  // Complete the half-spin in the air; only the grounded settle turns toward the audience.
+  if(reduced||t>.65){
+   const audience=Math.atan2(this.camera.position.x-f.holder.position.x,this.camera.position.z-f.holder.position.z);
+   const forward=new THREE.Vector3(0,0,1).applyQuaternion(f.holder.quaternion);
+   const delta=THREE.MathUtils.euclideanModulo(audience-Math.atan2(forward.x,forward.z)+Math.PI,2*Math.PI)-Math.PI;
+   f.holder.rotateY(delta*(reduced?1:ease((t-.65)/.13)));
+  }
+  if(!reduced&&t<.25)for(const [i,side] of ['left','right'].entries()){
+   const step=plantedStep(.34*ease(t/.25),.34,i),goal=f.motionRig.feet[i].position.clone().addScaledVector(f.winDirection,step.distance);
+   goal.y+=step.lift;
+   solveLimb(f,side,'leg',goal,goal.clone().add(new THREE.Vector3(0,.35,-.2)),f.motionRig.feet[i].rotation);
+  }
+  const pose=reduced?1:ease((t-.56)/.09);
+  rigOffset(f,'chest',-.09*pose);rigOffset(f,'head',-.08*pose);
+  if(pose)for(const [i,side] of ['left','right'].entries()){
+   const sign=side==='left'?-1:1;
+   const hand=f.motionRig.hands[i].clone().lerp(new THREE.Vector3(sign*1.04,.68,.08),pose);
+   solveLimb(f,side,'arm',f.holder.localToWorld(hand),f.holder.localToWorld(new THREE.Vector3(sign*.65,1.0,-.18)));
+  }
+  if(pose)for(const [i,side] of ['left','right'].entries()){
+   const sign=side==='left'?-1:1,foot=f.root.getObjectByName(side+'foot');if(!foot)continue;
+   const goal=foot.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(sign*.18*pose,0,0).applyQuaternion(f.holder.quaternion));
+   goal.y=f.motionRig.feet[i].position.y;
+   solveLimb(f,side,'leg',goal,goal.clone().add(new THREE.Vector3(sign*.1,.35,-.15)));
+  }
+  if(this.winDust){
+   this.winDust.visible=!reduced&&t>=.65&&t<.91;
+   this.winDust.position.copy(f.home.position).addScaledVector(f.winDirection,.34);
+   for(const particle of this.winDust.children){const u=(t-.65)/.26,a=particle.userData.angle;
+    particle.position.set(Math.cos(a)*(.10+.42*u),.06+.18*u,Math.sin(a)*(.10+.42*u));particle.scale.setScalar(1-u);
+   }
   }
  }
  prepareFallen(f){
@@ -700,7 +810,7 @@ export class BattleWorld {
   const e=this.active;if(!e?.koStartedAt)return false;
   const loser=this.fighters[e.target];if(loser){this.poseFallen(loser,1);tintDefeated(loser,1);}this.finish(true);this.onComplete?.(e);return true;
  }
- finish(preserveKO=false){for(const f of Object.values(this.fighters)){if(preserveKO&&f===this.fighters[this.active?.target]){for(const [mesh,visible] of f.hiddenProps||[])mesh.visible=visible;f.hiddenProps=null;continue;}restoreHood(f);restoreGarment(f);for(const [mesh,visible]of f.hiddenProps||[])mesh.visible=visible;f.hiddenProps=null;restoreFighter(f);for(const {mesh,original} of f.koProps||[]){mesh.geometry.dispose();mesh.geometry=original;}f.koProps=null;f.sampledPose=null;f.koPose=null;f.koFloorLift=0;f.koLockedFloorLift=0;f.koBodyDrop=0;f.koHeadAdjustment=0;f.koCalibrated=false;f.koGroundChecks=0;if(f.koMaterials)tintDefeated(f,0);if(f.clip!=='defeat'){f.mixer.stopAllAction();f.current=null;f.clip=null;f.mixer.update(0);} }this.choreography=null;this.releasePoint=null;this.contactPoint=null;this.contactTop=null;this.propRotation=null;clearTimeout(this.fallbackTimer);if(this.fallbackRaf)cancelAnimationFrame(this.fallbackRaf);this.fallbackRaf=null;this.fallbackLabel?.remove();this.fallbackLabel=null;this.badge?.classList?.remove('ko-slam');if(this.container?.dataset){delete this.container.dataset.koPhase;delete this.container.dataset.koLoser;}this.selection=null;if(this.fx){this.scene?.remove(this.fx);release(this.fx);this.fx=null;}this.active=null;for(const [team,f]of Object.entries(this.fighters))if(f.clip!=='defeat'){this.play(team,'idle');f.mixer.update(0);}if(this.badge)this.badge.textContent='';if(this.canvas){this.canvas.dataset.camera='overview';delete this.canvas.dataset.action;}this.overview(true);if(this.renderer)this.renderer.shadowMap.needsUpdate=true;}
+ finish(preserveKO=false){for(const f of Object.values(this.fighters)){if(preserveKO&&f===this.fighters[this.active?.target]){for(const [mesh,visible] of f.hiddenProps||[])mesh.visible=visible;f.hiddenProps=null;continue;}restoreHood(f);restoreGarment(f);for(const [mesh,visible]of f.hiddenProps||[])mesh.visible=visible;f.hiddenProps=null;restoreFighter(f);for(const {mesh,original} of f.koProps||[]){mesh.geometry.dispose();mesh.geometry=original;}f.koProps=null;f.sampledPose=null;f.koPose=null;f.koFloorLift=0;f.koLockedFloorLift=0;f.koBodyDrop=0;f.koHeadAdjustment=0;f.koCalibrated=false;f.koGroundChecks=0;if(f.koMaterials)tintDefeated(f,0);if(f.clip!=='defeat'){f.mixer.stopAllAction();f.current=null;f.clip=null;f.mixer.update(0);} }if(this.winDust){this.scene?.remove(this.winDust);release(this.winDust);this.winDust=null;}for(const f of Object.values(this.fighters)){f.winDirection=null;f.celebrationFrames=null;f.reducedCelebrationBox=null;}this.choreography=null;this.releasePoint=null;this.contactPoint=null;this.contactTop=null;this.propRotation=null;clearTimeout(this.fallbackTimer);if(this.fallbackRaf)cancelAnimationFrame(this.fallbackRaf);this.fallbackRaf=null;this.fallbackLabel?.remove();this.fallbackLabel=null;this.badge?.classList?.remove('ko-slam','win-siuuu');if(this.container?.dataset){delete this.container.dataset.koPhase;delete this.container.dataset.koLoser;delete this.container.dataset.winPhase;}this.selection=null;if(this.fx){this.scene?.remove(this.fx);release(this.fx);this.fx=null;}this.active=null;for(const [team,f]of Object.entries(this.fighters))if(f.clip!=='defeat'){this.play(team,'idle');f.mixer.update(0);}if(this.badge)this.badge.textContent='';if(this.canvas){this.canvas.dataset.camera='overview';delete this.canvas.dataset.action;}this.overview(true);if(this.renderer)this.renderer.shadowMap.needsUpdate=true;}
  cancel(preserveTail=false){this.onCancel?.({preserveTail});this.events.reset();this.finish();for(const [t,f] of Object.entries(this.fighters))this.play(t,this.state?.teams[t].hp===0?'defeat':'idle');}
  disconnect(){this.cancel();if(this.state)this.events.consume(this.state);}
  clear(preserveTail=false){this.fallback=false;this.generation++;cancelAnimationFrame(this.raf);this.cancel(preserveTail);this.observer?.disconnect();for(const f of Object.values(this.fighters)){f.mixer.stopAllAction();f.mixer.uncacheRoot(f.root);}release(this.scene);this.renderer?.dispose();this.renderer?.forceContextLoss();this.canvas?.remove();this.badge?.remove();if(this.container)delete this.container.dataset.worldStatus;this.renderer=null;this.scene=null;this.fighters={};this.scope=null;this.camera=null;}
