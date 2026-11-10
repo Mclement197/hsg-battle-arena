@@ -1,0 +1,14 @@
+{
+  "name": "hsg-battle-arena-ci-tools",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.6"
+  },
+  "scripts": {
+    "lint": "biome lint --only=noDebugger --only=noUnreachable --only=noConstantCondition --only=noDuplicateObjectKeys ../../game/src ../../game/public/*.js ../../game/public/assets/audio/*.mjs"
+  }
+}

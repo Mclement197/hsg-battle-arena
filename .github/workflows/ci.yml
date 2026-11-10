@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  game:
+    name: Game checks (Node 22)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: game
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            game/package-lock.json
+            .github/ci-tools/package-lock.json
+      - name: Install locked game dependencies
+        run: npm ci
+      - name: Install locked static-analysis dependencies
+        run: npm ci --prefix ../.github/ci-tools
+      - name: Audit game dependencies
+        run: npm audit --audit-level=high
+      - name: Audit CI tooling dependencies
+        run: npm audit --prefix ../.github/ci-tools --audit-level=high
+      - name: Static syntax checks
+        run: find src -type f -name '*.mjs' -print0 | xargs -0 -n1 node --check && find public -type f \( -name '*.js' -o -name '*.mjs' \) -print0 | xargs -0 -n1 node --check
+      - name: Static analysis
+        run: npm --prefix ../.github/ci-tools run lint
+      - name: Tests and coverage summary
+        run: node --experimental-test-coverage --test-timeout=300000 --test test/*.test.mjs
+
+  secrets:
+    name: Full-history secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out full repository history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Download and verify Gitleaks CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=8.30.1
+          archive="gitleaks_${version}_linux_x64.tar.gz"
+          curl --fail --location --silent --show-error \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${version}/${archive}" \
+            --output "$RUNNER_TEMP/$archive"
+          echo '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  '"$RUNNER_TEMP/$archive" | sha256sum --check --status
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" version
+      - name: Scan every commit in fetched history
+        run: |
+          "$RUNNER_TEMP/gitleaks" git \
+            --redact --exit-code 1 \
+            --log-opts=--all \
+            "$GITHUB_WORKSPACE"
