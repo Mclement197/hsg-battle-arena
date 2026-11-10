@@ -917,7 +917,20 @@ if (typeof document !== 'undefined') (() => {
     stop: () => actionAudio?.stopActions()
   });
   battleWorld.onPresent = (event, frame) => actionCue.present(event, frame);
-  battleWorld.onCancel = options => actionCue.cancel(options);
+  const skipKOButton = $('skip-ko');
+  battleWorld.onKOStart = () => { skipKOButton.hidden = false; };
+  battleWorld.onKO = event => {
+    if (soundReady() && window.ArenaUI.connected && !document.hidden && presentation.pending.some(item => item.id === event.id) &&
+        actionAudio.play('ko', { soundKey: 'attack', actionId: 'ko:' + event.id })) event.koAudioAt = performance.now();
+  };
+  skipKOButton.addEventListener('click', () => {
+    const event = battleWorld.active, remaining = event?.koAudioAt ? Math.max(0, 220 - (performance.now() - event.koAudioAt)) : 0;
+    if (remaining) {
+      const generation = battleWorld.generation;skipKOButton.disabled = true;
+      setTimeout(() => { skipKOButton.disabled = false;if (battleWorld.generation === generation && battleWorld.active === event && !document.hidden) battleWorld.skipKO(); }, remaining);
+    } else if (battleWorld.skipKO()) skipKOButton.hidden = true;
+  });
+  battleWorld.onCancel = options => { skipKOButton.hidden = true;skipKOButton.disabled = false; actionCue.cancel(options); };
   document.addEventListener('visibilitychange', () => { if (document.hidden) actionCue.cancel(); });
   const battleStartCue = createBattleStartCue(cue, () => actionAudio?.stopPrebattle());
   let activeEffect, effectTimer;
@@ -980,7 +993,7 @@ if (typeof document !== 'undefined') (() => {
     },
     onConnection(status) {
       if (status !== 'connected') {
-        clearReactions();
+        skipKOButton.hidden = true;clearReactions();
         for (const id of ['host-reactions', 'player-reactions']) $(id).hidden = true;
         battleStartCue.reset(); actionCue.reset(); victoryCue.reset(); battleWorld.disconnect(); presentation.reset();
       }
@@ -1020,9 +1033,9 @@ if (typeof document !== 'undefined') (() => {
       visualCue(state); victoryCue(state);
     }
   }
-  battleWorld.onComplete = event => { actionCue.complete(event); if (presentation.complete(event.id)) paintState(); };
+  battleWorld.onComplete = event => { skipKOButton.hidden = true; actionCue.complete(event); if (presentation.complete(event.id)) paintState(); };
   battleWorld.onSkip = () => {
-    actionCue.cancel();
+    skipKOButton.hidden = true;actionCue.cancel();
     presentation.reset();
     if (client.state) { presentation.consume(client.state); paintState(); }
   };

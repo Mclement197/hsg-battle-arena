@@ -504,3 +504,20 @@ body[data-screen=battle] #host-reactions{flex:none;z-index:6;min-height:48px;pad
 .player-world .reaction-float{font-size:clamp(1rem,calc(1rem + var(--burst-grow,0rem)),1.7rem)}
 @media(prefers-reduced-motion:no-preference){.reaction-float{animation:reaction-rise 2s ease-out forwards}@keyframes reaction-rise{0%{opacity:0;transform:translateY(16px) scale(.7)}15%{opacity:1;transform:translateY(0) scale(1.12)}75%{opacity:1}100%{opacity:0;transform:translateY(-18px) scale(1)}}}
 @media(max-width:500px){.reaction-bar{gap:.15rem;padding:.2rem}.reaction-bar-label{display:none}.reaction-buttons{width:100%;justify-content:space-between}.reaction-buttons button{min-width:0;flex:1;font-size:1.15rem}.fight-stage>.reaction-floats{top:35%;width:35%;height:28%}.fight-stage>.reaction-floats[data-team=A]{left:3%}.fight-stage>.reaction-floats[data-team=B]{right:3%}}
+
+/* KO is a local presentation overlay, not a new game state. */
+.host-bar #skip-ko[hidden]{display:none!important}
+.host-bar #skip-ko{background:#b9e2ba;color:#071b15;border-radius:5px;padding-inline:12px;min-height:36px}
+.host-bar #skip-ko:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.world-action-label.ko-slam{left:50%;top:40%;bottom:auto;background:transparent;color:#ffe788;text-shadow:0 5px #171b1b,0 0 20px #b94338;font:900 clamp(4rem,15vw,10rem)/1 'Barlow Condensed',sans-serif;letter-spacing:.08em;transform:translate(-50%,-50%);pointer-events:none;animation:ko-slam 420ms cubic-bezier(.1,1.2,.35,1) both}
+.fight-stage[data-ko-phase] .battle-world-canvas,.player-world[data-ko-phase] .battle-world-canvas{animation:ko-shake 260ms ease-out}
+@keyframes ko-slam{0%{transform:translate(-50%,-90%) scale(2.3);opacity:0}55%{transform:translate(-50%,-50%) scale(.92);opacity:1}100%{transform:translate(-50%,-50%) scale(1);opacity:1}}
+@keyframes ko-shake{0%,100%{translate:0}20%,60%{translate:-6px 2px}40%,80%{translate:6px -2px}}
+@media(prefers-reduced-motion:reduce){.world-action-label.ko-slam,.fight-stage[data-ko-phase] .battle-world-canvas,.player-world[data-ko-phase] .battle-world-canvas{animation:none!important}}
+
+.fight-stage:not([data-world-status=ready])[data-ko-loser=A] .fighter-visual[data-team=A] .fighter-art,
+.fight-stage:not([data-world-status=ready])[data-ko-loser=B] .fighter-visual[data-team=B] .fighter-art,
+.player-world:not([data-world-status=ready])[data-ko-loser=A]+.player-preview [data-preview-team=A] img,
+.player-world:not([data-world-status=ready])[data-ko-loser=B]+.player-preview [data-preview-team=B] img{filter:grayscale(1);transform-origin:center bottom;animation:ko-portrait-fall 1.4s ease-in forwards}
+@keyframes ko-portrait-fall{0%,25%{transform:rotate(0)}50%{transform:rotate(20deg) translateY(8%)}100%{transform:rotate(85deg) translateY(12%) scale(.82)}}
+@media(prefers-reduced-motion:reduce){.fight-stage:not([data-world-status=ready])[data-ko-loser=A] .fighter-visual[data-team=A] .fighter-art,.fight-stage:not([data-world-status=ready])[data-ko-loser=B] .fighter-visual[data-team=B] .fighter-art,.player-world:not([data-world-status=ready])[data-ko-loser=A]+.player-preview [data-preview-team=A] img,.player-world:not([data-world-status=ready])[data-ko-loser=B]+.player-preview [data-preview-team=B] img{animation:none!important;transform:rotate(85deg) scale(.82)}}
