@@ -1,0 +1,12 @@
+{
+  "name": "afp-security-dashboard",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "scan": "node src/scan.mjs"
+  },
+  "dependencies": {
+    "acorn": "8.15.0"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "repository": "opengrep/opengrep-rules",
+  "commit": "f1d2b562b414783763fd02a6ed2736eaed622efa",
+  "rules": [
+    {
+      "path": "javascript/browser/security/eval-detected.yaml",
+      "sha256": "9f6d12dbcdb47679876d212e044ec6db9710d88b987e30c90dbdc10fca47dfc9"
+    },
+    {
+      "path": "javascript/browser/security/insecure-innerhtml.yaml",
+      "sha256": "13ed92c5ad04f4cfcc95f8db9b9c1ca2497c57098e92a834e7a9cef4e53cffa2"
+    },
+    {
+      "path": "javascript/lang/security/audit/dangerous-spawn-shell.yaml",
+      "sha256": "2b52766770929c4e96321acdc5890fdd11fb60fc6fd184cb04e2b2c4e066c248"
+    },
+    {
+      "path": "javascript/lang/security/audit/spawn-shell-true.yaml",
+      "sha256": "d8a4ee2ae2f29186c41c1fbb0786662c1989ae098d6f7b31c2fc28f0c7a7dd8d"
+    },
+    {
+      "path": "javascript/lang/security/audit/path-traversal/path-join-resolve-traversal.yaml",
+      "sha256": "aadf2c8e288b75b2dcdc2e4800de29280d6ba03df7ea894188d04ddefb1caaa0"
+    },
+    {
+      "path": "javascript/lang/security/audit/detect-redos.yaml",
+      "sha256": "e0c175abe6cff76a180bca411e2e05a861dbe1377996bf63a1eb0796e2fe30ce"
+    },
+    {
+      "path": "javascript/lang/security/audit/prototype-pollution/prototype-pollution-assignment.yaml",
+      "sha256": "6171d49c49c0c2daa8a9e91db10771e980c1247920c3f452db5ced71451c2333"
+    },
+    {
+      "path": "javascript/lang/security/audit/prototype-pollution/prototype-pollution-loop.yaml",
+      "sha256": "288b160126c76a88a3879bf169baba505d36df7b2e1a244a3d17df5fa0baa0eb"
+    },
+    {
+      "path": "javascript/lang/security/audit/hardcoded-hmac-key.yaml",
+      "sha256": "452a3f587d4fc43356bce49d9f0daf42e6d317fda064884daf509cb23a9c5dba"
+    },
+    {
+      "path": "javascript/lang/security/detect-insecure-websocket.yaml",
+      "sha256": "f6f5a78ecda093353ad3583583f8b2203ae589a9f3f889561eedcd73032f36ef"
+    }
+  ]
+}

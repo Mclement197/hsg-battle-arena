@@ -1,0 +1,11 @@
+# Scan and remediation acceptance requirements
+
+- Secret-scanner traversal must pass a real redacted synthetic positive control using the same anchored directory/report protocol; an empty walk must never masquerade as clean coverage.
+- Every expected source is explicitly ok/failed/unavailable. Missing or partial sources cannot earn a clean score or clear previous findings.
+- Keep all pinned rules and original source coverage. Known parser compatibility requires valid syntax, equivalent executable AST, retained static metadata, original UTF-8 location mapping and successful per-file second-pass inventory. Retain original failures. Never honor inline scanner suppression directives; no scanner-text-driven risk acceptance.
+- Preserve distinct occurrences, including multiple matches on one line and unaffected files. Deduplicate only exact rule/path/original spans. Store occurrence-aware incident keys.
+- Preflight all root ancestors and run/journal parents before any lock/write/chmod/scan. Use no-follow directory-descriptor anchoring and held child report descriptors. Reject symlinks, identity changes, hardlinked files, unsafe ownership and special files. Document same-OS-user limits; never claim path checks alone solve TOCTOU.
+- Fixed permission-only allowlist, one attempt, 100 edits, bounded inventory/file size, continuous exclusive lock. Preserve dirty work. Require tests and complete rescan. Journal before/after and roll back only unchanged own edits on failure. Unsupported security findings require private owner approval.
+- Publication contains no real home paths, operational job identity, credentials, active runtime posture or private evidence. Deployment-specific operations remain owner-local; public API is a nested allowlist with no raw artifact routes or mutations.
+- Scheduling comes from authenticated readback, not cron projections. Unknown/stale states must remain visible. A refresh mechanism is a separately authorized proposal; no scheduler changes or refresh evidence are synthesized here.
+- Independent review HOLD remains until containment and regression evidence are accepted. No live remediation, deployment, service restart or scheduler edit in this correction pass. Keep scoped coverage UI and real measurement labels intact.
