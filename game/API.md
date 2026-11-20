@@ -72,3 +72,37 @@ New starts in all modes return phase countdown, turn: null and prebattle: {start
 ### Cinematic presentation history
 
 Snapshots additionally include `recentResults`, the latest eight authoritative results in turn-number order (cleared on reset). Each result includes `actorCharacterId`, `targetTeam` and `targetHp` at resolution, alongside the existing result fields. This is bounded presentation history, not new mechanics or persisted replay storage. Clients baseline their first/reconnected snapshot, deduplicate by room/match/turn, and queue only subsequently unseen results. `arenaId` remains the authoritative room-selected venue shared by all participants.
+
+
+## Optional read-only admin overview
+
+This separate observer surface is disabled unless a nonempty `ADMIN_KEY` is present **when the server starts**. Disabled admin routes return 404 (existing transport/IP safety limits still apply). Changing the environment of an already-running process does not rotate its key. No public navigation links are added.
+
+- `GET /game/admin/` serves the standalone login shell from `public/admin.html`, with `/game/admin.js` and `/game/admin.css`. The shell/assets contain no room data or key and do not require authorization; all three routes are disabled together. They retain the normal static allowlist, size, path and symlink checks. Direct `/game/admin.html` is not a route.
+- `GET /game/api/admin/overview` requires exactly one `Authorization: Bearer ADMIN_KEY` header. No cookies, room tokens or query-string credentials authenticate it; any API query string is rejected with 400. Only GET is supported. Browser requests retain the existing same-origin/cross-site restrictions; no CORS is enabled.
+- Missing/malformed/wrong credentials return 401. Per validated client IP (socket IP by default, existing explicit trusted-Cloudflare rules when enabled), ten failed authentications in a sliding 60-second window return 401 and activate a five-minute block. Subsequent attempts, **including correct credentials**, return 429 with remaining whole seconds rounded up in `Retry-After`. Successful authentication outside a block clears prior failures. This limiter is independent of room quotas; admin requests also retain anonymous all-request IP limits. Its client map is capped at the existing IP-bucket limit (4096); saturation rejects new identities with 429 rather than evicting active blocks. Unused expired entries are pruned. State is memory-only and resets on restart.
+- The startup key and each supplied bearer are SHA-256 hashed; authentication compares only fixed-size digests with Node's constant-time comparison. No key, digest, authorization header or participant data is logged or echoed.
+- All admin responses, including errors and static assets, use `Cache-Control: no-store`. The key grants no gameplay role or action and is never passed into room authentication. It must be independent of room capabilities.
+
+The exact success response is an explicit allowlist, **not** a room snapshot:
+
+```json
+{
+  "serverNow": 100000,
+  "summary": {"activeRooms": 1, "runningBattles": 0, "playersOnline": 0, "roomsUsed": 1, "roomCapacity": 50},
+  "rooms": [{
+    "roomCode": "K7MP", "mode": "groups", "phase": "lobby", "turnNumber": null,
+    "fighters": {
+      "A": {"characterId": null, "hp": 100, "maxHp": 100},
+      "B": {"characterId": null, "hp": 100, "maxHp": 100}
+    },
+    "playerCount": 0
+  }]
+}
+```
+
+`activeRooms` counts retained nonfinished rooms; `runningBattles` includes countdown and running. `roomsUsed` includes every retained room, finished or not; `roomCapacity` reports the Arena's actual limit (default 50). `playersOnline` counts connected human seats once each, not streams: multiple tabs do not multiply a seat. Friend's playing host counts; Bot counts only its human A seat when its host has an active stream, never the internal bot B. Nonplaying Groups/legacy presenters do not count. `playerCount` counts human seats including disconnected seats, excluding bot B. There is no account identity across rooms; a human occupying distinct seats counts per seat. No IDs, nicknames, IPs, capabilities, votes, results or credentials appear in the DTO.
+
+Phases are `lobby|countdown|running|finished`; modes retain existing `online|groups|friend|bot` values. `turnNumber` is null before battle, the current turn while running, and the final resolved turn when finished. Unselected `characterId` is null. Display names belong to the public fighter table, not the API. Stable ordering groups running/countdown first, then lobby, then finished; creation/insertion order is preserved inside each group.
+
+Overview reads do not touch TTLs, advance turns, open streams, broadcast or modify gameplay. They observe rooms retained at that instant; the normal server sweep (100ms by default) remains responsible for turn advancement and expired-room removal. With injected `autoTick:false`, tests must call `game.tick()` to exercise normal expiry. Poll from the standalone frontend every two seconds; no admin SSE endpoint exists.
