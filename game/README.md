@@ -143,8 +143,17 @@ An independent read-only overview can be enabled with the startup environment va
 ADMIN_KEY='<ADMIN_KEY>' npm start
 ```
 
-Open the private standalone `/game/admin/` path directly after UI integration; there are no public game-menu links. The login shell is not secret; room data requires a bearer-authenticated GET to `/game/api/admin/overview`. The UI polls every two seconds and resolves fighter IDs through public display-name data. No game-control API is authorized by this key, and no participant names, votes, IPs or game capabilities are returned. See API.md for the exact DTO, human-seat counts, five-minute failed-auth blocks and trusted-IP rules.
+Open the private standalone `/game/admin/` path directly after deployment; there are no public game-menu links. The login shell is not secret; room data requires a bearer-authenticated GET to `/game/api/admin/overview`. The UI polls every two seconds and resolves fighter IDs through public display-name data. No game-control API is authorized by this key, and no participant names, votes, IPs or game capabilities are returned. See API.md for the exact DTO, human-seat counts, five-minute failed-auth blocks and trusted-IP rules.
 
 Implementation reuses the existing HTTP server, Arena state and static-file protections, plus Node crypto only (no new dependency, service, account, persistence or SSE). Admin reads never keep rooms alive or advance gameplay; normal tick/expiry handling remains unchanged. Any later backend deployment/key rotation needs an explicitly approved restart and a room-free window because rooms are memory-only. This change performs no deployment or real-key setup.
 
 QA can inject a **fake** `adminKey` into `createGameServer` with the existing deterministic `Arena({now,pick})`, `autoTick:false` and `game.tick()` fixtures in `test/http.test.mjs`. `src/admin.mjs` exports the pure DTO builder and bounded authentication gate for targeted unit tests. Existing backend regression entry point: `node --test test/engine.test.mjs test/http.test.mjs`. Use temporary static fixtures for route/symlink checks; real keys and live rooms are unnecessary.
+
+Admin verification (fake credentials only):
+
+```sh
+node --test test/admin.test.mjs test/engine.test.mjs test/http.test.mjs test/profiles-modes.test.mjs
+PLAYWRIGHT_MODULE=/path/to/playwright-core/index.mjs CHROMIUM_EXECUTABLE=/path/to/chrome node test/admin-browser.mjs
+```
+
+The browser harness uses mocked overview data and checks login, tab storage/logout, polling/backoff, masking, display names, empty state and responsive layouts. Backend tests exercise real HTTP authentication and sanitized room responses. Polls have a ten-second total request/body deadline and show stale/reconnecting status on failure. Deployment remains pending a confirmed room-free restart window and private operator key setup.

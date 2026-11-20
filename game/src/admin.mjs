@@ -22,13 +22,25 @@ export function createAdminAuth(key, { now, maxClients }) {
     const error = new GameError(429, 'admin_rate_limit', 'Too many admin authentication attempts');
     error.retryAfter = seconds; throw error;
   }
-  return { prune, authenticate(req, ip) {
+  function retryAfter(ip) {
     prune();
     const time = now();
-    let entry = clients.get(ip);
-    if (entry?.blockedUntil > time) limited(Math.ceil((entry.blockedUntil - time) / 1000));
+    const entry = clients.get(ip);
+    if (entry?.blockedUntil > time) return Math.ceil((entry.blockedUntil - time) / 1000);
     // Never evict active blocks to admit new identities: bounded and fail closed.
-    if (!entry && clients.size >= maxClients) limited(60);
+    if (!entry && clients.size >= maxClients) {
+      let availableAt = Infinity;
+      for (const client of clients.values())
+        availableAt = Math.min(availableAt, Math.max(client.blockedUntil, client.failures.at(-1) + WINDOW_MS));
+      return Math.max(1, Math.ceil((availableAt - time) / 1000));
+    }
+    return 0;
+  }
+  return { prune, retryAfter, authenticate(req, ip) {
+    const wait = retryAfter(ip);
+    if (wait) limited(wait);
+    const time = now();
+    let entry = clients.get(ip);
     const occurrences = req.rawHeaders.filter((_, i) => i % 2 === 0 && req.rawHeaders[i].toLowerCase() === 'authorization').length;
     const supplied = /^Bearer ([^\s]+)$/i.exec(req.headers.authorization ?? '')?.[1];
     const matches = timingSafeEqual(expected, digest(supplied ?? ''));

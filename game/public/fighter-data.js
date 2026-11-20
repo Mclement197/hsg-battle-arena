@@ -15,6 +15,12 @@ export const FIGHTER_PROFILES = Object.freeze({
   'bad-teacher': profile('The gatekeeper · defensive pressure', 22, 66, 9, 34)
 });
 export const LEGACY_STATS = Object.freeze({ attack: 20, defend: 50, heal: 15, special: 30 });
+// Presentation names from CHARACTER_THEMES in app.js, without gameplay side effects.
+export const FIGHTER_DISPLAY_NAMES = Object.freeze({
+  'luca-di-grazia': 'Luca Di Grazia', 'free-rider': 'Free rider in group project',
+  'tryhard': 'Tryhard', 'assessment-hoodie': 'Assessment student',
+  'trischli-warrior': 'Trischli warrior', 'bad-teacher': 'Bad teacher'
+});
 export function fighterStats(id) { return Object.hasOwn(FIGHTER_PROFILES, id || '') ? FIGHTER_PROFILES[id].stats : LEGACY_STATS; }
 export function strengthScore(id) { return Object.entries(fighterStats(id)).reduce((sum, [key, value]) => sum + value / STAT_META[key].max, 0); }
 export function moveDescription(stats, move) {

@@ -193,12 +193,22 @@ export function createGameServer({ arena, publicOrigin = 'http://127.0.0.1:3210'
         candidate.requestRates ??= new Map();
         consume(candidate.requestRates, quotaViewer.player?.id ?? 'host', limits.requestsPerMinute, arena.now());
       } else {
+        const rejectQuota = (code, message, availableAt) => {
+          const error = new GameError(429, code, message);
+          error.retryAfter = Math.max(1, Math.ceil((availableAt - arena.now()) / 1000),
+            req.method === 'GET' && pathname === '/game/api/admin/overview' ? adminAuth?.retryAfter(ip) ?? 0 : 0);
+          throw error;
+        };
         ipEntry = ips.get(ip);
         if (!ipEntry || arena.now() - ipEntry.since >= MINUTE) {
-          if (!ipEntry && ips.size >= limits.ipBuckets) fail(429, 'rate_capacity', 'Too many clients; retry in a minute');
+          if (!ipEntry && ips.size >= limits.ipBuckets) {
+            let availableAt = Infinity;
+            for (const entry of ips.values()) availableAt = Math.min(availableAt, entry.since + MINUTE);
+            rejectQuota('rate_capacity', 'Too many clients; retry in a minute', availableAt);
+          }
           ipEntry = { since: arena.now(), count: 0, creates: 0 }; ips.set(ip, ipEntry);
         }
-        if (ipEntry.count >= limits.requestsPerMinute) fail(429, 'rate_limit', 'Too many requests; retry in a minute');
+        if (ipEntry.count >= limits.requestsPerMinute) rejectQuota('rate_limit', 'Too many requests; retry in a minute', ipEntry.since + MINUTE);
         ipEntry.count++;
       }
       if (adminPath && !adminAuth) fail(404, 'not_found', 'Not found');
