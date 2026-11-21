@@ -78,3 +78,7 @@ Snapshots expose the current room toggle and a transient `reactions.recent` queu
 ### Cinematic presentation history
 
 Snapshots additionally include `recentResults`, the latest eight authoritative results in turn-number order (cleared on reset). Each result includes `actorCharacterId`, `targetTeam` and `targetHp` at resolution, alongside the existing result fields. This is bounded presentation history, not new mechanics or persisted replay storage. Clients baseline their first/reconnected snapshot, deduplicate by room/match/turn, and queue only subsequently unseen results. `arenaId` remains the authoritative room-selected venue shared by all participants.
+
+### Knockout presentation timing (client only)
+
+A live, newly consumed result with authoritative `targetHp: 0` can append a bounded 2000 ms K.O. presentation after its normal move duration. The client holds its displayed finished phase/winner until presentation completes; the server is already finished and remains authoritative. Existing `recentResults`/room/match/turn deduplication applies: first/reconnected snapshots are history, not a request to replay a knockout. Local skip/cancel does not send a mutation or change HP, winner, turn, deadlines or room state. Reduced-motion and non-WebGL modes preserve the completion contract. No new endpoint, snapshot field or timing authority is introduced.

@@ -85,6 +85,12 @@ During a running multiplayer battle, players can send six transient reactions: �
 
 The browser maps authoritative lastResult moves to four bounded CSS effects in public/app.js and public/styles.css: opponent slash for attack, actor shield for defend, actor healing glow for heal, and opponent energy burst for special. Presenter effects overlay the affected fighter; phone and victory screens show a compact result stamp where the opposing fighter is not displayed. Votes and local timer expiry never trigger effects. First snapshots on join/reconnect are history; room/match/turn-number deduplication consumes repeat snapshots. Effects clean up after 850 ms; reduced-motion mode uses a stationary fading cue. No new assets or dependencies.
 
+### Knockout presentation (staging; not yet deployed)
+
+A newly observed authoritative zero-HP result completes its winning move, then holds the shared host/player battle view for a two-second K.O. tail before the existing victory screen and victory cue. The defeated fighter transitions through knees to a flat, greyed-out pose; reduced motion uses a stationary fallen pose and label. The non-WebGL fallback retains the same bounded completion delay. The presenter’s **Skip K.O.** button completes only this screen’s presentation, never resets the room or changes the winner. Reset, disconnect, leaving the view and hidden-page handling cancel or consume pending presentation rather than replaying historical results.
+
+The K.O. cue reuses the existing generic attack sample through the SFX path, with current mute/readiness/visibility gates. No audio assets, sound maps, combat rules, API fields, dependencies or server routes are added. Static frontend refresh is required after an approved release; this staging description is not deployment or six-fighter visual sign-off.
+
 ### Character-themed resolved cues (integrated roster)
 
 Presentation definitions in `public/app.js` cover Luca Di Grazia (chalk/book), free rider (copied notes/credit), tryhard (formula/textbook), assessment hoodie (storm/luck), Trischli warrior (disco/wristband, no strobe), and bad teacher (red pen/exam/FAILED) for all four moves. The actor's theme colors, illustrated vector mark and per-move caption decorate the existing attack/defend/heal/special placement. The old generic effects remain the fallback; audio and game rules are unchanged. Motion is one-shot, clears after 850 ms, and becomes stationary with reduced motion.

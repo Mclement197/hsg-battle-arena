@@ -2,6 +2,10 @@ import * as THREE from './vendor/three.module.js';
 import { loadModel, modelFor, release } from './characters.js?v=20261018-previews';
 import { ARENA_WORLDS, BattleEvents, actionSoundTiming } from './battle-contract.js?v=20261020-action-sync-current1';
 const v = a => new THREE.Vector3(...a);
+export const KO_DURATION = 2000;
+export function koPhase(ms){return ms<350?'stagger':ms<850?'knees':ms<1460?'fall':'flat';}
+
+
 const ease = t => { t = THREE.MathUtils.clamp(t,0,1); return t*t*(3-2*t); };
 
 // Analytic timeline (not accumulated lerps): identical framing at 15/30/60 Hz and zero cut on return.
@@ -37,6 +41,29 @@ export function selectionCamera(config, team = 'A', aspect = 1.6) {
  position.z -= THREE.MathUtils.lerp(.8,.3,portrait);
  position.y -= .35;
  return { position, look: v(config.look), phase: 'selection-' + team };
+}
+
+export function fighterBounds(root) {
+ const bounds=new THREE.Box3(),point=new THREE.Vector3(),base=new THREE.Vector3(),bones=new Map();
+ root.updateWorldMatrix(false,true);
+ root.traverse(mesh=>{
+  const geometry=mesh.geometry,positions=geometry?.attributes.position;if(!positions)return;
+  if(mesh.isInstancedMesh||positions.isGLBufferAttribute){bounds.union(new THREE.Box3().setFromObject(mesh,true));return;}
+  const indices=geometry.attributes.skinIndex,weights=geometry.attributes.skinWeight;
+  const skinned=mesh.isSkinnedMesh&&indices&&weights&&!geometry.morphAttributes.position?.length;
+  let matrices;if(skinned){matrices=bones.get(mesh.skeleton);if(!matrices){matrices=mesh.skeleton.bones.map((bone,i)=>new THREE.Matrix4().multiplyMatrices(bone.matrixWorld,mesh.skeleton.boneInverses[i]).elements);bones.set(mesh.skeleton,matrices);}}
+  for(let i=0;i<positions.count;i++){
+   if(skinned){
+    base.fromBufferAttribute(positions,i).applyMatrix4(mesh.bindMatrix);point.set(0,0,0);
+    for(let j=0;j<4;j++){const weight=weights.getComponent(i,j);if(!weight)continue;const m=matrices[indices.getComponent(i,j)],x=base.x,y=base.y,z=base.z,divisor=1/(m[3]*x+m[7]*y+m[11]*z+m[15]);
+     point.x+=weight*(m[0]*x+m[4]*y+m[8]*z+m[12])*divisor;
+     point.y+=weight*(m[1]*x+m[5]*y+m[9]*z+m[13])*divisor;
+     point.z+=weight*(m[2]*x+m[6]*y+m[10]*z+m[14])*divisor;
+    }point.applyMatrix4(mesh.bindMatrixInverse);
+   }else if(mesh.isMesh)mesh.getVertexPosition(i,point);else point.fromBufferAttribute(positions,i);
+   bounds.expandByPoint(point.applyMatrix4(mesh.matrixWorld));
+  }
+ });return bounds;
 }
 
 // Fit the *animated* cast (including wings, raised hands and props), not just the bind pose.
@@ -148,6 +175,50 @@ export function createMoveProps(label,color=0xffcf63) {
 
 function rigOffset(f,name,x=0,y=0,z=0){const bone=f.root.getObjectByName(THREE.PropertyBinding.sanitizeNodeName(name));if(bone)bone.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(x,y,z))).normalize();}
 function restoreFighter(f){if(!f?.home)return;f.holder.position.copy(f.home.position);f.holder.quaternion.copy(f.home.rotation);f.holder.scale.copy(f.home.scale);}
+
+function tintDefeated(f,amount){
+ if(!f.koMaterials){f.koMaterials=[];f.root.traverse(o=>{if(o.isMesh)for(const m of Array.isArray(o.material)?o.material:[o.material])if(m?.color&&!f.koMaterials.some(x=>x[0]===m))f.koMaterials.push([m,m.color.clone()]);});}
+ for(const [m,color] of f.koMaterials)m.color.copy(color).lerp(new THREE.Color(0x777777),amount*.8);
+}
+function keepKOPropsGrounded(f,amount){
+ if(f.characterId!=='free-rider'||!f.koBodyDrop)return;
+ if(!f.koProps){f.koProps=[];f.root.traverse(mesh=>{
+  if(!mesh.isSkinnedMesh||!['warm note paper','ink charcoal'].includes(mesh.material?.name))return;
+  const original=mesh.geometry,indices=original.attributes.skinIndex,weights=original.attributes.skinWeight,root=mesh.skeleton.bones.findIndex(b=>b.name==='root');
+  if(root<0||!indices||!weights)return;
+  const vertices=[];for(let i=0;i<indices.count;i++)if([0,1,2,3].every(j=>weights.getComponent(i,j)<.0001||indices.getComponent(i,j)===root))vertices.push(i);
+  if(!vertices.length)return;
+  mesh.geometry=original.clone();f.koProps.push({mesh,original,vertices});
+ });}
+ const lift=f.koBodyDrop*amount/f.root.scale.y;
+ for(const {mesh,original,vertices}of f.koProps){const source=original.attributes.position,target=mesh.geometry.attributes.position;
+  for(const i of vertices)target.setY(i,source.getY(i)+lift);
+  target.needsUpdate=true;mesh.geometry.computeBoundingBox();mesh.geometry.computeBoundingSphere();
+ }
+}
+function koBodyContact(f){
+ const low={spine:Infinity,chest:Infinity,head:Infinity,lefttoe:Infinity,righttoe:Infinity,leftshin:Infinity,rightshin:Infinity};
+ const body=/faded teal|shirt mustard|club plum satin|brown tweed|HSG forest green|warm ivory|skin|hair|peach/i;
+ const point=new THREE.Vector3();f.holder.updateMatrixWorld(true);
+ f.root.traverse(mesh=>{if(!mesh.isSkinnedMesh||!mesh.visible||!body.test(Array.isArray(mesh.material)?mesh.material.map(m=>m.name).join(' '):mesh.material?.name||''))return;
+  mesh.skeleton.update();const geometry=mesh.geometry,weights=geometry.attributes.skinWeight,indices=geometry.attributes.skinIndex;
+  const drawn=geometry.index?.array||Array.from({length:weights.count},(_,i)=>i);
+  for(const i of drawn){let strongest=-1,bone;for(let k=0;k<4;k++)if(weights.getComponent(i,k)>strongest){strongest=weights.getComponent(i,k);bone=mesh.skeleton.bones[indices.getComponent(i,k)]?.name;}
+   if(!(bone in low))continue;mesh.getVertexPosition(i,point).applyMatrix4(mesh.matrixWorld);low[bone]=Math.min(low[bone],point.y);
+  }
+ });return low;
+}
+function fallenPose(f,amount){
+ if(!f.koPose)return;
+ for(const [i,[bone,p,q,scale]] of f.koPose.entries()){const neutral=f.neutralPose?.[i];bone.position.copy(p);bone.quaternion.copy(q);bone.scale.copy(scale);if(neutral){bone.position.lerp(neutral[1],amount);bone.quaternion.slerp(neutral[2],amount);bone.scale.lerp(neutral[3],amount);}}
+ const joint=(name,x)=>{const bone=f.root.getObjectByName(name);if(bone)bone.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),x*amount));};
+ joint('pelvis',f.characterId==='free-rider'?1.5:1.2);joint('spine',f.characterId==='free-rider'?0:.2);joint('chest',.36);joint('head',-.85+(f.koHeadAdjustment||0));
+ for(const side of ['left','right']){joint(side+'thigh',f.characterId==='free-rider'?.3:.5);joint(side+'shin',f.characterId==='free-rider'?-.15:.25);joint(side+'upperarm',f.characterId==='free-rider'?.55:1.08);joint(side+'forearm',f.characterId==='free-rider'?-1.15:.85);}
+ // Once the anatomical support is solved, late accessory bounds must not re-lift the body.
+ f.holder.position.copy(f.home.position);f.holder.position.y+=amount*((f.koCalibrated?f.koLockedFloorLift:f.koFloorLift||0)-(f.koBodyDrop||0));
+ keepKOPropsGrounded(f,amount);
+}
+
 
 // Animate the actual authored shell (including embroidery, cuffs and hood), never a second jacket.
 // The fitted undershirt/bare arms remain independently weighted beneath it in the native asset.
@@ -418,11 +489,12 @@ export class BattleWorld {
     const other=v(world.fighters[1-i]);holder.rotation.y=Math.atan2(other.x-holder.position.x,other.z-holder.position.z);
     root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=false;o.frustumCulled=false;}});
     this.scene.add(holder);const mixer=new THREE.AnimationMixer(root),actions=new Map(gltf.animations.map(c=>[c.name,mixer.clipAction(c)]));
-    this.fighters[team]={root,holder,mixer,actions,clip:null,home:{position:holder.position.clone(),rotation:holder.quaternion.clone(),scale:holder.scale.clone()}};
+    this.fighters[team]={root,holder,mixer,actions,characterId:state.teams[team].characterId,clip:null,home:{position:holder.position.clone(),rotation:holder.quaternion.clone(),scale:holder.scale.clone()}};
     isolateHeldAccessories(this.fighters[team]);
     this.fighters[team].envelope=fighterEnvelope(this.fighters[team]);
+    this.fighters[team].neutralPose=captureMotionRig(this.fighters[team]).pose;
     this.play(team,state.teams[team].hp===0?'defeat':'idle');
-    if(state.teams[team].hp===0)mixer.update(1.5);
+    if(state.teams[team].hp===0){mixer.update(1.5);this.prepareFallen(this.fighters[team]);this.poseFallen(this.fighters[team],1);tintDefeated(this.fighters[team],1);}
    }
    this.renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'low-power'});this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.25));
    this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.autoUpdate=false;this.renderer.shadowMap.needsUpdate=true;this.renderer.shadowMap.type=THREE.PCFShadowMap;this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;
@@ -435,13 +507,23 @@ export class BattleWorld {
    this.fallback=false;
    let last=performance.now();const tick=now=>{if(generation!==this.generation)return;this.raf=requestAnimationFrame(tick);if(document.hidden||now-last<1000/30)return;const dt=Math.min((now-last)/1000,.25);last=now;
     for(const [team,f] of Object.entries(this.fighters))if(!this.motion.matches&&team!==this.active?.actor)f.mixer.update(dt);
+    // KO dedup: existing BattleEvents consumes each authoritative result once per room/match.
     if(!this.active&&this.events.pending.length)this.begin(this.events.pending.shift(),now);
     const presentationNow=this.active?this.presentationTime(now):now;
     if(this.active)this.animate(presentationNow);else this.idleCamera(now);
+    for(const [team,f] of Object.entries(this.fighters))if(f.koCalibrated&&f.koGroundChecks<3&&
+      (this.active?.koStartedAt ? team===this.active.target && (this.motion.matches || performance.now()-this.active.koStartedAt>=1460) : this.state?.teams[team].hp===0)){
+      f.koGroundChecks++;
+      if(f.koGroundChecks>=2){
+       // The body contact was calibrated on actual chest/belly skin. A foot, wing,
+       // or dropped prop below that plane must never lift the whole torso again.
+       this.poseFallen(f,1);this.renderer.shadowMap.needsUpdate=true;
+      }
+    }
     if(this.active&&!this.motion.matches)this.renderer.shadowMap.needsUpdate=true;
     if(this.renderer&&this.scene){
       this.renderer.render(this.scene,this.camera);
-      if(this.active)this.onPresent?.(this.active,{elapsed:presentationNow-this.active.startedAt,tableau:this.motion.matches});
+      if(this.active){this.onPresent?.(this.active,{elapsed:presentationNow-this.active.startedAt,tableau:this.motion.matches});if(this.active.koStartedAt&&!this.active.koSoundDone&&!document.hidden){this.active.koSoundDone=true;if(presentationNow-this.active.koStartedAt<=180)this.onKO?.(this.active);}}
     }
    };this.raf=requestAnimationFrame(tick);
   } catch(error) {
@@ -464,7 +546,7 @@ export class BattleWorld {
   if(result)this.container.style.setProperty('--battle-results-height',result.offsetHeight+'px');
   const controls=this.container.querySelector('.solo-controls');
   if(controls)this.container.style.setProperty('--battle-controls-height',controls.hidden?'0px':controls.offsetHeight+'px');
-  if(this.active&&this.camera)this.direct((performance.now()-this.active.startedAt)/this.active.ability.duration);else this.idleCamera(performance.now());
+  if(this.active&&this.camera)this.active.koStartedAt?this.overview(true):this.direct((performance.now()-this.active.startedAt)/this.active.ability.duration);else this.idleCamera(performance.now());
  }
  play(team,clip){const f=this.fighters[team],a=f?.actions.get(clip);if(!a)return;if(clip==='idle'&&f.clip==='idle')return;
   if(!f.onClipFinished){f.onClipFinished=event=>{if(event.action===f.current&&f.clip==='hit')this.play(team,'idle');};f.mixer.addEventListener('finished',f.onClipFinished);}
@@ -533,9 +615,14 @@ export class BattleWorld {
   const event=this.events.pending.shift();this.active=event;
   if(this.container){this.fallbackLabel=document.createElement('span');this.fallbackLabel.className='world-action-label';this.fallbackLabel.textContent=event.ability.label;this.container.append(this.fallbackLabel);}
   const generation=this.generation;
-  if(this.container)this.fallbackRaf=requestAnimationFrame(()=>{if(generation===this.generation&&this.active===event&&!document.hidden)this.onPresent?.(event,{fallback:true});});
+  if(this.container)this.fallbackRaf=requestAnimationFrame(()=>{if(generation===this.generation&&this.active===event&&!event.koStartedAt&&!document.hidden)this.onPresent?.(event,{fallback:true});});
   // Same completion contract and ability duration without a WebGL renderer.
-  this.fallbackTimer=setTimeout(()=>{this.finish();this.onComplete?.(event);this.pumpFallback();},event.ability.duration);
+  this.fallbackTimer=setTimeout(()=>{
+   if(generation!==this.generation||this.active!==event||(typeof document!=='undefined'&&document.hidden))return;
+   if(event.defeated){if(this.container?.dataset)this.container.dataset.koLoser=event.target;if(this.fallbackLabel){this.fallbackLabel.textContent='K.O.!';this.fallbackLabel.classList.add('ko-slam');}event.koStartedAt=performance.now();this.onKOStart?.(event);this.fallbackRaf=requestAnimationFrame(()=>{if(generation===this.generation&&this.active===event&&!document.hidden&&!event.koSoundDone&&performance.now()-event.koStartedAt<=180){event.koSoundDone=true;this.onKO?.(event);}});this.fallbackTimer=setTimeout(()=>{if(generation!==this.generation||this.active!==event||(typeof document!=='undefined'&&document.hidden))return;this.finish();this.onComplete?.(event);this.pumpFallback();},KO_DURATION);}
+   else{this.finish();this.onComplete?.(event);this.pumpFallback();}
+  },event.ability.duration);
+
  }
  begin(event,now){
   if(this.active)this.finish();
@@ -558,13 +645,62 @@ export class BattleWorld {
  }
  animate(now){
   const e=this.active;if(!e)return;
+  if(e.koStartedAt){
+   const target=this.fighters[e.target],elapsed=Math.max(0,now-e.koStartedAt);
+   this.poseKnockout(target,elapsed);
+   tintDefeated(target,this.motion.matches?1:ease(elapsed/1400));
+   this.container.dataset.koPhase=koPhase(elapsed);this.overview(true);
+   if(elapsed>=KO_DURATION){this.finish(true);this.onComplete?.(e);}return;
+  }
   const t=now===e.markerTime?e.markerPhase:THREE.MathUtils.clamp((now-e.startedAt)/e.ability.duration,0,1),target=this.fighters[e.target];
   this.choreography=choreograph(this,t);
   if(t>=e.ability.impact&&!e.hit){e.hit=true;if(e.actor!==e.target){this.play(e.target,e.defeated?'defeat':'hit');if(e.defeated)target.current?.setDuration(e.ability.duration*(1-e.ability.impact)/1000);if(this.motion.matches)target.mixer.update(e.defeated?1.5:.35);}}
   this.direct(t);
-  if(t>=1){if(e.defeated&&target.current){target.current.time=target.current.getClip().duration;target.mixer.update(0);}this.finish();this.onComplete?.(e);}
+  if(t>=1){
+   if(e.defeated){
+    if(target.current){target.current.time=target.current.getClip().duration;target.mixer.update(0);}
+    this.prepareFallen(target);e.koStartedAt=now;
+    this.badge.textContent='K.O.!';this.badge.classList.add('ko-slam');this.onKOStart?.(e);this.container.dataset.koPhase='stagger';
+    if(this.motion.matches){this.poseFallen(target,1);tintDefeated(target,1);}
+    this.fx.visible=false;this.choreography=null;this.overview(true);return;
+   }
+   this.finish();this.onComplete?.(e);
+  }
  }
- finish(){for(const f of Object.values(this.fighters)){restoreHood(f);restoreGarment(f);for(const [mesh,visible]of f.hiddenProps||[])mesh.visible=visible;f.hiddenProps=null;restoreFighter(f);f.sampledPose=null;if(f.clip!=='defeat'){f.mixer.stopAllAction();f.current=null;f.clip=null;f.mixer.update(0);} }this.choreography=null;this.releasePoint=null;this.contactPoint=null;this.contactTop=null;this.propRotation=null;clearTimeout(this.fallbackTimer);if(this.fallbackRaf)cancelAnimationFrame(this.fallbackRaf);this.fallbackRaf=null;this.fallbackLabel?.remove();this.fallbackLabel=null;this.selection=null;if(this.fx){this.scene?.remove(this.fx);release(this.fx);this.fx=null;}this.active=null;for(const [team,f]of Object.entries(this.fighters))if(f.clip!=='defeat'){this.play(team,'idle');f.mixer.update(0);}if(this.badge)this.badge.textContent='';if(this.canvas){this.canvas.dataset.camera='overview';delete this.canvas.dataset.action;}this.overview(true);if(this.renderer)this.renderer.shadowMap.needsUpdate=true;}
+ prepareFallen(f){
+  f.koPose=captureMotionRig(f).pose;f.mixer.stopAllAction();f.current=null;f.clip='defeat';
+  f.koFloorLift=0;f.koLockedFloorLift=0;f.koBodyDrop=0;f.koHeadAdjustment=0;f.koProps=null;f.koCalibrated=false;f.koGroundChecks=0;fallenPose(f,0);
+ }
+ poseKnockout(f,elapsed){
+  if(this.motion.matches){this.poseFallen(f,1);return;}
+  const fall=ease((elapsed-800)/600),kneel=ease((elapsed-200)/480)*(1-ease((elapsed-850)/550));
+  this.poseFallen(f,fall);
+  const joint=(name,angle)=>{const bone=f.root.getObjectByName(name);if(bone)bone.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),angle));};
+  joint('spine',.32*kneel+.12*(1-ease(elapsed/350)));
+  joint('chest',.18*kneel);joint('head',-.13*kneel);
+  for(const side of ['left','right']){joint(side+'thigh',(side==='left'?-1.17:-.8)*kneel);joint(side+'shin',2.23*kneel);}
+  f.holder.position.y-=.55*kneel;
+ }
+ poseFallen(f,amount){
+  if(amount>0&&!f.koCalibrated){
+   // Measure after the defeat mixer relinquishes its pose, not during its last update.
+   fallenPose(f,1);const low=fighterBounds(f.holder).min.y;
+   // Skinned bind offsets differ between loaded defeat poses and live mixer handoff.
+   f.koFloorLift=.1;fallenPose(f,1);const slope=(fighterBounds(f.holder).min.y-low)/.1;
+   f.koFloorLift=Math.max(-1.1,Math.min(.8,((this.config?.floor??0)-low+.025)/(Math.abs(slope)>.1?slope:1)));
+   fallenPose(f,1);const body=koBodyContact(f),floor=this.config?.floor??0;
+   f.koBodyDrop=THREE.MathUtils.clamp(Math.max(body.spine,body.chest)-floor-.035,0,.8);
+   // Native head bind poses are shared except the free-rider's lower prone profile.
+   f.koHeadAdjustment=f.characterId==='free-rider'?0:.3;
+   f.koLockedFloorLift=f.koFloorLift;f.koCalibrated=true;
+  }
+  fallenPose(f,amount);
+ }
+ skipKO(){
+  const e=this.active;if(!e?.koStartedAt)return false;
+  const loser=this.fighters[e.target];if(loser){this.poseFallen(loser,1);tintDefeated(loser,1);}this.finish(true);this.onComplete?.(e);return true;
+ }
+ finish(preserveKO=false){for(const f of Object.values(this.fighters)){if(preserveKO&&f===this.fighters[this.active?.target]){for(const [mesh,visible] of f.hiddenProps||[])mesh.visible=visible;f.hiddenProps=null;continue;}restoreHood(f);restoreGarment(f);for(const [mesh,visible]of f.hiddenProps||[])mesh.visible=visible;f.hiddenProps=null;restoreFighter(f);for(const {mesh,original} of f.koProps||[]){mesh.geometry.dispose();mesh.geometry=original;}f.koProps=null;f.sampledPose=null;f.koPose=null;f.koFloorLift=0;f.koLockedFloorLift=0;f.koBodyDrop=0;f.koHeadAdjustment=0;f.koCalibrated=false;f.koGroundChecks=0;if(f.koMaterials)tintDefeated(f,0);if(f.clip!=='defeat'){f.mixer.stopAllAction();f.current=null;f.clip=null;f.mixer.update(0);} }this.choreography=null;this.releasePoint=null;this.contactPoint=null;this.contactTop=null;this.propRotation=null;clearTimeout(this.fallbackTimer);if(this.fallbackRaf)cancelAnimationFrame(this.fallbackRaf);this.fallbackRaf=null;this.fallbackLabel?.remove();this.fallbackLabel=null;this.badge?.classList?.remove('ko-slam');if(this.container?.dataset){delete this.container.dataset.koPhase;delete this.container.dataset.koLoser;}this.selection=null;if(this.fx){this.scene?.remove(this.fx);release(this.fx);this.fx=null;}this.active=null;for(const [team,f]of Object.entries(this.fighters))if(f.clip!=='defeat'){this.play(team,'idle');f.mixer.update(0);}if(this.badge)this.badge.textContent='';if(this.canvas){this.canvas.dataset.camera='overview';delete this.canvas.dataset.action;}this.overview(true);if(this.renderer)this.renderer.shadowMap.needsUpdate=true;}
  cancel(preserveTail=false){this.onCancel?.({preserveTail});this.events.reset();this.finish();for(const [t,f] of Object.entries(this.fighters))this.play(t,this.state?.teams[t].hp===0?'defeat':'idle');}
  disconnect(){this.cancel();if(this.state)this.events.consume(this.state);}
  clear(preserveTail=false){this.fallback=false;this.generation++;cancelAnimationFrame(this.raf);this.cancel(preserveTail);this.observer?.disconnect();for(const f of Object.values(this.fighters)){f.mixer.stopAllAction();f.mixer.uncacheRoot(f.root);}release(this.scene);this.renderer?.dispose();this.renderer?.forceContextLoss();this.canvas?.remove();this.badge?.remove();if(this.container)delete this.container.dataset.worldStatus;this.renderer=null;this.scene=null;this.fighters={};this.scope=null;this.camera=null;}
