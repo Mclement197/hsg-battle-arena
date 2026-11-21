@@ -8,6 +8,21 @@ export const ABILITIES = Object.freeze({
  'trischli-warrior': entry('disco',0xff83e1,['DANCE OFF','WRISTBAND','SECOND WIND','DANCE FLOOR']),
  'bad-teacher': entry('redpen',0xff685b,['RED PEN','EXAM SHIELD','LATE CREDIT','FAILED'])
 });
+// Sound accents are seconds into the existing clips; phases refer to visible choreography, not server time.
+const soundTiming = (phase, accent) => Object.freeze({ phase, accent });
+export const GENERIC_ACTION_TIMING = Object.freeze({ attack: soundTiming(.59, 0), defend: soundTiming(.40, 0), heal: soundTiming(.59, .24), special: soundTiming(.59, .15) });
+export const NAMED_ACTION_TIMING = Object.freeze(Object.fromEntries(Object.entries({
+ 'luca-di-grazia': [[.59,.055],[.40,.04],[.59,.245],[.385,.16]],
+ 'free-rider': [[.59,.065],[.40,.035],[.59,.25],[.59,.17]],
+ 'tryhard': [[.59,.09],[.40,0],[.59,.21],[.59,.14]],
+ 'assessment-hoodie': [[.59,.055],[.43,.12],[.40,.075],[.59,.16]],
+ 'trischli-warrior': [[.58,.15],[.43,.13],[.53,.095],[.59,.17]],
+ 'bad-teacher': [[.59,.035],[.59,.095],[.59,.15],[.385,.16]]
+}).flatMap(([id, values]) => ['attack','defend','heal','special'].map((move, i) => [id + ':' + move, soundTiming(...values[i])]))));
+export function actionSoundTiming(move, soundKey = move) {
+ return (Object.hasOwn(NAMED_ACTION_TIMING, soundKey) && NAMED_ACTION_TIMING[soundKey]) || GENERIC_ACTION_TIMING[move];
+}
+export const actionEventId = (state, result) => state.roomId + ':' + state.match + ':' + (result.turnId ?? result.number);
 export const ARENA_WORLDS = Object.freeze({
  library: { model: './assets/arenas/library.glb', fighters: [[-2.3,0,2.5],[2.3,0,1.0]], overview: [0,3.0,8.0], look: [0,1,1.6], floor: 0 },
  trischli: { model: './assets/arenas/trischli.glb', fighters: [[-1.4,.012,-4.2],[1.3,.012,-6.4]], overview: [0,2.55,.2], look: [0,1,-5.3], floor: .012 }

@@ -2,6 +2,8 @@
 
 All paths start `/game`; use relative same-origin URLs. JSON request/response, no external assets/services. `POST` requires `Content-Type: application/json` and (when sent by a browser) `Origin` exactly matching configured `PUBLIC_ORIGIN`. Credentials are opaque bearer capabilities, never put them in URLs, QR codes, DOM, or logs. Store host and player tokens separately in browser session storage; a presenter token grants start/reset, never distribute it to students. Fetch SSE with `Authorization` (native EventSource cannot set that header).
 
+Room IDs for new rooms are **four uppercase easy-read characters**, drawn uniformly with Node crypto from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (no I/O/0/1). Codes are public join locators, **not passwords or host authorization**. All room routes accept either case; the browser trims surrounding whitespace and canonicalizes four-character codes to uppercase. Existing 12-character hex room IDs, deep links and session-storage keys remain accepted (canonical lowercase). New allocations retry collisions at most 32 times, then return 503 `room_code_exhausted` without replacing any room. Host/player capabilities remain independent 32-byte secrets (43 base64url characters).
+
 ## Endpoints
 
 - `POST /game/api/rooms`, body `{}` or `{mode:"friend"|"bot"|"groups"}` → **201** `{roomId, hostToken, joinUrl, qrUrl, state}`. Browser-only presenter creation; no CLI/account needed. `joinUrl` is `${PUBLIC_ORIGIN}/game/?room=ROOM_ID`, `qrUrl` is `/game/api/rooms/ROOM_ID/qr.svg`; neither contains a capability.
@@ -21,7 +23,7 @@ Unknown fields rejected on every POST. Empty bodies are not `{}`. Responses use 
 
 ```json
 {
-  "roomId":"12 lowercase hex characters",
+  "roomId":"4 uppercase easy-read characters (legacy: 12 lowercase hex)",
   "revision":3, "serverNow":1700000000000,
   "phase":"lobby", "match":0, "winner":null,
   "rules":{"turnMs":15000,"maxHp":100,"attack":20,"heal":15,"special":30,"specialCooldownOwnTurns":3},

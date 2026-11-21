@@ -138,3 +138,26 @@ test('transport retries with bounded delay and never regresses to older snapshot
   client.accept({ roomId: room, revision: 2, serverNow: Date.now() - 1 });
   assert.equal(client.state.revision, 3);
 });
+
+test('room entry normalizes short/legacy deep-link codes and preserves legacy storage keys', async t => {
+  const { roomCode } = await import('../public/app.js');
+  assert.equal(roomCode('  k7Mp  '), 'K7MP');
+  assert.equal(roomCode(' ABCDEF123456 '), 'abcdef123456');
+  for (const value of ['K7MP', 'k7mp', 'abcdef123456', 'ABCDEF123456']) assert.ok(validRoom(value));
+  for (const value of ['I0O1', 'K7M', 'K7MPP', '../K7MP']) assert.equal(validRoom(value), false);
+  const { fetcher, game } = await fixture(t);
+  const host = new ArenaClient({ fetcher, storage: storage() });
+  const phone = new ArenaClient({ fetcher, storage: storage() });
+  t.after(() => { host.stop(); phone.stop(); });
+  const room = await host.create(); assert.match(room.roomId, /^[A-HJ-NP-Z2-9]{4}$/);
+  await phone.join(' ' + room.roomId.toLowerCase() + ' ', 'Student');
+  assert.equal(phone.room, room.roomId);
+  assert.equal(phone.state.roomId, room.roomId);
+  const legacy = game.arena.create(); game.arena.rooms.delete(legacy.id);
+  legacy.id = 'abcdef123456'; game.arena.rooms.set(legacy.id, legacy);
+  const oldStore = storage(); oldStore.setItem('hsg-arena:v1:host:' + legacy.id, legacy.hostToken);
+  oldStore.setItem('hsg-arena:v1:active', JSON.stringify({ room: legacy.id, role: 'host' }));
+  const restored = new ArenaClient({ fetcher, storage: oldStore }); t.after(() => restored.stop());
+  assert.equal(await restored.resume(restored.remembered(roomCode('ABCDEF123456'))), true);
+  assert.equal(restored.state.roomId, legacy.id);
+});

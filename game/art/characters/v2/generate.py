@@ -54,11 +54,12 @@ def blended(t,names,positions):
 
 def tube(n,points,radii,m,names,centers,flat=1,N=16,times=None):
  # Multi-ring continuous skin: enough loops across each bend for blended weights.
- pts=[Vector(v) for v in points];v=[];f=[];ws=[]
+ pts=[Vector(v) for v in points];v=[];f=[];ws=[];previous=None
  for j,(p,r) in enumerate(zip(pts,radii)):
   axis=(pts[min(j+1,len(pts)-1)]-pts[max(0,j-1)]).normalized()
   ref=Vector((0,1,0)) if abs(axis.y)<.9 else Vector((1,0,0))
-  xx=axis.cross(ref).normalized();yy=axis.cross(xx).normalized()
+  # Parallel transport avoids the old reference-axis flip folding a sleeve inside out.
+  xx=axis.cross(ref).normalized() if previous is None else (previous-axis*previous.dot(axis)).normalized();yy=axis.cross(xx).normalized();previous=xx
   for i in range(N):
    ang=i*math.tau/N;v.append(tuple(p+xx*(r*math.cos(ang))+yy*(r*flat*math.sin(ang))));ws.append(blended(times[j] if times is not None else j/(len(pts)-1),names,centers))
  for j in range(len(pts)-1):
@@ -298,6 +299,9 @@ for i,(slug,title) in enumerate(zip(ids,names)):
  sc,col,rt=make_character(slug,title,i)
  repair_details(col,rt)
  rig,body=make_rig(sc,col,rt)
+ # Apply semantic scalp/garment attachment repairs to evaluated surfaces too.
+ from surface_repair import repair
+ repair(body)
  skinmeshes=[obj for obj in col.all_objects if obj.type=='MESH']
  for obj in skinmeshes:obj.hide_set(True)
  clips(rig)

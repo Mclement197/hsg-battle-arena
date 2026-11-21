@@ -2,6 +2,10 @@
 
 Authoritative Node HTTP + SSE backend with separately implemented browser UI in `public/`. A dedicated local origin is now deployed as the user service `afp-game.service` on `127.0.0.1:18892`, with the canonical public origin `https://afp.mclement.ch`. Local and public HTTPS end-to-end verification passed; the game is live at https://afp.mclement.ch/game/ . See [deployment evidence](../docs/game-deployment.md).
 
+## Room codes
+
+New Friend/Groups rooms display a **4-character room code**, for example `K7MP`. Type either case or scan the QR / open the join link. I, O, 0 and 1 are excluded. Existing 12-character codes and saved sessions remain accepted; the input retains its 12-character maximum for legacy links. This public code only allows joining, never presenter control: host/player bearer tokens remain unchanged. Room collision retries are bounded and never overwrite another room. Rate limits, TTLs and memory-only storage are unchanged; deploying backend changes requires a room-free service restart (rooms do not survive restart).
+
 ## Run
 
 Requires Node 22 or newer and npm.

@@ -27,8 +27,15 @@ test('more than eight connected results are retained and no completed HP snaps t
 });
 for(const [arena,config]of Object.entries(ARENA_WORLDS))test(arena+' held opposing selection shots and transitions clear geometry and sight lines',async()=>{
  const bytes=await readFile(new URL('../public/'+config.model.slice(2),import.meta.url));const g=await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');g.scene.updateMatrixWorld(true);const ray=new THREE.Raycaster();
- for(const team of ['A','B']){const shot=selectionCamera(config,team);assert.ok(shot.position.distanceTo(new THREE.Vector3(...config.overview))>2.4);
- for(let i=0;i<=20;i++){const t=i/20,action=actionCamera(config,{actor:team,target:team==='A'?'B':'A',move:'special',ability:ABILITIES['luca-di-grazia'].special},t*.32);const p=action.position.lerp(shot.position,1-t*t*(3-2*t));
+ // The integrated HUD uses shallow mirrored shots so both bodies remain comparable in size.
+ // World-space travel (>2.4 in the old wide orbit) is not a visibility requirement.
+ for(const aspect of [.65,.85,1.6,2.7])for(const team of ['A','B']){
+ const shot=selectionCamera(config,team,aspect),opposing=selectionCamera(config,team==='A'?'B':'A',aspect);
+ assert.equal(shot.phase,'selection-'+team);assert.equal(shot.position.x,-opposing.position.x);
+ assert.ok(team==='A'?shot.position.x<0:shot.position.x>0,'opposing held shots');
+ assert.deepEqual(shot.look.toArray(),config.look);
+ assert.deepEqual(selectionCamera(config,team,aspect).position.toArray(),shot.position.toArray(),'held, not orbiting');
+ for(let i=0;i<=20;i++){const t=i/20,action=actionCamera(config,{actor:team,target:team==='A'?'B':'A',move:'special',ability:ABILITIES['luca-di-grazia'].special},t*.32,aspect);const p=action.position.lerp(shot.position,1-t*t*(3-2*t));
  for(const d of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]]){ray.set(p,new THREE.Vector3(...d));ray.near=0;ray.far=.12;assert.equal(ray.intersectObject(g.scene,true).length,0,team+' near-plane '+i);}
  for(const f of config.fighters){const delta=new THREE.Vector3(...f).add(new THREE.Vector3(0,1,0)).sub(p);ray.set(p,delta.clone().normalize());ray.far=delta.length()-.1;assert.equal(ray.intersectObject(g.scene,true).length,0,team+' body occlusion '+i);}
  }

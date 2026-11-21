@@ -352,3 +352,55 @@ installed. Existing browser module:
 executable: `/home/mathis/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome`.
 Raw logs and the captured integration overlay are under
 `/tmp/hsg-named-sfx-evidence/`; these are local QA artifacts, not shipped assets.
+### Current-base integration (2026-10-20, private candidate)
+
+The current `3c84c6b` choreography is retained unchanged: `createMoveProps` creates the `jacket` secondary star/`FREEDOM` label; `choreograph`'s undress peel ends at `.36`, but its jacket secondary becomes visible only at `t >= .40 && t < .65`. Consequently Take Hoodie Off's semantic audio marker is now **.40 = 880 ms**, not the inherited .37 = 814 ms. The original clip accent remains **75 ms**. This aligns sound with the actual existing reveal rather than changing garment motion or treating shell clearance as the semantic reveal. `action-sync-current.test.mjs` renders the actual authored model at .36/.37/.399999 (hidden) and the exact .40 sampled marker (visible), and checks garment restoration plus fallback-RAF invalidation together. The native harness records actual FREEDOM visibility on the marker frame across single, queue, reduced and stalled presentations.
+
+The private candidate coordinates the index app query, app world query and both app/world contract queries at `20261020-action-sync-current1`; no markup/layout redesign is included. Independent merged QA remains a publication gate; this integration is not a deployment.
+
+
+### Action/animation synchronization (timing only)
+
+Authoritative results authorize a single-use cue; selection/voting never plays it.
+Playback follows that event's actual queued presentation, not a receipt timeout.
+The named phase and existing clip's internal accent are listed in
+
+game/public/battle-contract.js: NAMED_ACTION_TIMING / GENERIC_ACTION_TIMING.
+
+On smooth frames the available clip buildup leads into its semantic marker. When
+frames stall, playback waits for the marker and seeks past missed buildup through
+a 3 ms anti-click ramp to the unchanged SFX gain. A generic decoded-buffer fallback
+retains the named gesture phase but uses the generic clip's accent. Reduced-motion
+tableaux and renderer-failure labels cue at their first render opportunity.
+
+When RAF crosses a semantic marker, the renderer samples the EXISTING choreography
+pose exactly once, then resumes the unchanged absolute timeline on its next frame.
+A jump beyond the nominal 2200 ms end therefore shows the impact for one rendered
+frame before the existing completion/HP/victory transition. No new pose, camera
+path, server timing, music gain, source asset or victory playback is introduced.
+Hidden/suspended/muted/disconnected, reset and leave boundaries invalidate pending
+cues and stop action-only sources; stale callbacks cannot revive those events.
+Only natural final-hit completion allows an already-emitted action tail to finish
+under the unchanged victory source; it never preserves a queued/future cue. The
+first screen-change clear in app.js and the subsequent world sync both require
+finished victory with no active/pending world event for this exception. Any actual
+cancellation remains strict, including cancellation after victory has appeared.
+
+Focused regression: node --test test/action-sync.test.mjs test/audio.test.mjs.
+Native full-render timing: set PLAYWRIGHT_MODULE and CHROMIUM_EXECUTABLE, then run
+SYNC_ALL=1 SYNC_MATRIX=1 node test/action-sync-browser.mjs. Recovery/final-hit checks:
+SYNC_ONLY_LIFECYCLE=1 SYNC_LIFECYCLE=1 node test/action-sync-browser.mjs. The harness
+uses local in-memory rooms only. SYNC_GENERIC=1 deliberately corrupts optional
+named fetches to check the existing generic fallback. ROOT selects a baseline.
+Fast-completion/active-tail regression (no slow-next-frame masking):
+SYNC_ONLY_LIFECYCLE=1 SYNC_FAST_TAIL=1 node test/action-sync-browser.mjs. This
+test advances only the test presentation clock into natural completion immediately
+after a real rendered cue; native sources, UI transition, victory and cancellation
+handlers remain real. It also stops already-playing tails on mute/suspend/hidden/
+disconnect/reset/leave, rather than accepting a source that ended before the check.
+
+Recorded timing compares native buffer accent scheduling to renderer submission,
+not microphone output or physical display scanout. Hardware output latency,
+render/compositor latency and the short seek ramp remain; Chromium phone/tablet
+emulation does not verify real Safari/iOS or device speakers. A frame stall after
+an already-started buildup can still leave that accent early by the stall duration.
