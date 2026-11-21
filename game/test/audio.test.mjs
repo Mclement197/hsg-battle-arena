@@ -521,3 +521,55 @@ test('help credits the exact replacement source without inventing rights clearan
   assert.match(help, /https:\/\/www.youtube.com\/watch\?v=N2uyNC-Xz98/);
   assert.match(help, /SOUND EFFECTS HD/); assert.match(help, /disclaims ownership; redistribution rights are unverified/);
 });
+
+test('SIUUU alone doubles its original gain, preserving the full asset, SFX slider and source lifecycle', async () => {
+  const bytes = await readFile(new URL('../public/' + AUDIO_SOUNDS.siuu, import.meta.url));
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), '7321144635840f2b57545e7fb082397134912ff03097f2560a60f920490af01b');
+  const context = audioContext();
+  context.createGain = () => ({ gain: { setValueAtTime(value) { this.value = value; } },
+    connect(target) { this.target = target; return target; }, disconnect() { this.disconnected = true; } });
+  context.createBufferSource = () => ({ playbackRate: { value: 1 },
+    connect(gain) { this.gain = gain; return gain; }, disconnect() { this.disconnected = true; },
+    start(...args) { this.args = args; context.starts.push(this); },
+    stop() { this.stopped = true; this.onended?.(); } });
+  const audio = new ActionAudio(context);
+  for (const key of Object.keys(AUDIO_SOUNDS)) audio.buffers.set(key, { duration: key === 'siuu' ? 1.41 : 3 });
+  for (const volume of [0, .23, .8, 1]) {
+    audio.setVolume('sfx', volume);
+    audio.setVolume('music', .42);
+    let ended = 0;
+    assert.equal(audio.play('siuu', { delay: 5, offset: .4, loop: true, onended: () => ended++ }), true);
+    const source = audio.celebration;
+    assert.equal(source.buffer, audio.buffers.get('siuu'));
+    assert.equal(source.buffer.duration, 1.41);
+    assert.equal(source.playbackRate.value, 1);
+    assert.equal(source.loop, false);
+    assert.deepEqual(source.args, [context.currentTime, 0], 'no delay, seek or duration cutoff');
+    assert.equal(source.gain.gain.value / .45, 2, 'only SIUUU receives the +6.02 dB boost');
+    assert.equal(source.gain.target, audio.sfxGain);
+    assert.equal(source.gain.gain.value * audio.sfxGain.gain.value, .9 * volume);
+    assert.equal(audio.musicGain.gain.value, .42);
+    assert.ok(audio.active.has(source));
+    source.onended();
+    assert.equal(ended, 1);
+    assert.equal(source.stopped, undefined, 'natural completion is not truncated');
+    assert.equal(audio.celebration, null);
+    assert.equal(audio.active.has(source), false);
+    assert.ok(source.disconnected && source.gain.disconnected);
+  }
+  for (const [cue, gain, bus] of [
+    ['attack', .45, 'sfx'], ['defend', .45, 'sfx'], ['heal', .45, 'sfx'], ['special', .45, 'sfx'],
+    ['countdown', .9, 'sfx'], ['battle-start', .45, 'sfx'], ['lobby', .45, 'music'],
+    ['battle', .225, 'music'], ['win', .9, 'music']
+  ]) {
+    assert.equal(audio.play(cue), true);
+    assert.equal(audio.lastSource.gain.gain.value, gain, cue + ' gain unchanged');
+    assert.equal(audio.lastSource.gain.target, audio[bus + 'Gain'], cue + ' bus unchanged');
+  }
+  audio.play('siuu'); const cancelled = audio.celebration;
+  audio.stopCelebration(); assert.ok(cancelled.stopped); assert.equal(audio.celebration, null);
+  audio.play('siuu'); audio.stop(); assert.ok(context.starts.every(source => source.stopped || source.disconnected));
+  assert.equal(audio.active.size, 0);
+  context.state = 'suspended'; assert.equal(audio.play('siuu'), false);
+  context.state = 'running'; audio.buffers.delete('siuu'); assert.equal(audio.play('siuu'), false);
+});
