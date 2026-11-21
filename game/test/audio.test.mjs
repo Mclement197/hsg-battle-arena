@@ -240,6 +240,8 @@ test('actual UI hook: selection/local expiry silent, server result once, mute/un
       addEventListener(type, handler) { this.handlers[type] = handler; },
       attributes: {}, setAttribute(name, value) { this.attributes[name] = value; },
       getAttribute(name) { return this.attributes[name] ?? null; }, focus() {}, append() {}, replaceChildren() {},
+      // This audio-only fixture has no reaction events; bars still expose the real query API.
+      querySelectorAll: () => [],
       querySelector: selector => selector === 'img' && id === 'qr-container' ? null : element(id + selector)
     });
     return elements.get(id);

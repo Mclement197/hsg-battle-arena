@@ -478,3 +478,29 @@ body[data-screen=battle] .host-bar button{min-height:30px;padding:0 4px;font-siz
  body[data-screen=battle] .solo-moves button{min-height:44px}
  body[data-screen=battle] .battle-bottom{padding:2px 7px}
 }
+
+/* Reactions occupy their own strip, never the move grid or countdown HUD. */
+.reaction-setting{display:inline-flex;align-items:center;gap:.45rem;font-size:.85rem;min-height:44px;cursor:pointer}
+.reaction-setting input{width:20px;height:20px;accent-color:#39eea1}
+.reaction-bar[hidden]{display:none!important}
+.reaction-bar{display:flex;align-items:center;justify-content:center;gap:.5rem;flex-wrap:wrap;padding:.3rem .45rem;background:#092d20;border:1px solid #3e6b50;min-width:0}
+.reaction-bar-label{font-size:.7rem;letter-spacing:.12em;font-weight:800;color:#a7d8ba}
+.reaction-buttons{display:flex;justify-content:center;gap:clamp(2px,1vw,8px);min-width:0}
+.reaction-buttons button{min-width:clamp(40px,8vw,48px);min-height:44px;padding:2px;border:1px solid #62b489;border-radius:7px;background:#123d28;color:white;font-size:1.3rem;cursor:pointer}
+.reaction-buttons button:hover:not(:disabled),.reaction-buttons button:focus-visible{background:#246640;outline:2px solid #8cffbf;outline-offset:1px}
+.reaction-buttons button:disabled{opacity:.5;cursor:default}
+.reaction-status{font-size:.78rem;color:#ffe5ad}
+.reaction-status:empty{display:none}
+body[data-screen=battle] #host-reactions{flex:none;z-index:6;min-height:48px;padding:2px}
+.player-screen #player-reactions{flex:none;margin:0}
+.reaction-floats{position:absolute;z-index:5;pointer-events:none;display:flex;flex-wrap:wrap;align-content:center;justify-content:center;gap:.25rem;overflow:hidden}
+.fight-stage>.reaction-floats{top:27%;width:min(28%,260px);height:38%;}
+.fight-stage>.reaction-floats[data-team=A]{left:8%}
+.fight-stage>.reaction-floats[data-team=B]{right:8%}
+.player-world .reaction-floats{top:25%;width:32%;height:55%}
+.player-world .reaction-floats[data-team=A]{left:12%}
+.player-world .reaction-floats[data-team=B]{right:12%}
+.reaction-float{display:inline-block;border-radius:999px;background:#05291fe8;border:1px solid #91ffc6;padding:.2rem .5rem;color:#fff;font-size:clamp(1.3rem,calc(1.3rem + var(--burst-grow,0rem)),2.4rem);font-weight:800;text-shadow:0 2px 3px #000;white-space:nowrap;max-width:100%}
+.player-world .reaction-float{font-size:clamp(1rem,calc(1rem + var(--burst-grow,0rem)),1.7rem)}
+@media(prefers-reduced-motion:no-preference){.reaction-float{animation:reaction-rise 2s ease-out forwards}@keyframes reaction-rise{0%{opacity:0;transform:translateY(16px) scale(.7)}15%{opacity:1;transform:translateY(0) scale(1.12)}75%{opacity:1}100%{opacity:0;transform:translateY(-18px) scale(1)}}}
+@media(max-width:500px){.reaction-bar{gap:.15rem;padding:.2rem}.reaction-bar-label{display:none}.reaction-buttons{width:100%;justify-content:space-between}.reaction-buttons button{min-width:0;flex:1;font-size:1.15rem}.fight-stage>.reaction-floats{top:35%;width:35%;height:28%}.fight-stage>.reaction-floats[data-team=A]{left:3%}.fight-stage>.reaction-floats[data-team=B]{right:3%}}

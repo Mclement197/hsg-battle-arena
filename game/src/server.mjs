@@ -168,7 +168,7 @@ export function createGameServer({ arena, publicOrigin = 'http://127.0.0.1:3210'
       if (!req.url || req.url.length > 1024 || !req.url.startsWith('/')) fail(400, 'invalid_path', 'Invalid request path');
       const [pathname, query] = req.url.split('?');
       if (pathname.startsWith('/game/api/') && query !== undefined) fail(400, 'query_forbidden', 'API query parameters are not accepted');
-      const route = /^\/game\/api\/rooms\/([A-HJ-NP-Za-hj-np-z2-9]{4}|[a-fA-F0-9]{12})\/(join|reconnect|state|events|start|reset|configure|play|vote|qr\.svg)$/.exec(pathname);
+      const route = /^\/game\/api\/rooms\/([A-HJ-NP-Za-hj-np-z2-9]{4}|[a-fA-F0-9]{12})\/(join|reconnect|state|events|start|reset|configure|play|vote|react|qr\.svg)$/.exec(pathname);
       if (route) route[1] = route[1].length === 4 ? route[1].toUpperCase() : route[1].toLowerCase();
       const publicRead = (req.method === 'GET' || req.method === 'HEAD') &&
         (pathname === '/game' || publicStaticPath(pathname) || route?.[2] === 'qr.svg');
@@ -186,8 +186,9 @@ export function createGameServer({ arena, publicOrigin = 'http://127.0.0.1:3210'
       let ipEntry;
       if (quotaViewer) {
         // Valid capabilities never spend the anonymous connector/shared-NAT quota.
-        candidate.requestRates ??= new Map();
-        consume(candidate.requestRates, quotaViewer.player?.id ?? 'host', limits.requestsPerMinute, arena.now());
+        const rateKey = route[2] === 'react' ? 'reactionRequestRates' : 'requestRates';
+        candidate[rateKey] ??= new Map();
+        consume(candidate[rateKey], quotaViewer.player?.id ?? 'host', limits.requestsPerMinute, arena.now());
       } else {
         ipEntry = ips.get(ip);
         if (!ipEntry || arena.now() - ipEntry.since >= MINUTE) {
@@ -253,7 +254,8 @@ export function createGameServer({ arena, publicOrigin = 'http://127.0.0.1:3210'
         });
         sendState(room, stream); broadcast(room); return;
       }
-      consume(room.mutationRates, viewer.player?.id ?? 'host', limits.mutationsPerMinute, arena.now());
+      // Cosmetic traffic has its own per-player cooldown, never the gameplay mutation budget.
+      if (action !== 'react') consume(room.mutationRates, viewer.player?.id ?? 'host', limits.mutationsPerMinute, arena.now());
       if (action === 'reconnect') {
         fields(input, []); arena.requireRole(viewer, 'player'); arena.touch(room);
         return json(res, 200, { playerId: viewer.player.id, team: viewer.player.team, state: arena.snapshot(room, viewer) });
@@ -265,7 +267,7 @@ export function createGameServer({ arena, publicOrigin = 'http://127.0.0.1:3210'
       if (res.headersSent) return res.destroy();
       const known = error instanceof GameError;
       const status = known ? error.status : 500;
-      if (status === 429) res.setHeader('Retry-After', '60');
+      if (status === 429) res.setHeader('Retry-After', String(error.retryAfter ?? 60));
       // Reject and close unconsumed/oversize bodies; never log input or credentials.
       if (req.method === 'POST' && !req.complete) res.setHeader('Connection', 'close');
       json(res, status, { error: { code: known ? error.code : 'internal_error', message: known ? error.message : 'Request failed' } });

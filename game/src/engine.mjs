@@ -6,6 +6,8 @@ export const PREBATTLE_MS = 7157; // Three spoken beats + the unmodified 4.15637
 export const ARENAS = Object.freeze(['library', 'trischli', 'mensa-b']);
 export const CHARACTERS = Object.freeze(['luca-di-grazia', 'free-rider', 'tryhard', 'assessment-hoodie', 'trischli-warrior', 'bad-teacher']);
 export const MOVES = Object.freeze(['attack', 'defend', 'heal', 'special']);
+export const REACTIONS = Object.freeze(['😂', '🔥', '💀', '😱', '👏', '🤡']);
+const REACTION_COOLDOWN_MS = 1000, REACTION_TTL_MS = 2000, MAX_RECENT_REACTIONS = 64;
 export class GameError extends Error {
   constructor(status, code, message) { super(message); this.status = status; this.code = code; }
 }
@@ -39,7 +41,8 @@ export class Arena {
     const createdAt = this.now();
     const room = { id: roomId, hostToken: token(), createdAt, touchedAt: createdAt, revision: 0,
       mode: 'online', arenaId: 'library', phase: 'lobby', match: 0, winner: null, teams: { A: teamState(), B: teamState() },
-      players: new Map(), credentials: new Map(), turn: null, lastResult: null, recentResults: [], streams: new Set(), mutationRates: new Map() };
+      players: new Map(), credentials: new Map(), turn: null, lastResult: null, recentResults: [], streams: new Set(), mutationRates: new Map(),
+      reactionsEnabled: true, recentReactions: [], reactionTimes: new Map() };
     this.rooms.set(room.id, room);
     return room;
   }
@@ -55,13 +58,48 @@ export class Arena {
     player.team = 'A'; room.hostPlayer = player; room.mode = 'friend';
   }
   configure(room, viewer, body) {
-    fields(body, ['arenaId', 'characterA', 'characterB']); this.requireRole(viewer, 'host');
-    if (room.phase !== 'lobby') fail(409, 'invalid_phase', 'Choose fighters before starting the match');
-    if (!ARENAS.includes(body.arenaId) || !CHARACTERS.includes(body.characterA) || !CHARACTERS.includes(body.characterB))
+    const selection = ['arenaId', 'characterA', 'characterB'];
+    const hasToggle = Object.hasOwn(body || {}, 'reactionsEnabled');
+    const hasSelection = selection.some(key => Object.hasOwn(body || {}, key));
+    fields(body, [...(hasSelection || !hasToggle ? selection : []), ...(hasToggle ? ['reactionsEnabled'] : [])]);
+    this.requireRole(viewer, 'host');
+    if (room.phase !== 'lobby') fail(409, 'invalid_phase', 'Choose settings before starting the match');
+    if (hasToggle && typeof body.reactionsEnabled !== 'boolean')
+      fail(400, 'invalid_setting', 'reactionsEnabled must be a boolean');
+    if (hasSelection && (!ARENAS.includes(body.arenaId) || !CHARACTERS.includes(body.characterA) || !CHARACTERS.includes(body.characterB)))
       fail(400, 'invalid_selection', 'Choose a listed arena and two listed fighters');
-    room.arenaId = body.arenaId;
-    room.teams.A.characterId = body.characterA; room.teams.B.characterId = body.characterB;
+    if (hasSelection) {
+      room.arenaId = body.arenaId;
+      room.teams.A.characterId = body.characterA; room.teams.B.characterId = body.characterB;
+    }
+    if (hasToggle) room.reactionsEnabled = body.reactionsEnabled;
     this.touch(room); room.revision++;
+  }
+  react(room, viewer, body) {
+    fields(body, ['reaction']);
+    if (!REACTIONS.includes(body.reaction)) fail(400, 'invalid_reaction', 'Choose a listed reaction');
+    if (room.mode === 'bot') fail(409, 'invalid_mode', 'Reactions require a multiplayer match');
+    const player = viewer.player;
+    if (!player || room.players.get(player.id) !== player ||
+        !(viewer.role === 'player' || viewer.role === 'host' && room.mode === 'friend' && room.hostPlayer === player))
+      fail(403, 'role_required', 'A human player capability is required');
+    if (room.phase !== 'running') fail(409, 'invalid_phase', 'Reactions require a running match');
+    if (!room.reactionsEnabled) fail(409, 'reactions_disabled', 'Reactions are disabled for this room');
+    const now = this.now(), last = room.reactionTimes.get(player.id);
+    if (last !== undefined && now - last < REACTION_COOLDOWN_MS) {
+      const error = new GameError(429, 'reaction_cooldown', 'Wait one second between reactions');
+      error.retryAfter = 1; throw error;
+    }
+    room.reactionTimes.set(player.id, now);
+    this.pruneReactions(room);
+    room.recentReactions.push({ id: id(), playerId: player.id, team: player.team, emoji: body.reaction, at: now });
+    if (room.recentReactions.length > MAX_RECENT_REACTIONS) room.recentReactions.shift();
+    this.touch(room); room.revision++;
+  }
+  pruneReactions(room) {
+    const recent = room.recentReactions.filter(reaction => this.now() - reaction.at < REACTION_TTL_MS);
+    if (recent.length === room.recentReactions.length) return false;
+    room.recentReactions = recent; room.revision++; return true;
   }
   play(room, viewer, body) {
     this.requireRole(viewer, 'host');
@@ -122,6 +160,7 @@ export class Arena {
     fields(body, []); this.requireRole(viewer, 'host');
     room.prebattle = null;
     room.match++; room.phase = 'lobby'; room.winner = null; room.turn = null; room.lastResult = null; room.recentResults = [];
+    room.recentReactions = []; room.reactionTimes.clear();
     room.teams = { A: { ...teamState(), ...(room.teams.A.characterId ? { characterId: room.teams.A.characterId } : {}) }, B: { ...teamState(), ...(room.teams.B.characterId ? { characterId: room.teams.B.characterId } : {}) } }; this.touch(room); room.revision++;
   }
   vote(room, viewer, body) {
@@ -142,12 +181,13 @@ export class Arena {
     return counts;
   }
   advance(room) {
+    const reactionsExpired = this.pruneReactions(room);
     if (room.phase === 'countdown') {
-      if (this.now() < room.prebattle.deadline) return false;
+      if (this.now() < room.prebattle.deadline) return reactionsExpired;
       room.phase = 'running'; room.prebattle = null; this.openTurn(room, 'A', 1); room.revision++;
       return true; // A delayed tick still gives turn one its full 15 seconds.
     }
-    if (room.phase !== 'running' || this.now() < room.turn.deadline) return false;
+    if (room.phase !== 'running' || this.now() < room.turn.deadline) return reactionsExpired;
     const turn = room.turn;
     const voteCounts = this.counts(room);
     const totalVotes = turn.votes.size;
@@ -189,6 +229,7 @@ export class Arena {
       mode: room.mode, arenaId: room.arenaId, match: room.match, winner: room.winner, rules: RULES, teams,
       players: players.map(({ id, nickname, team, connections }) => ({ id, nickname, team, connected: connections > 0 })),
       turn, prebattle: room.prebattle || null, lastResult: room.lastResult, recentResults: [...room.recentResults],
+      reactions: { enabled: room.reactionsEnabled, recent: room.recentReactions.filter(reaction => this.now() - reaction.at < REACTION_TTL_MS).map(reaction => ({ ...reaction })) },
       you: viewer.role === 'host' ? { role: 'host', ...(room.hostPlayer ? { playerId: room.hostPlayer.id, team: 'A', vote: room.turn?.votes.get(room.hostPlayer.id) ?? null } : {}) } : { role: 'player', playerId: viewer.player.id,
         team: viewer.player.team, vote: room.turn?.votes.get(viewer.player.id) ?? null } };
   }

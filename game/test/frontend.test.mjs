@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { Readable } from 'node:stream';
-import { ArenaClient, parseFrames, present, validRoom } from '../public/app.js';
+import { ArenaClient, createReactionTracker, reactionWindow, parseFrames, present, validRoom } from '../public/app.js';
 import { createGameServer } from '../src/server.mjs';
 
 const ORIGIN = 'http://127.0.0.1';
@@ -160,4 +160,54 @@ test('room entry normalizes short/legacy deep-link codes and preserves legacy st
   const restored = new ArenaClient({ fetcher, storage: oldStore }); t.after(() => restored.stop());
   assert.equal(await restored.resume(restored.remembered(roomCode('ABCDEF123456'))), true);
   assert.equal(restored.state.roomId, legacy.id);
+});
+
+test('reaction transport uses player capability off-turn and friend host capability', async () => {
+  const calls = [];
+  const fetcher = async (path, init) => {
+    calls.push({ path, body: JSON.parse(init.body), authorization: init.headers.Authorization });
+    return new Response(JSON.stringify({ state: { roomId: 'K7MP', revision: 1, serverNow: 1000 } }), { status: 200 });
+  };
+  const player = new ArenaClient({ fetcher, storage: storage() });
+  player.room = 'K7MP'; player.role = 'player'; player.token = 'player-token';
+  player.state = { roomId: 'K7MP', revision: 0, mode: 'groups', phase: 'running', you: { team: 'B' }, turn: { team: 'A' } };
+  await player.mutate('react', { reaction: '👏' });
+  assert.deepEqual(calls[0], { path: '/game/api/rooms/K7MP/react', body: { reaction: '👏' }, authorization: 'Bearer player-token' });
+  const host = new ArenaClient({ fetcher, storage: storage() });
+  host.room = 'K7MP'; host.role = 'host'; host.token = 'host-token';
+  host.state = { roomId: 'K7MP', revision: 0, mode: 'friend', phase: 'running' };
+  await host.mutate('react', { reaction: '🔥' });
+  assert.equal(calls[1].authorization, 'Bearer host-token');
+  await host.mutate('configure', { reactionsEnabled: false });
+  assert.deepEqual(calls[2].body, { reactionsEnabled: false });
+  const presenter = new ArenaClient({ fetcher, storage: storage() });
+  presenter.room = 'K7MP'; presenter.role = 'host'; presenter.token = 'presenter-token';
+  presenter.state = { roomId: 'K7MP', revision: 0, mode: 'groups' };
+  await assert.rejects(presenter.mutate('react', { reaction: '😂' }), /Not allowed/);
+  assert.equal(calls.length, 3);
+});
+
+
+test('reaction tracker baselines first fresh snapshot after disconnect, not unseen history', () => {
+  const tracker = createReactionTracker();
+  const event = (id, at) => ({ id, playerId: 'p', team: 'B', emoji: '🔥', at });
+  assert.deepEqual(tracker.consume([event('a', 1000)], 1000), []);
+  assert.deepEqual(tracker.consume([event('a', 1000), event('b', 1100)], 1100).map(item => item.id), ['b']);
+  tracker.reset(); // Disconnect: the cached snapshot must not be consumed again.
+  assert.deepEqual(tracker.consume([event('b', 1100), event('c', 1200)], 1200), []); // Fresh stream baseline.
+  assert.deepEqual(tracker.consume([event('c', 1200), event('d', 1300)], 1300).map(item => item.id), ['d']);
+  assert.deepEqual(tracker.consume([event('c', 1200), event('d', 1300)], 1300), []);
+  assert.deepEqual(tracker.consume([event('stale', 1000)], 4000), []);
+});
+
+test('continuous same-emoji traffic starts a fresh bounded two-second window', () => {
+  let window = reactionWindow(null, 1, 0);
+  for (const time of [500, 1000, 1500, 1999]) {
+    window = reactionWindow(window, 1, time);
+    assert.equal(window.at, 0);
+  }
+  assert.equal(window.count, 5);
+  window = reactionWindow(window, 1, 2000);
+  assert.deepEqual(window, { at: 2000, count: 1 });
+  assert.deepEqual(reactionWindow(window, 2, 2500), { at: 2000, count: 3 });
 });
