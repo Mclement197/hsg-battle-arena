@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import net from 'node:net';
-import { mkdtemp, mkdir, writeFile, symlink, rm } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { readFile, mkdtemp, mkdir, writeFile, symlink, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import QRCode from 'qrcode';
@@ -74,6 +75,22 @@ function sse(base, roomId, credential, headers = {}) {
     req.on('error', reject);
   });
 }
+test('Siuuu MP3 static route serves exact bytes for GET/HEAD and rejects nearby paths', { timeout: 5000 }, async t => {
+  const f = await fixture(t);
+  const request = (url, method = 'GET') => new Promise((resolve, reject) => {
+    const req = http.request(f.base + url, { method }, res => { const chunks = []; res.on('data', chunk => chunks.push(chunk)); res.on('end', () => resolve({ status: res.statusCode, type: res.headers['content-type'], bytes: Buffer.concat(chunks) })); });
+    req.on('error', reject); req.end();
+  });
+  const expected = await readFile(new URL('../public/assets/audio/ronaldo_siuu.mp3', import.meta.url));
+  const get = await request('/game/assets/audio/ronaldo_siuu.mp3');
+  assert.equal(get.status, 200); assert.equal(get.type, 'audio/mpeg');
+  assert.equal(createHash('sha256').update(get.bytes).digest('hex'), createHash('sha256').update(expected).digest('hex'));
+  const head = await request('/game/assets/audio/ronaldo_siuu.mp3', 'HEAD');
+  assert.equal(head.status, 200); assert.equal(head.type, 'audio/mpeg'); assert.equal(head.bytes.length, 0);
+  for (const path of ['/game/assets/audio/unknown.mp3', '/game/assets/audio/ronaldo_siuu.mp3.bak', '/game/assets/audio/%2e%2e/ronaldo_siuu.mp3'])
+    assert.equal((await request(path)).status, 404, path + ' must remain outside the narrowly allowlisted asset route');
+});
+
 function rawRequest(base, url, { chunks = [], headers = {}, onWrite } = {}) {
   return new Promise((resolve, reject) => {
     const req = http.request(base + url, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: ORIGIN, ...headers } }, res => {
