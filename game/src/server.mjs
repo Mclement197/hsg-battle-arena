@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import QRCode from 'qrcode';
 import { Arena, GameError, fail, fields } from './engine.mjs';
+import { adminStaticPath, adminOverview, createAdminAuth } from './admin.mjs';
 
 export const LIMITS = Object.freeze({ bodyBytes: 2048, requestsPerMinute: 3000, createsPerMinute: 10,
   mutationsPerMinute: 90, ipBuckets: 4096, streamsPerCredential: 2, streamsPerRoom: 400, streamsTotal: 1000 });
@@ -90,9 +91,9 @@ function publicStaticPath(pathname) {
     /^\/game\/assets\/characters\/(luca-di-grazia|free-rider|tryhard|assessment-hoodie|trischli-warrior|bad-teacher)\.(glb|webp)$/.test(pathname) ||
     /^\/game\/vendor\/(three\.(module|core)|GLTFLoader|BufferGeometryUtils|SkeletonUtils)\.js$/.test(pathname);
 }
-async function staticFile(res, pathname, root) {
-  const name = pathname === '/game/' ? 'index.html' : pathname.slice('/game/'.length);
-  if (!publicStaticPath(pathname))
+async function staticFile(res, pathname, root, adminEnabled = false) {
+  const name = pathname === '/game/' ? 'index.html' : pathname === '/game/admin/' ? 'admin.html' : pathname.slice('/game/'.length);
+  if (!publicStaticPath(pathname) && !(adminEnabled && adminStaticPath(pathname)))
     fail(404, 'not_found', 'Not found');
   try {
     // All components must be local, non-symlinked and remain inside public/.
@@ -113,13 +114,14 @@ async function staticFile(res, pathname, root) {
 }
 
 export function createGameServer({ arena, publicOrigin = 'http://127.0.0.1:3210', publicDir = publicDirectory,
-  autoTick = true, limits: overrides = {}, trustedCloudflare = false } = {}) {
+  autoTick = true, limits: overrides = {}, trustedCloudflare = false, adminKey = process.env.ADMIN_KEY ?? '' } = {}) {
   if (typeof trustedCloudflare !== 'boolean') throw new Error('trustedCloudflare must be explicitly boolean');
   const wall = Date.now(), monotonic = performance.now();
   arena ??= new Arena({ now: () => Math.floor(wall + performance.now() - monotonic) });
   const origin = canonicalOrigin(publicOrigin);
   const limits = { ...LIMITS, ...overrides };
   const ips = new Map();
+  const adminAuth = createAdminAuth(adminKey, { now: () => arena.now(), maxClients: limits.ipBuckets });
   let streamCount = 0;
   let closed = false;
   const joinUrl = room => origin + '/game/?room=' + room.id;
@@ -142,6 +144,7 @@ export function createGameServer({ arena, publicOrigin = 'http://127.0.0.1:3210'
     for (const stream of room.streams) stream.res.end();
   }
   function sweep() {
+    adminAuth?.prune();
     for (const [ip, entry] of ips) if (arena.now() - entry.since >= MINUTE) ips.delete(ip);
     for (const room of arena.rooms.values()) {
       if (arena.expired(room)) remove(room);
@@ -167,14 +170,15 @@ export function createGameServer({ arena, publicOrigin = 'http://127.0.0.1:3210'
       const ip = requestClientIp(req, trustedCloudflare);
       if (!req.url || req.url.length > 1024 || !req.url.startsWith('/')) fail(400, 'invalid_path', 'Invalid request path');
       const [pathname, query] = req.url.split('?');
-      if (pathname.startsWith('/game/api/') && query !== undefined) fail(400, 'query_forbidden', 'API query parameters are not accepted');
+      const adminPath = adminStaticPath(pathname) || pathname === '/game/api/admin/overview';
+      if (!(adminPath && !adminAuth) && pathname.startsWith('/game/api/') && query !== undefined) fail(400, 'query_forbidden', 'API query parameters are not accepted');
       const route = /^\/game\/api\/rooms\/([A-HJ-NP-Za-hj-np-z2-9]{4}|[a-fA-F0-9]{12})\/(join|reconnect|state|events|start|reset|configure|play|vote|react|qr\.svg)$/.exec(pathname);
       if (route) route[1] = route[1].length === 4 ? route[1].toUpperCase() : route[1].toLowerCase();
       const publicRead = (req.method === 'GET' || req.method === 'HEAD') &&
-        (pathname === '/game' || publicStaticPath(pathname) || route?.[2] === 'qr.svg');
+        (pathname === '/game' || publicStaticPath(pathname) || adminAuth && adminStaticPath(pathname) || route?.[2] === 'qr.svg');
       // Public pages/assets/QR carry no capabilities or private state. Links and QR
       // navigations legitimately arrive cross-site; private APIs and all mutations do not.
-      if (!publicRead && (req.headers.origin && req.headers.origin !== origin || req.headers['sec-fetch-site'] === 'cross-site'))
+      if (!(adminPath && !adminAuth) && !publicRead && (req.headers.origin && req.headers.origin !== origin || req.headers['sec-fetch-site'] === 'cross-site'))
         fail(403, 'origin_forbidden', 'Cross-origin requests are not allowed');
       const credential = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(req.headers.authorization ?? '')?.[1];
       const candidate = route && !['join', 'qr.svg'].includes(route[2]) ? arena.rooms.get(route[1]) : null;
@@ -190,13 +194,28 @@ export function createGameServer({ arena, publicOrigin = 'http://127.0.0.1:3210'
         candidate[rateKey] ??= new Map();
         consume(candidate[rateKey], quotaViewer.player?.id ?? 'host', limits.requestsPerMinute, arena.now());
       } else {
+        const rejectQuota = (code, message, availableAt) => {
+          const error = new GameError(429, code, message);
+          error.retryAfter = Math.max(1, Math.ceil((availableAt - arena.now()) / 1000),
+            req.method === 'GET' && pathname === '/game/api/admin/overview' ? adminAuth?.retryAfter(ip) ?? 0 : 0);
+          throw error;
+        };
         ipEntry = ips.get(ip);
         if (!ipEntry || arena.now() - ipEntry.since >= MINUTE) {
-          if (!ipEntry && ips.size >= limits.ipBuckets) fail(429, 'rate_capacity', 'Too many clients; retry in a minute');
+          if (!ipEntry && ips.size >= limits.ipBuckets) {
+            let availableAt = Infinity;
+            for (const entry of ips.values()) availableAt = Math.min(availableAt, entry.since + MINUTE);
+            rejectQuota('rate_capacity', 'Too many clients; retry in a minute', availableAt);
+          }
           ipEntry = { since: arena.now(), count: 0, creates: 0 }; ips.set(ip, ipEntry);
         }
-        if (ipEntry.count >= limits.requestsPerMinute) fail(429, 'rate_limit', 'Too many requests; retry in a minute');
+        if (ipEntry.count >= limits.requestsPerMinute) rejectQuota('rate_limit', 'Too many requests; retry in a minute', ipEntry.since + MINUTE);
         ipEntry.count++;
+      }
+      if (adminPath && !adminAuth) fail(404, 'not_found', 'Not found');
+      if (req.method === 'GET' && pathname === '/game/api/admin/overview') {
+        adminAuth.authenticate(req, ip);
+        return json(res, 200, adminOverview(arena));
       }
       if (req.method === 'POST' && pathname === '/game/api/rooms') {
         if (ipEntry.creates >= limits.createsPerMinute) fail(429, 'rate_limit', 'Room creation rate exceeded');
@@ -216,7 +235,8 @@ export function createGameServer({ arena, publicOrigin = 'http://127.0.0.1:3210'
         res.writeHead(308, { Location: '/game/' + (query === undefined ? '' : '?' + query) }); return res.end();
       }
       if (!route) {
-        if (publicRead && publicStaticPath(pathname)) return await staticFile(res, pathname, publicDir);
+        if (publicRead && (publicStaticPath(pathname) || adminAuth && adminStaticPath(pathname)))
+          return await staticFile(res, pathname, publicDir, Boolean(adminAuth));
         fail(404, 'not_found', 'Not found');
       }
       const [, roomId, action] = route;
