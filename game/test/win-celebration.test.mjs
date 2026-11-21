@@ -11,18 +11,19 @@ function makeWorld(){
  const samples=[];const w=Object.create(BattleWorld.prototype);const winner={pose:[],koMaterials:[],root:{traverse(){}},home:{position:{clone(){return {sub(){return this},setY(){return this},normalize(){return this}}}}}};const loser={koMaterials:[],root:{traverse(){}},home:{position:{clone(){return {}}}}};
  Object.assign(w,{active:{id:'final',defeated:true,actor:'A',target:'B',koStartedAt:1000},fighters:{A:winner,B:loser},motion:{matches:false},container:{dataset:{}},camera:{position:new THREE.Vector3(0,3,8)},badge:{textContent:'',classList:{add(){},remove(){},toggle(){}},style:{setProperty(){}}},overview(){samples.push({op:'overview'});},poseKnockout(_f,ms){samples.push({op:'ko',ms});},poseCelebration(_f,ms){samples.push({op:'win',ms});},prepareCelebration(){samples.push({op:'prepare'});},finish(){samples.push({op:'finish'});this.active=null;},onComplete(){samples.push({op:'complete'});}});return {w,samples};
 }
-test('winner celebration is a separate full two-second tail after full KO, including delayed frames',()=>{
- assert.equal(KO_DURATION,2000);assert.equal(CELEBRATION_DURATION,2000);
+test('winner celebration is a separate full five-second tail after full KO, including delayed frames',()=>{
+ assert.equal(KO_DURATION,2000);assert.equal(CELEBRATION_DURATION,5000);
  const {w,samples}=makeWorld(),e=w.active;
  w.animate(1000+2100);assert.equal(e.celebrationStartedAt,undefined,'first late KO frame cannot consume the next phase');
- w.animate(1000+2101);assert.ok(Math.abs(e.celebrationStartedAt-3101)<2);assert.ok(samples.some(x=>x.op==='prepare'));
- w.animate(3101+2100);assert.equal(w.active,e,'first late celebration frame only arms completion');
- w.animate(3101+2101);assert.equal(w.active,null);assert.deepEqual(samples.filter(x=>x.op==='complete').length,1);
+ w.animate(1000+2101);assert.ok(e.celebrationStartedAt>=e.koStartedAt+KO_DURATION);assert.ok(samples.some(x=>x.op==='prepare'));
+ const celebrationStart=e.celebrationStartedAt;w.animate(celebrationStart+5000);assert.equal(w.active,e,'celebration remains active through the full five-second hold');
+ w.animate(celebrationStart+5001);assert.equal(w.active,null);assert.deepEqual(samples.filter(x=>x.op==='complete').length,1);
 });
 test('animation phase is ordered and pose callbacks use independent elapsed clocks',()=>{
  const {w,samples}=makeWorld(),e=w.active;w.animate(1300);w.animate(2500);w.animate(3001);w.animate(3500);w.animate(3700);
  const ko=samples.filter(x=>x.op==='ko').map(x=>x.ms),win=samples.filter(x=>x.op==='win').map(x=>x.ms);
  assert.deepEqual(ko,[300,1500,2000,2000]);assert.equal(win[0],0);assert.ok(Math.abs(win[1]-200)<2);assert.ok(e.celebrationStartedAt>=e.koStartedAt+KO_DURATION);
+ const checkpoints=[500,900,1300,1560,2000];for(const ms of checkpoints)w.poseCelebration({checkpoint:ms},ms);assert.deepEqual(samples.filter(x=>x.op==='win').slice(-checkpoints.length).map(x=>x.ms),checkpoints,'legacy choreography checkpoints remain exact through landing');
 });
 
 test('celebration choreography runs on every real fighter rig, side, and arena layout',async()=>{

@@ -3,7 +3,9 @@ import { loadModel, modelFor, release } from './characters.js?v=20261018-preview
 import { ARENA_WORLDS, BattleEvents, actionSoundTiming } from './battle-contract.js?v=20261020-action-sync-current1';
 const v = a => new THREE.Vector3(...a);
 export const KO_DURATION = 2000;
-export const CELEBRATION_DURATION = 2000;
+export const CELEBRATION_DURATION = 5000;
+const CELEBRATION_POSE_DURATION = 2000;
+const CELEBRATION_LANDING = 1300;
 export function koPhase(ms){return ms<350?'stagger':ms<850?'knees':ms<1460?'fall':'flat';}
 
 
@@ -118,12 +120,20 @@ export const MOVE_CHOREOGRAPHY = Object.freeze({
  'Brian AI': {mode:'self',gesture:'consult',prop:'brian',detail:'Tap a tablet; summon BRIAN robot tutor; receive a green advice heart; thank and close.'},
  'Failed': {mode:'melee',gesture:'slam',prop:'failed',detail:'Advance one pace; stamp the held report FAILED; send it to the opponent; step home.'}
 });
+const MOVE_ALIASES = Object.freeze({
+ 'ALL MY WORK':'AI Slop','ONE MORE TRY':'Take Hoodie Off','BROKEN CHARM':'Skip Maths A Lecture',
+ 'WRISTBAND':'Call the Bouncer','SECOND WIND':'Glass of Water','DANCE FLOOR':'Throw a Beer',
+ 'EXAM SHIELD':'Curved Exam','LATE CREDIT':'Brian AI'
+});
 const ramp=(t,a,b)=>ease((t-a)/(b-a));
 const pulse=(t,a,b,c)=>ramp(t,a,b)*(1-ramp(t,b,c));
 
 // Original low-poly theatrical props, generated with the existing Three runtime. No downloads/dependencies.
 export function createMoveProps(label,color=0xffcf63) {
- const recipe=MOVE_CHOREOGRAPHY[label];if(!recipe)throw Error('Missing move choreography: '+label);
+ const key=typeof label==='string'?label.trim().toUpperCase():'';
+ const canonical=Object.hasOwn(MOVE_ALIASES,key)?MOVE_ALIASES[key]:Object.keys(MOVE_CHOREOGRAPHY).find(name=>name.toUpperCase()===key);
+ const recipe=canonical&&Object.hasOwn(MOVE_CHOREOGRAPHY,canonical)?MOVE_CHOREOGRAPHY[canonical]:null;
+ if(!recipe)throw Error('Missing move choreography: '+label);
  const group=new THREE.Group();group.name=label+' / choreography';group.userData.recipe=recipe;
  const palette=new Map(), labels=[];
  const material=(c,glow=false)=>{const key=c+':'+glow;if(!palette.has(key))palette.set(key,new THREE.MeshStandardMaterial({color:c,roughness:.63,emissive:c,emissiveIntensity:glow?.55:.04}));return palette.get(key);};
@@ -439,7 +449,8 @@ export function choreograph(world,progress){
 }
 
 export class BattleWorld {
- constructor() {
+ constructor({onCelebrationLanding} = {}) {
+  this.onCelebrationLanding=onCelebrationLanding;
   this.events = new BattleEvents();this.motion=matchMedia('(prefers-reduced-motion: reduce)');this.fighters={};this.generation=0;
   this.onMotion=()=>{this.selection=null;if(this.active&&this.camera)this.animate(performance.now());else this.idleCamera(performance.now());};this.motion.addEventListener('change',this.onMotion);
   this.onHide=()=>{if(document.hidden){this.disconnect();this.onSkip?.();}else if(this.state)this.sync(this.state);};document.addEventListener('visibilitychange',this.onHide);
@@ -636,8 +647,13 @@ export class BattleWorld {
      this.fallbackLabel.textContent='K.O.!';this.fallbackLabel.classList.add('ko-slam');this.onKOStart?.(event);
      this.onKO?.(event);event.koSoundDone=true;
     }else{
-     event.celebrationStartedAt=first;this.container.dataset.winPhase='celebration';
-     this.fallbackLabel.classList.remove('ko-slam');this.fallbackLabel.textContent='SIUUU!';this.fallbackLabel.classList.add('win-siuuu');this.fallbackLabel.style.setProperty('--win-label-left',event.actor==='A'?'73%':'27%');
+     event.celebrationStartedAt=first;this.container.dataset.winPhase='jump';
+     this.fallbackLabel.classList.remove('ko-slam');this.fallbackLabel.textContent='';this.fallbackLabel.style.setProperty('--win-label-left',event.actor==='A'?'73%':'27%');
+     this.fallbackCueTimer=setTimeout(()=>{
+      if(generation!==this.generation||this.active!==event||(typeof document!=='undefined'&&document.hidden))return;
+      this.container.dataset.winPhase='landing';this.fallbackLabel.textContent='SIUUU!';this.fallbackLabel.classList.add('win-siuuu');
+      if(!event.celebrationLandingDone){event.celebrationLandingDone=true;this.onCelebrationLanding?.(event);}
+     },CELEBRATION_LANDING);
     }
     this.fallbackTimer=setTimeout(()=>{
      if(generation!==this.generation||this.active!==event||(typeof document!=='undefined'&&document.hidden))return;
@@ -676,9 +692,10 @@ export class BattleWorld {
    if(e.celebrationStartedAt){
     const elapsed=Math.max(0,now-e.celebrationStartedAt);
     this.poseCelebration(this.fighters[e.actor],elapsed);
-    this.container.dataset.winPhase=elapsed<1300?'jump':'landing';
-    this.badge.textContent=elapsed>=1300?'SIUUU!':'';
-    this.badge.classList.toggle('win-siuuu',elapsed>=1300);this.badge.style.setProperty('--win-label-left',e.actor==='A'?'73%':'27%');
+    this.container.dataset.winPhase=elapsed<CELEBRATION_LANDING?'jump':'landing';
+    this.badge.textContent=elapsed>=CELEBRATION_LANDING?'SIUUU!':'';
+    this.badge.classList.toggle('win-siuuu',elapsed>=CELEBRATION_LANDING);this.badge.style.setProperty('--win-label-left',e.actor==='A'?'73%':'27%');
+    if(!e.celebrationLandingDone&&elapsed>=CELEBRATION_LANDING&&!(typeof document!=='undefined'&&document.hidden)){e.celebrationLandingDone=true;this.onCelebrationLanding?.(e);}
     this.overview(true);
     if(elapsed>=CELEBRATION_DURATION){
      if(e.celebrationEndFrame){this.finish(true);this.onComplete?.(e);}
@@ -696,7 +713,7 @@ export class BattleWorld {
       const preparingAt=performance.now();
       this.prepareCelebration(this.fighters[e.actor],this.fighters[e.target]);
       this.poseCelebration(this.fighters[e.actor],0);
-      // Preparation can take several frames on a phone; the full two-second victory begins after it.
+      // Preparation can take several frames on a phone; the full victory begins after it.
       e.celebrationStartedAt=now+(performance.now()-preparingAt);this.container.dataset.winPhase='jump';this.overview(true);
      }else e.koEndFrame=true;
     }
@@ -736,8 +753,8 @@ export class BattleWorld {
   this.poseCelebration(f,0);
  }
  poseCelebration(f,elapsed,reduced=this.motion.matches){
-  f.celebrationTime=THREE.MathUtils.clamp(elapsed,0,CELEBRATION_DURATION);
-  const t=f.celebrationTime/CELEBRATION_DURATION;
+  f.celebrationTime=THREE.MathUtils.clamp(elapsed,0,CELEBRATION_POSE_DURATION);
+  const t=f.celebrationTime/CELEBRATION_POSE_DURATION;
   for(const [bone,p,q,scale] of f.motionRig.pose){bone.position.copy(p);bone.quaternion.copy(q);bone.scale.copy(scale);}
   restoreFighter(f);
   f.holder.position.addScaledVector(f.winDirection,reduced?0:.34*ease(t/.25));
@@ -810,7 +827,7 @@ export class BattleWorld {
   const e=this.active;if(!e?.koStartedAt)return false;
   const loser=this.fighters[e.target];if(loser){this.poseFallen(loser,1);tintDefeated(loser,1);}this.finish(true);this.onComplete?.(e);return true;
  }
- finish(preserveKO=false){for(const f of Object.values(this.fighters)){if(preserveKO&&f===this.fighters[this.active?.target]){for(const [mesh,visible] of f.hiddenProps||[])mesh.visible=visible;f.hiddenProps=null;continue;}restoreHood(f);restoreGarment(f);for(const [mesh,visible]of f.hiddenProps||[])mesh.visible=visible;f.hiddenProps=null;restoreFighter(f);for(const {mesh,original} of f.koProps||[]){mesh.geometry.dispose();mesh.geometry=original;}f.koProps=null;f.sampledPose=null;f.koPose=null;f.koFloorLift=0;f.koLockedFloorLift=0;f.koBodyDrop=0;f.koHeadAdjustment=0;f.koCalibrated=false;f.koGroundChecks=0;if(f.koMaterials)tintDefeated(f,0);if(f.clip!=='defeat'){f.mixer.stopAllAction();f.current=null;f.clip=null;f.mixer.update(0);} }if(this.winDust){this.scene?.remove(this.winDust);release(this.winDust);this.winDust=null;}for(const f of Object.values(this.fighters)){f.winDirection=null;f.celebrationFrames=null;f.reducedCelebrationBox=null;}this.choreography=null;this.releasePoint=null;this.contactPoint=null;this.contactTop=null;this.propRotation=null;clearTimeout(this.fallbackTimer);if(this.fallbackRaf)cancelAnimationFrame(this.fallbackRaf);this.fallbackRaf=null;this.fallbackLabel?.remove();this.fallbackLabel=null;this.badge?.classList?.remove('ko-slam','win-siuuu');if(this.container?.dataset){delete this.container.dataset.koPhase;delete this.container.dataset.koLoser;delete this.container.dataset.winPhase;}this.selection=null;if(this.fx){this.scene?.remove(this.fx);release(this.fx);this.fx=null;}this.active=null;for(const [team,f]of Object.entries(this.fighters))if(f.clip!=='defeat'){this.play(team,'idle');f.mixer.update(0);}if(this.badge)this.badge.textContent='';if(this.canvas){this.canvas.dataset.camera='overview';delete this.canvas.dataset.action;}this.overview(true);if(this.renderer)this.renderer.shadowMap.needsUpdate=true;}
+ finish(preserveKO=false){for(const f of Object.values(this.fighters)){if(preserveKO&&f===this.fighters[this.active?.target]){for(const [mesh,visible] of f.hiddenProps||[])mesh.visible=visible;f.hiddenProps=null;continue;}restoreHood(f);restoreGarment(f);for(const [mesh,visible]of f.hiddenProps||[])mesh.visible=visible;f.hiddenProps=null;restoreFighter(f);for(const {mesh,original} of f.koProps||[]){mesh.geometry.dispose();mesh.geometry=original;}f.koProps=null;f.sampledPose=null;f.koPose=null;f.koFloorLift=0;f.koLockedFloorLift=0;f.koBodyDrop=0;f.koHeadAdjustment=0;f.koCalibrated=false;f.koGroundChecks=0;if(f.koMaterials)tintDefeated(f,0);if(f.clip!=='defeat'){f.mixer.stopAllAction();f.current=null;f.clip=null;f.mixer.update(0);} }if(this.winDust){this.scene?.remove(this.winDust);release(this.winDust);this.winDust=null;}for(const f of Object.values(this.fighters)){f.winDirection=null;f.celebrationFrames=null;f.reducedCelebrationBox=null;}this.choreography=null;this.releasePoint=null;this.contactPoint=null;this.contactTop=null;this.propRotation=null;clearTimeout(this.fallbackTimer);clearTimeout(this.fallbackCueTimer);if(this.fallbackRaf)cancelAnimationFrame(this.fallbackRaf);this.fallbackRaf=null;this.fallbackLabel?.remove();this.fallbackLabel=null;this.badge?.classList?.remove('ko-slam','win-siuuu');if(this.container?.dataset){delete this.container.dataset.koPhase;delete this.container.dataset.koLoser;delete this.container.dataset.winPhase;}this.selection=null;if(this.fx){this.scene?.remove(this.fx);release(this.fx);this.fx=null;}this.active=null;for(const [team,f]of Object.entries(this.fighters))if(f.clip!=='defeat'){this.play(team,'idle');f.mixer.update(0);}if(this.badge)this.badge.textContent='';if(this.canvas){this.canvas.dataset.camera='overview';delete this.canvas.dataset.action;}this.overview(true);if(this.renderer)this.renderer.shadowMap.needsUpdate=true;}
  cancel(preserveTail=false){this.onCancel?.({preserveTail});this.events.reset();this.finish();for(const [t,f] of Object.entries(this.fighters))this.play(t,this.state?.teams[t].hp===0?'defeat':'idle');}
  disconnect(){this.cancel();if(this.state)this.events.consume(this.state);}
  clear(preserveTail=false){this.fallback=false;this.generation++;cancelAnimationFrame(this.raf);this.cancel(preserveTail);this.observer?.disconnect();for(const f of Object.values(this.fighters)){f.mixer.stopAllAction();f.mixer.uncacheRoot(f.root);}release(this.scene);this.renderer?.dispose();this.renderer?.forceContextLoss();this.canvas?.remove();this.badge?.remove();if(this.container)delete this.container.dataset.worldStatus;this.renderer=null;this.scene=null;this.fighters={};this.scope=null;this.camera=null;}

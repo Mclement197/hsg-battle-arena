@@ -251,3 +251,9 @@ not microphone output or physical display scanout. Hardware output latency,
 render/compositor latency and the short seek ramp remain; Chromium phone/tablet
 emulation does not verify real Safari/iOS or device speakers. A frame stall after
 an already-started buildup can still leave that accent early by the stall duration.
+
+## SIUUU win-branch clip (2026-11-21)
+
+- **Included:** `ronaldo_siuu.mp3`, copied byte-for-byte from the user-supplied `ronaldo_siuu.mp3` (23,449 bytes; 1.410 seconds effective duration from MP3 Info frame count and encoder delay/padding). No trimming, stretching, transcoding, normalization, or substitute sound.
+- **SHA-256 (supplied and included file):** `7321144635840f2b57545e7fb082397134912ff03097f2560a60f920490af01b`.
+- **Provenance and rights:** supplied by the user on 2026-11-21; original source unknown. Reuse and redistribution rights have not been verified. No license or rights clearance is claimed; resolve permissions before publication.

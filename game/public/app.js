@@ -1,4 +1,4 @@
-import { BattleWorld } from './battle-world.js?v=20261110-win-celebration1';
+import { BattleWorld } from './battle-world.js?v=20261121-siuu1';
 import { CharacterStage, modelFor } from './characters.js?v=20261018-previews';
 import { FIGHTER_PROFILES, STAT_META, fighterStats, moveDescription } from './fighter-data.js?v=20261020-luca-max';
 import { ABILITIES, BattlePresentation, moveLabel, actionSoundTiming, actionEventId } from './battle-contract.js?v=20261020-action-sync-current1';
@@ -30,13 +30,17 @@ export const ACTION_SOUNDS = Object.freeze({
   special: './assets/audio/special-burst.wav'
 });
 
+// This branch ships generic action samples only; keep the existing fallback selectable.
+const THEMED_ACTION_SOUNDS = Object.freeze({});
+
 export const AUDIO_SOUNDS = Object.freeze({
   ...ACTION_SOUNDS,
   'battle-start': './assets/audio/battle-start.wav',
   countdown: './assets/audio/countdown.wav',
   lobby: './assets/audio/lobby-loop.wav',
   battle: './assets/audio/battle-loop.webm',
-  win: './assets/audio/victory.webm'
+  win: './assets/audio/victory.webm',
+  siuu: './assets/audio/ronaldo_siuu.mp3'
 });
 
 // Arm only on a live edge. Native audio-clock scheduling avoids timer drift and stale replay.
@@ -78,6 +82,43 @@ export function createVictoryCue(play, stop = () => {}) {
     if (won) play('win');
   };
   consume.reset = () => { stop(); scope = null; phase = null; consumed = false; };
+  return consume;
+}
+
+// Freeze availability on the live finish edge, never on a later decode/unmute.
+export function createCelebrationCue(play, stop = () => {}, ready = () => true) {
+  let scope = null, phase = null, consumed = false, pending = null, playing = false, waiting = null, generation = 0;
+  const consume = state => {
+    const nextScope = state.roomId + ':' + state.match;
+    if (scope !== nextScope || state.phase === 'lobby') {
+      consume.cancel(); scope = nextScope; phase = state.phase; consumed = state.phase === 'finished'; return;
+    }
+    if (phase === 'running' && state.phase === 'finished' && !consumed && state.lastResult && ready()) pending = actionEventId(state, state.lastResult);
+    phase = state.phase;
+    if (phase === 'finished') consumed = true;
+  };
+  consume.land = event => {
+    if (pending !== event.id) return;
+    pending = null;
+    if (!ready()) return;
+    const token = ++generation;
+    playing = true;
+    const ended = () => {
+      if (generation !== token) return;
+      playing = false;
+      const next = waiting; waiting = null; next?.();
+    };
+    try { if (!play(ended)) ended(); } catch { ended(); }
+  };
+  consume.afterEnded = next => { if (playing) waiting = next; else next(); };
+  consume.cancel = ({ preserveTail = false, release = false } = {}) => {
+    pending = null;
+    if (preserveTail) return; // Natural world cleanup must not truncate a late landing.
+    ++generation; playing = false;
+    const next = waiting; waiting = null; stop();
+    if (release) next?.();
+  };
+  consume.reset = () => { consume.cancel(); scope = null; phase = null; consumed = false; };
   return consume;
 }
 
@@ -186,8 +227,8 @@ export class ActionAudio {
     this.musicGain.connect(context.destination); this.sfxGain.connect(context.destination);
     this.setVolume('music', this.musicVolume); this.setVolume('sfx', this.sfxVolume);
   }
-  // Optional music codecs must not silence the unchanged lobby or SFX.
-  get ready() { return Object.keys(AUDIO_SOUNDS).every(move => ['battle', 'win'].includes(move) || this.buffers.has(move)); }
+  // Optional recordings must not silence the unchanged lobby or SFX.
+  get ready() { return Object.keys(AUDIO_SOUNDS).every(move => ['battle', 'win', 'siuu'].includes(move) || this.buffers.has(move)); }
   async load() {
     if (this.loading) return this.loading;
     this.loading = Promise.all(Object.entries(AUDIO_SOUNDS).map(async ([move, url]) => {
@@ -224,6 +265,9 @@ export class ActionAudio {
   stopVictory() {
     this.victory?.stop(); this.victory = null;
   }
+  stopCelebration() {
+    this.celebration?.stop(); this.celebration = null;
+  }
   actionSound(move, characterId) {
     const key = characterId + ':' + move;
     return Object.hasOwn(THEMED_ACTION_SOUNDS, key) && this.buffers.has(key) ? key : move;
@@ -232,15 +276,17 @@ export class ActionAudio {
     for (const source of [...this.actions]) source.stop();
     this.actions.clear();
   }
-  play(move, { delay = 0, offset = 0, loop = false, characterId, soundKey, actionId } = {}) {
+  play(move, { delay = 0, offset = 0, loop = false, characterId, soundKey, actionId, onended } = {}) {
     if (move === 'win') { this.setMusic(null); this.stopVictory(); }
-    const key = actionId ? soundKey : this.actionSound(move, characterId);
+    if (move === 'siuu') { delay = 0; offset = 0; loop = false; }
+    const key = move === 'siuu' ? 'siuu' : actionId ? soundKey : this.actionSound(move, characterId);
     const buffer = this.buffers.get(key);
     // Never queue a stale action while loading or waiting for a user gesture.
     if (!buffer || this.context.state !== 'running' || (Number.isFinite(buffer.duration) && offset >= buffer.duration)) return false;
     const source = this.context.createBufferSource();
     const gain = this.context.createGain();
     source.buffer = buffer; source.loop = loop; this.lastSource = source;
+    if (move === 'siuu') source.playbackRate.value = 1;
     gain.gain.setValueAtTime((move === 'countdown' ? .9 : .45) * (move === 'battle' ? .5 : move === 'win' ? 2 : 1), this.context.currentTime);
     source.connect(gain).connect(['lobby', 'battle', 'win'].includes(move) ? this.musicGain : this.sfxGain);
     // Seeking past a missed prelude must not introduce a discontinuity at an interior PCM sample.
@@ -252,14 +298,20 @@ export class ActionAudio {
     this.active.add(source);
     if (actionId) this.actions.add(source);
     if (move === 'win') this.victory = source;
+    if (move === 'siuu') this.celebration = source;
     if (['countdown', 'battle-start'].includes(move)) this.prebattle.add(source);
-    source.onended = () => { if (this.victory === source) this.victory = null; this.active.delete(source); this.actions.delete(source); this.prebattle.delete(source); source.disconnect(); gain.disconnect(); };
-    source.start(this.context.currentTime + delay, offset);
+    source.onended = () => { if (this.celebration === source) this.celebration = null; if (this.victory === source) this.victory = null; this.active.delete(source); this.actions.delete(source); this.prebattle.delete(source); source.disconnect(); gain.disconnect(); onended?.(); };
+    try { source.start(this.context.currentTime + delay, offset); } catch (error) {
+      if (move !== 'siuu') throw error;
+      source.onended = null; this.active.delete(source); this.celebration = null;
+      source.disconnect(); gain.disconnect();
+      return false;
+    }
     return true;
   }
   stop() {
     for (const source of this.active) source.stop();
-    this.active.clear(); this.actions.clear(); this.prebattle.clear(); this.music = null; this.musicKey = null; this.victory = null;
+    this.active.clear(); this.actions.clear(); this.prebattle.clear(); this.music = null; this.musicKey = null; this.victory = null; this.celebration = null;
   }
 }
 
@@ -533,6 +585,7 @@ if (typeof document !== 'undefined') (() => {
   let audioContext;
   let actionAudio;
   let actionCue;
+  let celebrationCue;
   let muted = false; // Desired preference; readiness still depends on browser permission and decoding.
   let audioAttempt = 0;
   let audioLoading = false;
@@ -753,6 +806,7 @@ if (typeof document !== 'undefined') (() => {
     if (!muted) {
       ++audioAttempt;
       muted = true;
+      celebrationCue?.cancel({ release: true });
       actionCue?.cancel();
       actionAudio?.stop();
       for (const tone of activeTones) tone.stop();
@@ -778,6 +832,7 @@ if (typeof document !== 'undefined') (() => {
         audioContext = new Audio();
         audioContext.addEventListener?.('statechange', () => {
           if (audioContext.state !== 'running') {
+            celebrationCue?.cancel({ release: true });
             actionCue?.cancel();
             actionAudio?.stop();
             for (const tone of activeTones) tone.stop();
@@ -910,6 +965,11 @@ if (typeof document !== 'undefined') (() => {
   }
   window.ArenaUI = { render, cue, connected: false };
   $('copy-link').disabled = true;
+  celebrationCue = createCelebrationCue(
+    onended => actionAudio.play('siuu', { onended }),
+    () => actionAudio?.stopCelebration(),
+    () => soundReady() && actionAudio.buffers.has('siuu') && window.ArenaUI.connected && !document.hidden
+  );
   actionCue = createActionCue(cue, {
     presentation: true,
     ready: () => soundReady() && window.ArenaUI.connected && !document.hidden,
@@ -917,6 +977,7 @@ if (typeof document !== 'undefined') (() => {
     stop: () => actionAudio?.stopActions()
   });
   battleWorld.onPresent = (event, frame) => actionCue.present(event, frame);
+  battleWorld.onCelebrationLanding = event => celebrationCue.land(event);
   const skipKOButton = $('skip-ko');
   battleWorld.onKOStart = () => { skipKOButton.hidden = (typeof client !== 'undefined' && (client.role !== 'host' || document.body?.dataset.screen !== 'battle')); };
   battleWorld.onKO = event => {
@@ -925,14 +986,15 @@ if (typeof document !== 'undefined') (() => {
   };
   skipKOButton.addEventListener('click', () => {
     if ((typeof client !== 'undefined' && (client.role !== 'host' || document.body?.dataset.screen !== 'battle'))) return;
+    celebrationCue.cancel(); // Cancel before either the K.O. guard or the victory transition.
     const event = battleWorld.active, remaining = event?.koAudioAt ? Math.max(0, 220 - (performance.now() - event.koAudioAt)) : 0;
     if (remaining) {
       const generation = battleWorld.generation;skipKOButton.disabled = true;
       setTimeout(() => { skipKOButton.disabled = false;if (battleWorld.generation === generation && battleWorld.active === event && !document.hidden && (typeof client === 'undefined' || (client.role === 'host' && document.body?.dataset.screen === 'battle'))) battleWorld.skipKO(); }, remaining);
     } else if (battleWorld.skipKO()) skipKOButton.hidden = true;
   });
-  battleWorld.onCancel = options => { skipKOButton.hidden = true;skipKOButton.disabled = false; actionCue.cancel(options); };
-  document.addEventListener('visibilitychange', () => { if (document.hidden) actionCue.cancel(); });
+  battleWorld.onCancel = options => { skipKOButton.hidden = true;skipKOButton.disabled = false; actionCue.cancel(options); celebrationCue.cancel(options); };
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { actionCue.cancel(); celebrationCue.cancel(); } });
   const battleStartCue = createBattleStartCue(cue, () => actionAudio?.stopPrebattle());
   let activeEffect, effectTimer;
   function showActionEffect(effect) {
@@ -976,11 +1038,14 @@ if (typeof document !== 'undefined') (() => {
     effectTimer = setTimeout(() => { node.remove?.(); if (activeEffect === node) activeEffect = null; }, 850);
   }
   const visualCue = createVisualCue(showActionEffect);
-  const victoryCue = createVictoryCue(kind => { if (window.ArenaUI.connected) cue(kind); }, () => actionAudio?.stopVictory());
+  const victoryCue = createVictoryCue(kind => celebrationCue.afterEnded(() => {
+    if (window.ArenaUI.connected && !document.hidden) cue(kind);
+  }), () => actionAudio?.stopVictory());
   const client = new ArenaClient({
     onState(state) {
       if (setupBusy || pendingSetupRoom) return;
       actionCue(state);
+      celebrationCue(state);
       presentation.consume(state);
       paintState();
       syncReactions(state, true);
@@ -996,7 +1061,7 @@ if (typeof document !== 'undefined') (() => {
       if (status !== 'connected') {
         skipKOButton.hidden = true;clearReactions();
         for (const id of ['host-reactions', 'player-reactions']) $(id).hidden = true;
-        battleStartCue.reset(); actionCue.reset(); victoryCue.reset(); battleWorld.disconnect(); presentation.reset();
+        battleStartCue.reset(); actionCue.reset(); celebrationCue.reset(); victoryCue.reset(); battleWorld.disconnect(); presentation.reset();
       }
       render({ connection: status });
       if (client.state && !setupBusy && !pendingSetupRoom) {
@@ -1036,7 +1101,7 @@ if (typeof document !== 'undefined') (() => {
   }
   battleWorld.onComplete = event => { skipKOButton.hidden = true; actionCue.complete(event); if (presentation.complete(event.id)) paintState(); };
   battleWorld.onSkip = () => {
-    skipKOButton.hidden = true;actionCue.cancel();
+    skipKOButton.hidden = true;actionCue.cancel();celebrationCue.cancel();
     presentation.reset();
     if (client.state) { presentation.consume(client.state); paintState(); }
   };

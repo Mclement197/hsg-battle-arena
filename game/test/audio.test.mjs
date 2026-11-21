@@ -202,7 +202,7 @@ test('all mapped audio URLs serve with their audio MIME over HTTP, including HEA
     const route = '/game/' + url.slice(2);
     const response = await get(route);
     assert.equal(response.status, 200);
-    assert.equal(response.headers['content-type'], url.endsWith('.webm') ? 'audio/webm' : 'audio/wav');
+    assert.equal(response.headers['content-type'], url.endsWith('.webm') ? 'audio/webm' : url.endsWith('.mp3') ? 'audio/mpeg' : 'audio/wav');
     assert.deepEqual(response.body, await readFile(new URL('../public/' + url, import.meta.url)));
     const head = await get(route, 'HEAD');
     assert.equal(head.status, 200); assert.equal(head.body.length, 0);

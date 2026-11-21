@@ -26,8 +26,8 @@ try{
     if(!inside||!frame.dustSame||!frame.framesSame||!frame.geometrySame||!frame.materialSame||frame.sceneChildren!==stable.sceneChildren||frame.dustChildren!==stable.dustChildren)failures.push({fixture,reduced,frame,stable});
     results.push({fixture,reduced,frame});
    }
-   const timing=await page.evaluate(()=>{const w=window.__w,e=w.active,start=e.celebrationStartedAt;w.animate(start+1999);const at1999=w.active===e;w.animate(start+2000);const at2000=w.active===e;w.animate(start+2016);return {at1999,at2000,completed:w.active===null,dustCleared:w.winDust===null,dustDetached:!w.scene.children.includes(window.__qaDust),disposed:{...window.__qaDisposed}};});
-   if(!timing.at1999||!timing.at2000||!timing.completed||!timing.dustCleared||!timing.dustDetached||!timing.disposed.geometry||!timing.disposed.material)failures.push({fixture,problem:'celebration duration shortened or completion ordering changed',timing});
+   const timing=await page.evaluate(()=>{const w=window.__w,e=w.active,start=e.celebrationStartedAt;w.animate(start+4999);const at4999=w.active===e;w.animate(start+5000);const at5000=w.active===e;w.animate(start+5016);return {at4999,at5000,completed:w.active===null,dustCleared:w.winDust===null,dustDetached:!w.scene.children.includes(window.__qaDust),disposed:{...window.__qaDisposed}};});
+   if(!timing.at4999||!timing.at5000||!timing.completed||!timing.dustCleared||!timing.dustDetached||!timing.disposed.geometry||!timing.disposed.material)failures.push({fixture,problem:'celebration duration shortened or completion ordering changed',timing});
    await page.evaluate(()=>{window.__w.sync({...window.__w.state,phase:'lobby'});});
   }catch(error){failures.push({fixture,error:String(error)});}
  }
