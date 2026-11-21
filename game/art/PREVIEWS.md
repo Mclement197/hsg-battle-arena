@@ -1,5 +1,7 @@
 # Current-model UI previews
 
+**2026-10-19 addition:** Mensa B now has its own real modeled environment and production-rendered `arena-mensa-b.webp`. See [Mensa source/provenance](mensa-b/README.md). Its dedicated tests/evidence cover the new third map; the original eight-asset manifest and report below still verify the unchanged six fighters and two earlier venues. The historical unmodeled-Mensa tile described below is replaced.
+
 All active artwork is rendered from the exact repaired six character GLBs and two arena GLBs shipped at commit 96f7431. The native character and two arena .blend sources remain unchanged. No stock photographs, image generation, new models, rigs, or game rules.
 
 ## Reproduce
@@ -22,7 +24,7 @@ preview-manifest.json records SHA-256 of all eight GLBs, the three native source
 - Menu: current Luca/Trischli WebPs; actual Library backdrop and matching image preload.
 - Arena chooser: actual Library/Trischli environment WebPs, same map IDs as battle. Mensa B has no modeled environment: its old fake illustration is replaced by an honest text tile; its existing selection/gameplay behavior is unchanged.
 - Selected preview and roster: one shared current modelFor mapping; static same-model image stays underneath asynchronous WebGL; all six IDs covered.
-- Entry/help: help contains no fighter artwork; entry figures now current Assessment/Tryhard images, never original SVG placeholders.
+- Entry/help: help contains no fighter artwork; entry figures now current Assessie with HSG hoodie/Tryhard images, never original SVG placeholders.
 - Host lobby/roster: authoritative character IDs select current portraits. Guest lobby and HUD: current portraits next to health labels.
 - Battle loading and WebGL failure: actual selected arena background plus current host portraits, guest portrait HUD remains visible. Successful shared 3D world covers that background. Lost-context canvas is hidden until recovery instead of obscuring fallback artwork.
 - Result/victory and missing-identity defaults: current WebPs; no old SVG fallback branch remains. Victory's articulated preview still loads the current GLB.

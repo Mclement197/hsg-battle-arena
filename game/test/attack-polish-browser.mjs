@@ -1,6 +1,7 @@
 // Owned loopback rooms only. Record production resolved events at the unchanged 2200 ms clock.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import http from 'node:http';
 import {createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {once} from 'node:events';
@@ -17,7 +18,7 @@ await new Promise(r=>game.server.listen(port,'127.0.0.1',r));
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_EXECUTABLE||'/home/mathis/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome',headless:true,args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 const restored=process.env.RESUME_MANIFEST?JSON.parse(await fs.readFile(process.env.RESUME_MANIFEST,'utf8')):null;if(restored)assert.equal(restored.sourceSha256,sourceSha256,'resumed clips use the exact renderer source');
 const errors=[],records=restored?.records||[];
-async function post(path,body={},token){const r=await fetch('http://127.0.0.1:'+port+'/game/api/'+path,{method:'POST',headers:{Origin:'http://127.0.0.1:'+port,'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(body)});assert.ok(r.ok,await r.clone().text());return r.json();}
+async function post(path,body={},token){return new Promise((resolve,reject)=>{const req=http.request('http://127.0.0.1:'+port+'/game/api/'+path,{method:'POST',headers:{Origin:'http://127.0.0.1:'+port,'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})}},res=>{let data='';res.on('data',b=>data+=b);res.on('end',()=>{try{assert.ok(res.statusCode<300,data);resolve(JSON.parse(data));}catch(e){reject(e);}});});req.on('error',reject);req.end(JSON.stringify(body));});}
 try{for(const id of (process.env.FIGHTER_IDS?process.env.FIGHTER_IDS.split(','):CHARACTERS)){
  const index=CHARACTERS.indexOf(id);assert.ok(index>=0,'known fighter');
  if(process.env.FIGHTER_ID&&process.env.FIGHTER_ID!==id)continue;

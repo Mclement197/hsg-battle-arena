@@ -53,7 +53,7 @@ async function capture(page,number,name){
 }
 try{
  for(const arenaId of (process.env.ARENA_ID?[process.env.ARENA_ID]:['library','trischli','mensa-b']))for(const id of (process.env.FIGHTER_IDS?process.env.FIGHTER_IDS.split(','):process.env.FIGHTER_ID?[process.env.FIGHTER_ID]:CHARACTERS)){
-  if(process.env.SKIP_COMPLETED==='1'){try{const prior=JSON.parse(await fs.readFile(dir+'/room-'+arenaId+'-'+id+'-checks.json','utf8'));if(prior.sourceSha256!==sourceSha256)throw Error('Stale renderer proof');checks.push(...prior.checks);console.log('REUSE',arenaId,id);continue;}catch{}}
+  if(process.env.SKIP_COMPLETED==='1'){try{const prior=JSON.parse(await fs.readFile(dir+'/room-'+arenaId+'-'+id+'-checks.json','utf8'));if(prior.sourceSha256!==sourceSha256||JSON.stringify(prior.modelSha256)!==JSON.stringify(modelSha256))throw Error('Stale renderer/model proof');checks.push(...prior.checks);console.log('REUSE',arenaId,id);continue;}catch{}}
   const recordStart=checks.length,other=CHARACTERS[(CHARACTERS.indexOf(id)+3)%CHARACTERS.length];
   console.log('ROOM',arenaId,id);
   const desktop=await browser.newContext({viewport:{width:1280,height:900}}),mobile=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
@@ -81,7 +81,7 @@ try{
    await post('rooms/'+room.roomId+'/reset',{},room.hostToken);for(const p of [host,phone])await p.waitForFunction(()=>!document.querySelector('.battle-world-canvas'));checks.push({arenaId,interruptedReset:true});
    const switched=arenaId==='trischli'?'mensa-b':'trischli';await post('rooms/'+room.roomId+'/configure',{arenaId:switched,characterA:id,characterB:other},room.hostToken);const restart=await post('rooms/'+room.roomId+'/start',{},room.hostToken);clock=restart.state.prebattle.deadline;game.tick();for(const p of [host,phone]){await ready(p);assert.equal(await p.evaluate(()=>window.__world.state.arenaId),switched);assert.equal(await p.locator('.battle-world-canvas').count(),1);}await post('rooms/'+room.roomId+'/reset',{},room.hostToken);checks.push({arenaId,switched,reenter:true});
   }
-  await desktop.close();await mobile.close();await fs.writeFile(dir+'/room-'+arenaId+'-'+id+'-checks.json',JSON.stringify({sourceSha256,checks:checks.slice(recordStart),errors},null,2));await fs.writeFile(dir+'/checks-partial.json',JSON.stringify({sourceSha256,checks,errors},null,2));
+  await desktop.close();await mobile.close();await fs.writeFile(dir+'/room-'+arenaId+'-'+id+'-checks.json',JSON.stringify({sourceSha256,modelSha256,checks:checks.slice(recordStart),errors},null,2));await fs.writeFile(dir+'/checks-partial.json',JSON.stringify({sourceSha256,checks,errors},null,2));
  }
  assert.deepEqual(errors,[]);await fs.writeFile(dir+'/checks'+(process.env.ARENA_ID?'-'+process.env.ARENA_ID:'')+(process.env.FIGHTER_ID?'-'+process.env.FIGHTER_ID:process.env.FIGHTER_IDS?'-remaining':'')+'.json',JSON.stringify({sourceSha256,checks,errors},null,2));console.log('PASS',checks.length,'exhaustive real-render checks');
 }finally{await browser.close();await game.close();}

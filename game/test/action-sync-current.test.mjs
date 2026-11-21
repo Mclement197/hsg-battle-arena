@@ -8,8 +8,8 @@ import {ABILITIES,ARENA_WORLDS,BattleEvents,actionSoundTiming} from '../public/b
 
 test('entrypoint, app/world and both contract imports share the new cache generation',async()=>{
  const [html,app,world]=await Promise.all(['index.html','app.js','battle-world.js'].map(f=>readFile(new URL('../public/'+f,import.meta.url),'utf8')));
- const version='20261020-action-sync-current1',viewport='20261121-siuu1';
- // Only app gain changed; world, stylesheet and contract retain their own cache generations.
+ const version='20261021-festival-puck1',viewport='20261121-siuu1';
+ // Entry assets and world use the win generation; contract modules retain their deliberate generation.
  assert.ok(html.includes('./app.js?v=20261121-siuu2'));
  assert.ok(html.includes('./styles.css?v=20261110-win-celebration1'));
  assert.ok(app.includes('./battle-world.js?v='+viewport));

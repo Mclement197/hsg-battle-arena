@@ -19,7 +19,8 @@ for(const id of Object.keys(contract.ABILITIES))for(const move of ['attack','def
  const played=[],cue=createActionCue((move,options)=>played.push(options),{presentation:true}),s=initial(),r=result(1,move,id),e=event(r);cue(s);cue({...s,lastResult:r});
  const {phase,accent}=contract.actionSoundTiming(move,id+':'+move),anchor=phase*2200;
  for(let t=0;t<=anchor+10;t+=10){cue.present(e,{elapsed:t});if(played.length){assert.ok(Math.abs(t+(accent-played[0].offset)*1000-anchor)<=10);break;}}
- assert.equal(played.length,1,'smooth frames retain available prelude');cue.present(e,{elapsed:anchor});assert.equal(played.length,1);
+ assert.equal(played.length,1,'smooth frames retain available prelude');cue.present(e,{elapsed:anchor});assert.equal(played.length,id==='trischli-warrior'&&move==='attack'?2:1);
+ if(id==='trischli-warrior'&&move==='attack'){assert.equal(played[1].soundKey,'trischli-warrior:attack:accent');assert.equal(played[1].offset,0);}
 });
 test('fallback buffer changes acoustic accent, not the authoritative named gesture phase',()=>{
  const played=[],cue=createActionCue((m,o)=>played.push(o),{presentation:true,select:move=>move}),s=initial(),r=result(1,'special');cue(s);cue({...s,lastResult:r});

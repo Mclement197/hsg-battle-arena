@@ -39,13 +39,15 @@ try{
   const start=await post('rooms/'+room.roomId+'/start',{},room.hostToken);time=start.state.prebattle.deadline;game.tick();await ready(host);console.log('HOST READY',arenaId);await ready(phone);console.log('PHONE READY',arenaId);if(process.env.PHONE_MATRIX)for(const page of [host,phone])await page.evaluate(()=>{const renderer=window.__world.renderer,render=renderer.render.bind(renderer);window.__renderMs=[];renderer.render=(...args)=>{const start=performance.now();render(...args);if(window.__renderMs.length<1500)window.__renderMs.push(performance.now()-start);};});await host.waitForTimeout(400);
   const initial=await probe(host);assert.equal(initial.canvases,1);assert.equal(initial.separate,0);assert.ok(initial.environment);assert.ok(Object.values(initial.fighters).every(f=>f.parent));assert.equal((await probe(phone)).arena,arenaId);
 
+  await host.bringToFront();await host.waitForFunction(()=>window.__world?.renderer?.info.render.frame>5,null,{timeout:90000});
   console.log('RECORD',arenaId);await host.evaluate(()=>{const canvas=document.querySelector('.battle-world-canvas');window.__video=new Promise(resolve=>{const stream=canvas.captureStream(20),rec=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp9',videoBitsPerSecond:1800000}),chunks=[];rec.ondataavailable=e=>chunks.push(e.data);rec.onstop=async()=>{stream.getTracks().forEach(t=>t.stop());resolve(Array.from(new Uint8Array(await new Blob(chunks).arrayBuffer())));};window.__rec=rec;rec.start();});});
   const r=arena.rooms.get(room.roomId);let actionNo=0;
   for(const [actor,move]of [['A','attack'],['B','special'],['A','defend'],['B','heal']]){
    const token=actor==='A'?room.hostToken:guest.playerToken;
+   await host.bringToFront();
    if(process.env.PHONE_MATRIX){await (actor==='A'?host:phone).locator(actor==='A'?'[data-solo-move='+move+']':'[data-move='+move+']').tap();}else await post('rooms/'+room.roomId+'/'+(actor==='A'?'play':'vote'),{turnId:r.turn.id,move},token);game.tick();
    if(process.env.PHONE_MATRIX){assert.equal(r.lastResult?.move,move);assert.equal(r.lastResult?.team,actor);assert.equal(r.lastResult?.targetTeam,['attack','special'].includes(move)?actor==='A'?'B':'A':actor);if(['attack','special'].includes(move))assert.ok(r.lastResult.damage>0);}
-   await host.waitForFunction(n=>window.__world?.active?.id.endsWith('0:'+n),++actionNo,{timeout:15000});
+   await host.waitForFunction(n=>window.__world?.active?.id.endsWith('0:'+n),++actionNo,{timeout:15000}).catch(async error=>{console.error('ACTION_DIAGNOSTIC',await host.evaluate(()=>({hidden:document.hidden,state:window.__world?.state?.lastResult,queue:window.__world?.events?.pending,active:window.__world?.active,shots:window.__cameraShots,frame:window.__world?.renderer?.info.render.frame})));throw error;});
    await host.bringToFront();await host.waitForTimeout(350);const anticipation=await probe(host);console.log('ACTION',arenaId,move,anticipation.camera);
    await host.waitForFunction(()=>window.__world?.active?.hit||!window.__world?.active,null,{timeout:10000});const impact=await probe(host);
    await shot(host,arenaId+'-'+move+'-impact');

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import * as THREE from '../public/vendor/three.module.js';
 import {GLTFLoader} from '../public/vendor/GLTFLoader.js';
-import {BattleWorld,actionCamera,fighterEnvelope,selectionCamera} from '../public/battle-world.js';
+import {BattleWorld,actionCamera,fighterEnvelope,selectionCamera,createMensa} from '../public/battle-world.js';
 import {ARENA_WORLDS,ABILITIES} from '../public/battle-contract.js';
 
 const moves=['attack','defend','heal','special'];
@@ -50,7 +50,7 @@ for(const id of Object.keys(ABILITIES))test(id+' true animated bounds keep wings
 });
 
 for(const [arena,config] of Object.entries(ARENA_WORLDS))test(arena+' paths clear actual walls/ceiling and retain unobstructed fighter sight lines',async()=>{
- const bytes=await readFile(new URL('../public/'+config.model.slice(2),import.meta.url));const gltf=await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');gltf.scene.updateMatrixWorld(true);
+ const bytes=arena==='mensa-b'?null:await readFile(new URL('../public/'+config.model.slice(2),import.meta.url));const gltf=arena==='mensa-b'?await createMensa():await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');gltf.scene.updateMatrixWorld(true);
  const ray=new THREE.Raycaster();
  for(const actor of ['A','B'])for(const move of moves)for(const aspect of [1,2.7])for(const t of [0,.16,.32,.46,.59,.72,.88,1]){
   const {position}=actionCamera(config,event(actor,move),t,aspect);

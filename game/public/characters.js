@@ -16,7 +16,7 @@ export function release(root) {
   const geometries = new Set(), materials = new Set(), skeletons = new Set(), textures = new Set();
   root?.traverse(o => { if (o.geometry) geometries.add(o.geometry); if (o.skeleton) skeletons.add(o.skeleton); for (const m of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) materials.add(m); });
   for (const material of materials) for (const value of Object.values(material)) if (value?.isTexture) textures.add(value);
-  root?.traverse(o => { if (o.shadow?.map) o.shadow.map.dispose(); });
+  root?.traverse(o => { if (o.shadow?.map) o.shadow.map.dispose(); if(o.isInstancedMesh)o.dispose(); });
   for (const x of [...geometries, ...materials, ...skeletons, ...textures]) x.dispose();
 }
 

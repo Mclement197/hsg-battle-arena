@@ -1,11 +1,11 @@
 import { BattleWorld } from './battle-world.js?v=20261121-siuu1';
 import { CharacterStage, modelFor } from './characters.js?v=20261018-previews';
 import { FIGHTER_PROFILES, STAT_META, fighterStats, moveDescription } from './fighter-data.js?v=20261020-luca-max';
-import { ABILITIES, BattlePresentation, moveLabel, actionSoundTiming, actionEventId } from './battle-contract.js?v=20261020-action-sync-current1';
+import { ABILITIES, BattlePresentation, moveLabel, actionSoundTiming, actionEventId } from './battle-contract.js?v=20261021-festival-puck1';
 // Presentation identities use the authoritative team characterId, never nickname or team order.
 export const CHARACTER_THEMES = Object.freeze(Object.fromEntries(Object.entries({
- 'luca-di-grazia': 'Luca Di Grazia', 'free-rider': 'Free rider in group project', 'tryhard': 'Tryhard',
- 'assessment-hoodie': 'Assessment student', 'trischli-warrior': 'Trischli warrior', 'bad-teacher': 'Bad teacher'
+ 'luca-di-grazia': 'Luca Di Grazia', 'free-rider': 'Free rider', 'tryhard': 'Tryhard',
+ 'assessment-hoodie': 'Assessie with HSG hoodie', 'trischli-warrior': 'Trischli warrior', 'bad-teacher': 'Bad teacher'
 }).map(([id, name]) => [id, { name, motif: ABILITIES[id].attack.motif, labels: Object.fromEntries(Object.entries(ABILITIES[id]).map(([move, ability]) => [move, ability.label])) }])));
 
 // Drawn vector motifs, not platform-dependent emoji. Each action retains its own motion grammar.
@@ -33,8 +33,13 @@ export const ACTION_SOUNDS = Object.freeze({
 // Stable roster/mechanic IDs only; display labels and animation clips never select audio.
 export const THEMED_ACTION_SOUNDS = Object.freeze(Object.fromEntries(
   Object.keys(CHARACTER_THEMES).flatMap(id => Object.keys(ACTION_SOUNDS).map(move =>
-    [id + ':' + move, './assets/audio/' + id + '-' + move + '.wav']))
+    [id + ':' + move, './assets/audio/' + id + '-' + move + '.wav' + (id === 'trischli-warrior' && move === 'attack' ? '?v=20261021-festival-puck1' : id === 'assessment-hoodie' && move === 'attack' ? '?v=20261109-bad-luck1' : '')]))
 ));
+
+// The existing Dance Off marker is a stem, not a new generic hit category.
+export const ACTION_ACCENTS = Object.freeze({
+  'trischli-warrior:attack:accent': './assets/audio/trischli-warrior-attack-accent.wav?v=20261021-festival-puck1'
+});
 
 export const AUDIO_SOUNDS = Object.freeze({
   ...ACTION_SOUNDS,
@@ -167,10 +172,31 @@ export function createActionCue(play, { presentation = false, ready = () => true
       }
     }
   };
-  consume.present = (event, { elapsed = 0, tableau = false, fallback = false } = {}) => {
+  consume.present = (event, { elapsed = 0, tableau = false, fallback = false, presentedAt } = {}) => {
     const cue = pending.get(event.id);
     if (!cue) return;
     if (!ready()) { pending.delete(event.id); return; }
+    const fullDance = cue.soundKey === 'trischli-warrior:attack';
+    if (fullDance) {
+      presentedAt ??= performance.now();
+      const duration = event.ability?.duration || 2200, anchor = actionSoundTiming(cue.move, cue.soundKey).phase * duration;
+      const age = Number.isFinite(event.startedAt) ? Math.max(elapsed, performance.now() - event.startedAt) : elapsed;
+      const step = elapsed - (cue.elapsed || 0); cue.elapsed = elapsed;
+      if (!cue.bedDone && (tableau || fallback || elapsed >= anchor - .001 || step <= 80 || age >= duration)) {
+        cue.bedDone = true;
+        if (age < duration && (tableau || fallback || elapsed <= anchor + 180)) play(cue.move, { ...cue, actionId: event.id, offset: Math.max(0, age / 1000) });
+      }
+      if (!cue.markerDone && (tableau || fallback || elapsed >= anchor - .001)) {
+        cue.markerDone = true;
+        // A held pose may be late; its accent may not start >80ms after render submission.
+        if (pending.get(event.id) === cue && ready() && performance.now() - presentedAt <= 80 && (!fallback || age < duration) &&
+            (tableau || fallback || elapsed <= anchor + 180)) {
+          play(cue.move, { ...cue, soundKey: cue.soundKey + ':accent', actionId: event.id, offset: 0 });
+        }
+      }
+      if (cue.bedDone && cue.markerDone) pending.delete(event.id);
+      return;
+    }
     const phase = actionSoundTiming(cue.move, cue.characterId + ':' + cue.move).phase;
     const { accent } = actionSoundTiming(cue.move, cue.soundKey), duration = event.ability?.duration || 2200;
     const anchor = phase * duration, lead = anchor - accent * 1000;
@@ -245,7 +271,7 @@ export class ActionAudio {
     };
     this.loading = Promise.all(Object.entries(AUDIO_SOUNDS).map(loadOne));
     // A missing or slow personalized cue must never gate the seven required base WAVs.
-    this.themedLoading ||= Promise.all(Object.entries(THEMED_ACTION_SOUNDS).map(loadOne))
+    this.themedLoading ||= Promise.all(Object.entries({ ...THEMED_ACTION_SOUNDS, ...ACTION_ACCENTS }).map(loadOne))
       .finally(() => { this.themedLoading = null; });
     await this.loading;
     this.loading = null;
@@ -277,7 +303,8 @@ export class ActionAudio {
   }
   actionSound(move, characterId) {
     const key = characterId + ':' + move;
-    return Object.hasOwn(THEMED_ACTION_SOUNDS, key) && this.buffers.has(key) ? key : move;
+    const complete = key !== 'trischli-warrior:attack' || this.buffers.has(key + ':accent');
+    return Object.hasOwn(THEMED_ACTION_SOUNDS, key) && this.buffers.has(key) && complete ? key : move;
   }
   stopActions() {
     for (const source of [...this.actions]) source.stop();
@@ -1158,7 +1185,7 @@ if (typeof document !== 'undefined') (() => {
     }
   }
   const arenaNames = { library: 'Library', trischli: 'Trischli', 'mensa-b': 'Mensa B' };
-  const arenaDescriptions = { library: 'Quiet zone. Loud rivalry.', trischli: 'Last dance. Last fighter standing.', 'mensa-b': 'No 3D environment yet. Health and commands only.' };
+  const arenaDescriptions = { library: 'Quiet zone. Loud rivalry.', trischli: 'Last dance. Last fighter standing.', 'mensa-b': 'Concrete beams. Coffee. Campus rivalry.' };
   let setupMode = 'groups', selectedArena = 'library', selectedTeam = 'A';
   const selectedCharacters = { A: 'luca-di-grazia', B: 'free-rider' };
   function reportError(message) { setText('global-error', message); $('global-error').hidden = false; }
@@ -1196,9 +1223,8 @@ if (typeof document !== 'undefined') (() => {
       const button = document.createElement('button');
       button.type = 'button'; button.className = 'arena-option'; button.dataset.arena = id;
       button.setAttribute('aria-pressed', String(selectedArena === id));
-      const image = document.createElement(id === 'mensa-b' ? 'span' : 'img');
-      if (id === 'mensa-b') { image.className = 'arena-unmodeled'; image.textContent = '3D arena not modeled'; }
-      else { image.src = './assets/arena-' + id + '.webp?v=96f7431-previews1'; image.alt = name + ' — actual 3D battle arena'; }
+      const image = document.createElement('img');
+      image.src = './assets/arena-' + id + '.webp?v=' + (id === 'mensa-b' ? '20261019-mensa1' : '96f7431-previews1'); image.alt = name + ' — actual 3D battle arena';
       const title = document.createElement('strong'); title.textContent = name;
       const description = document.createElement('small'); description.textContent = arenaDescriptions[id];
       button.append(image, title, description);
@@ -1297,7 +1323,7 @@ if (typeof document !== 'undefined') (() => {
     const identities = {};
     for (const [team, key] of [['A', 'ace'], ['B', 'dynamo']]) {
       const theme = characterTheme(state.teams[team].characterId);
-      const name = theme?.name || (team === 'A' ? 'Assessment Ace' : 'Deadline Dynamo');
+      const name = theme?.name || (team === 'A' ? 'Assessie with HSG hoodie' : 'Deadline Dynamo');
       const id = theme ? state.teams[team].characterId : team === 'A' ? 'assessment-hoodie' : 'tryhard';
       identities[team] = { name, id };
       for (const image of document.querySelectorAll('.' + key + '-fighter .fighter-art, .' + key + '-roster > img')) {
@@ -1308,6 +1334,7 @@ if (typeof document !== 'undefined') (() => {
       document.querySelector('.' + key + '-roster h2').textContent = name;
       document.querySelector('.' + key + '-roster .team-tag').textContent = 'TEAM ' + team;
       $(key + '-hp').setAttribute('aria-label', name + ' health');
+      $(key + '-players').setAttribute('aria-label', name + ' players');
     }
     setText('battle-title', arenaNames[state.arenaId] || 'Campus battle');
     $('battle-title').classList.remove('sr-only');

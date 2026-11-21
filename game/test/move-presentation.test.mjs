@@ -2,12 +2,42 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {BattlePresentation,ABILITIES,ARENA_WORLDS,moveLabel} from '../public/battle-contract.js';
-import {BattleWorld,selectionCamera,actionCamera} from '../public/battle-world.js';
+import {CHARACTER_THEMES} from '../public/app.js';
+import {BattleWorld,selectionCamera,actionCamera,createMensa} from '../public/battle-world.js';
 import * as THREE from '../public/vendor/three.module.js';
 import {GLTFLoader} from '../public/vendor/GLTFLoader.js';
 const initial=()=>({roomId:'qa',match:0,phase:'running',teams:{A:{hp:100,characterId:'luca-di-grazia'},B:{hp:100,characterId:'bad-teacher'}},lastResult:null});
 const result=(n,team,move,hp)=>({number:n,turnId:'0:'+n,team,move,targetTeam:['attack','special'].includes(move)?team==='A'?'B':'A':team,targetHp:hp,actorCharacterId:team==='A'?'luca-di-grazia':'bad-teacher'});
-test('all 24 named moves derive from the sole ability mapping',()=>{for(const [id,abilities]of Object.entries(ABILITIES))for(const [move,ability]of Object.entries(abilities))assert.equal(moveLabel(id,move),move[0].toUpperCase()+move.slice(1)+' · '+ability.label);});
+test('all six display names and 24 moves preserve title case, spelling and stable IDs',()=>{
+ const roster={
+  'luca-di-grazia':['Luca Di Grazia',['Golden Chalk','Open Book','Good Work','Full Marks']],
+  'free-rider':['Free rider',['Copy / Paste','Paper Decoy','Group Credit','AI Slop']],
+  'tryhard':['Tryhard',['Formula','Textbook','Extra Credit','A+']],
+  'assessment-hoodie':['Assessie with HSG hoodie',['Bad Luck','Hood Up','Take Hoodie Off','Skip Maths A Lecture']],
+  'trischli-warrior':['Trischli warrior',['Dance Off','Call the Bouncer','Glass of Water','Throw a Beer']],
+  'bad-teacher':['Bad teacher',['Red Pen','Curved Exam','Brian AI','Failed']]
+ };
+ assert.deepEqual(Object.keys(ABILITIES),Object.keys(roster));
+ assert.deepEqual(Object.keys(CHARACTER_THEMES),Object.keys(roster));
+ for(const [id,[name,labels]]of Object.entries(roster)){
+  assert.equal(CHARACTER_THEMES[id].name,name);
+  assert.deepEqual(Object.keys(ABILITIES[id]),['attack','defend','heal','special']);
+  assert.deepEqual(Object.values(ABILITIES[id]).map(ability=>ability.label),labels);
+  assert.deepEqual(Object.values(CHARACTER_THEMES[id].labels),labels);
+  for(const [move,ability]of Object.entries(ABILITIES[id])){
+   assert.equal(moveLabel(id,move),move[0].toUpperCase()+move.slice(1)+' · '+ability.label);
+   assert.deepEqual({...ability,label:undefined},{motif:CHARACTER_THEMES[id].motif,color:ABILITIES[id].attack.color,label:undefined,clip:move,target:['attack','special'].includes(move)?'opponent':'actor',duration:2200,launch:.32,impact:.59});
+  }
+ }
+});
+test('Assessie static battle and lobby labels include accessible names without renaming assets',async()=>{
+ const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');
+ for(const label of ['<h2>Assessie with HSG hoodie</h2>','<span>Assessie with HSG hoodie</span>','aria-label="Assessie with HSG hoodie players"','aria-label="Assessie with HSG hoodie health"','alt="Assessie with HSG hoodie"'])assert.ok(html.includes(label),label);
+ assert.ok(html.includes('./assets/characters/assessment-hoodie.webp'));
+ assert.ok(!/Assessment Ace|ASSESSMENT ACE|Assessment student/.test(html));
+ const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
+ assert.ok(app.includes("$(key + '-players').setAttribute('aria-label', name + ' players')"));
+});
 test('rapid coalesced damage, opponent attack, heal and lethal commit individually only on matching completion',()=>{
  const p=new BattlePresentation(),s=initial();p.consume(s);
  const results=[result(1,'A','attack',72),result(2,'B','attack',78),result(3,'A','heal',92),result(4,'B','special',0)];
@@ -26,7 +56,7 @@ test('more than eight connected results are retained and no completed HP snaps t
  const p=new BattlePresentation(),s=initial();p.consume(s);for(let n=1;n<=12;n++)p.consume({...s,lastResult:result(n,'A','attack',100-n),teams:{...s.teams,B:{...s.teams.B,hp:100-n}}});assert.equal(p.pending.length,12);p.complete(p.pending[0].id);assert.equal(p.hp.B,99);
 });
 for(const [arena,config]of Object.entries(ARENA_WORLDS))test(arena+' held opposing selection shots and transitions clear geometry and sight lines',async()=>{
- const bytes=await readFile(new URL('../public/'+config.model.slice(2),import.meta.url));const g=await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');g.scene.updateMatrixWorld(true);const ray=new THREE.Raycaster();
+ const bytes=arena==='mensa-b'?null:await readFile(new URL('../public/'+config.model.slice(2),import.meta.url));const g=arena==='mensa-b'?await createMensa():await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');g.scene.updateMatrixWorld(true);const ray=new THREE.Raycaster();
  // The integrated HUD uses shallow mirrored shots so both bodies remain comparable in size.
  // World-space travel (>2.4 in the old wide orbit) is not a visibility requirement.
  for(const aspect of [.65,.85,1.6,2.7])for(const team of ['A','B']){

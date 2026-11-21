@@ -27,7 +27,7 @@ try {
   await page.locator('#connection[data-state="connected"]').waitFor();
   assert.equal(await page.evaluate(() => sessionStorage.getItem('hsg-admin-key')), 'browser-fixture-key');
   assert.equal(await page.locator('#admin-key').inputValue(), '');
-  assert.deepEqual(await page.locator('.fighter-name').allTextContents(), ['Luca Di Grazia', 'Free rider in group project']);
+  assert.deepEqual(await page.locator('.fighter-name').allTextContents(), ['Luca Di Grazia', 'Free rider']);
   assert.equal(await page.locator('.room-code').textContent(), 'K7••');
   await page.locator('#show-codes').click();
   assert.equal(await page.locator('.room-code').textContent(), 'K7MP');

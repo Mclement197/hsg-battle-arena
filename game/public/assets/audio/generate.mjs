@@ -1,6 +1,7 @@
-// Original HSG Battle Arena synthesis by OpenClaw game-sound-designer, 2026-10-20; no samples.
+// Original instrumental synthesis, OpenClaw game-sound-designer, 2026-10-20. Dance Off uses the approved offline Kokoro Puck recording; see README.md.
 import { writeFile } from 'node:fs/promises';
-import { pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ACTION_SOUNDS, THEMED_ACTION_SOUNDS } from '../../app.js';
 
 const RATE = 24000;
@@ -72,6 +73,10 @@ export function buildSound(move) {
   return wav;
 }
 
+export function buildDanceOffAccent() {
+  return execFileSync('python3', [fileURLToPath(new URL('./generate-dance-off.py', import.meta.url)), '--stem', 'accent']);
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   for (const [move, url] of Object.entries(ACTION_SOUNDS)) {
     const destination = new URL(url, new URL('../../app.js', import.meta.url));
@@ -86,14 +91,17 @@ export const NAMED_DURATIONS = Object.freeze({
   'luca-di-grazia': [.24, .34, .52, .70],
   'free-rider': [.26, .34, .56, .70],
   tryhard: [.24, .32, .52, .66],
-  'assessment-hoodie': [.28, .34, .56, .70],
-  'trischli-warrior': [.30, .36, .54, .72],
+  'assessment-hoodie': [.50, .34, .56, .70],
+  'trischli-warrior': [2.20, .36, .54, .72],
   'bad-teacher': [.24, .36, .56, .68]
 });
 
 export function buildNamedSound(characterId, move) {
   const key = characterId + ':' + move, index = Object.keys(ACTION_SOUNDS).indexOf(move);
   if (!Object.hasOwn(THEMED_ACTION_SOUNDS, key)) throw new Error('Unknown named sound: ' + key);
+  if (key === 'trischli-warrior:attack') {
+    return execFileSync('python3', [fileURLToPath(new URL('./generate-dance-off.py', import.meta.url))]);
+  }
   const samples = new Float64Array(Math.round(NAMED_DURATIONS[characterId][index] * RATE));
   let seed = 0x485347;
   const random = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) / 2147483648 - 1; };
@@ -157,9 +165,25 @@ export function buildNamedSound(characterId, move) {
     case 'tryhard:special': // A+: precise score buildup, bright grade payoff, not a win fanfare.
       charge(800, 1800, .13); [0, .04, .075].forEach(s => tone(s, .06, 950, 950, .3, 15));
       stamp(.14, 850); tone(.15, .42, 1760, 1760, .65, 10, 'glass'); tone(.23, .32, 1320, 1320, .4, 11); break;
-    case 'assessment-hoodie:attack': // Bad Luck: unstable fall and a short midrange lightning crack.
-      tone(0, .19, 950, 380, .8, 9, 'pulse'); friction(.055, .12, 1, 4200, 23, 97);
-      tone(.085, .18, 460, 300, .5, 20); break;
+    case 'assessment-hoodie:attack': { // Bad Luck: one lightning crack at the existing 55 ms accent, then thunder.
+      friction(0, .055, .04, 4800, 8); // Restrained electrical air, not a pitched game chirp.
+      let crackLow = 0, crackBass = 0, crackSmooth = 0, thunderLow = 0, thunderBass = 0;
+      const pole = hz => 1 - Math.exp(-TAU * hz / RATE);
+      layer(.055, .085, 2.3, .0007, 55, () => {
+        crackLow += pole(3500) * (random() - crackLow);
+        crackBass += pole(1400) * (crackLow - crackBass);
+        crackSmooth += pole(3500) * (crackLow - crackBass - crackSmooth);
+        return crackSmooth;
+      });
+      // A continuous noisy body with audible phone midrange, not sub-bass or separate strikes.
+      layer(.055, .445, .85, .005, 9, () => {
+        thunderLow += pole(900) * (random() - thunderLow);
+        thunderBass += pole(95) * (thunderLow - thunderBass);
+        return thunderLow - thunderBass;
+      });
+      tone(.055, .40, 180, 85, .18, 12);
+      break;
+    }
     case 'assessment-hoodie:defend': // Hood Up: low cloth swish, paired protective tucks.
       friction(0, .20, 1, 1250, 6, 19); tone(.055, .20, 650, 580, .65, 20);
       friction(.11, .18, .7, 1700, 15); tone(.12, .20, 850, 780, .45, 19); break;
@@ -170,9 +194,6 @@ export function buildNamedSound(characterId, move) {
       charge(600, 1400, .14); tone(0, .07, 620, 620, .4, 20); tone(.08, .07, 620, 620, .4, 20);
       friction(.15, .15, .7, 2000, 10);
       [800, 1050, 1400].forEach((hz, i) => tone([.16, .28, .34][i], .25, hz, hz * 1.15, .75, 12)); break;
-    case 'trischli-warrior:attack': // Dance Off: syncopated footwork and a compact clap.
-      tone(0, .14, 520, 340, 1, 21); tone(.085, .15, 750, 490, .8, 21);
-      friction(.15, .12, .85, 2600, 20, 80); break;
     case 'trischli-warrior:defend': // Call the Bouncer: call chirp answered by weighty two-step guard.
       tone(0, .065, 1100, 1300, .45, 15); tone(.065, .065, 1300, 1100, .4, 15);
       stamp(.13, 500); tone(.195, .15, 750, 650, .7, 20); break;
@@ -228,4 +249,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     await writeFile(destination, wav);
     console.log(key + ': ' + destination.pathname + ' (' + wav.length + ' bytes)');
   }
+  await writeFile(new URL('./trischli-warrior-attack-accent.wav', import.meta.url), buildDanceOffAccent());
 }

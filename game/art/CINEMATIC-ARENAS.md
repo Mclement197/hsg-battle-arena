@@ -1,5 +1,7 @@
 # Shared modeled battle worlds
 
+**2026-10-19 Mensa follow-up:** Mensa B is now reconstructed from three user-confirmed photographs. See [native source, reference limits and runtime integration](mensa-b/README.md). Its evaluated geometry is instanced in the same shared BattleWorld. The original two-venue implementation report below is historical; its former unmodeled-Mensa status no longer describes the current selector.
+
 Local implementation and verification. The phone follow-up has **not restarted or redeployed** the running service.
 
 ## Architecture
@@ -38,12 +40,12 @@ Evidence lives at /home/mathis/.openclaw/workspace/media/hsg-cinematic-arenas/. 
 
 | Fighter | Attack | Defend | Heal | Special | Physical vocabulary |
 |---|---|---|---|---|---|
-| Luca | Golden Chalk | Open Book | Good Work | Full Marks | Right-hand writing flourish; open hand/book guard; head lift; expanded wing/arm marks |
-| Free rider | Copy / Paste | Paper Decoy | Group Credit | All My Work | Left-hand snatch; paper fan guard; phone/credit glance; broad paper claim |
+| Luca Di Grazia | Golden Chalk | Open Book | Good Work | Full Marks | Right-hand writing flourish; open hand/book guard; head lift; expanded wing/arm marks |
+| Free rider | Copy / Paste | Paper Decoy | Group Credit | AI slop | Left-hand snatch; paper fan guard; phone/credit glance; broad paper claim |
 | Tryhard | Formula | Textbook | Extra Credit | A+ | Right-hand calculation over held book; raised textbook; studying nod; overhead formula |
-| Assessment hoodie | Bad Luck | Hood Up | One More Try | Broken Charm | Nervous recoil; hands to hood; recovery head lift; thrown broken cloud/charm |
-| Trischli warrior | Dance Off | Wristband | Second Wind | Dance Floor | Chest/arm dance; wrist raise; drink/head lift; amplified alternating dance rays |
-| Bad teacher | Red Pen | Exam Shield | Late Credit | Failed | Marking slash; exam-book guard; credit nod; broad crossed red-pen fail mark |
+| Assessie with HSG hoodie | Bad luck | hood up | Take hoodie off | Skip Maths A lecture | Nervous recoil; hands to hood; recovery head lift; thrown broken cloud/charm |
+| Trischli warrior | Dance Off | call the bouncer | glass of water | throw a beer | Chest/arm dance; wrist raise; drink/head lift; amplified alternating dance rays |
+| Bad teacher | Red Pen | curved exam | Brian AI | Failed | Marking slash; exam-book guard; credit nod; broad crossed red-pen fail mark |
 
 Guard and healing effects remain on the actor; only damaging moves travel to the opponent. Effects are small geometric constructions in the same depth-tested world, not CSS cards replacing character action. Labels merely name the existing combat commands.
 

@@ -1,0 +1,32 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { THEMED_ACTION_SOUNDS, ACTION_ACCENTS } from '../public/app.js';
+const digest = bytes => createHash('sha256').update(bytes).digest('hex');
+const sourceRoot = new URL('../audio-sources/dance-off/', import.meta.url);
+test('festival-techno shipping stems recompose to the exact user-approved audition, not stale eSpeak', async () => {
+ const provenance=JSON.parse(await readFile(new URL('provenance.json',sourceRoot),'utf8'));
+ const bed=await readFile(new URL('../public/assets/audio/trischli-warrior-attack.wav',import.meta.url));
+ const accent=await readFile(new URL('../public/assets/audio/trischli-warrior-attack-accent.wav',import.meta.url));
+ assert.equal(digest(bed),provenance.bed_sha256);assert.equal(digest(accent),provenance.accent_sha256);
+ const combined=Buffer.from(bed);
+ for(let i=0;i<(accent.length-44)/2;i++)combined.writeInt16LE(bed.readInt16LE(44+(30624+i)*2)+accent.readInt16LE(44+i*2),44+(30624+i)*2);
+ assert.equal(digest(combined),provenance.approved_preview_sha256,'zero PCM16 LSB difference from selected preview');
+ const generator=fileURLToPath(new URL('../public/assets/audio/generate-dance-off.py',import.meta.url));
+ assert.deepEqual(execFileSync('python3',[generator,'--stem','combined']),combined);
+ const voice=await readFile(new URL('puck-approved.wav',sourceRoot));assert.equal(digest(voice),'3fe1c9b530c4da9738e03effc466745841579f1f8c550312fe0a499265f33013');
+ assert.equal(digest(await readFile(new URL('puck-raw.wav',sourceRoot))),provenance.voice.raw_sha256);
+ assert.deepEqual(execFileSync('python3',[fileURLToPath(new URL('prepare-voice.py',sourceRoot))]),voice,'offline raw-to-approved preprocessing is byte-exact');
+});
+test('festival cache graph versions index/app/world and both contract imports coherently',async()=>{
+ const release='20261021-festival-puck1';
+ const [html,app,world]=await Promise.all(['index.html','app.js','battle-world.js'].map(p=>readFile(new URL('../public/'+p,import.meta.url),'utf8')));
+ assert.ok(html.includes('./app.js?v=20261121-siuu2'));assert.ok(html.includes('./styles.css?v=20261110-win-celebration1'));
+ assert.ok(app.includes('./battle-world.js?v=20261121-siuu1'));
+ for(const code of [app,world])assert.ok(code.includes('./battle-contract.js?v='+release));
+ assert.ok(THEMED_ACTION_SOUNDS['trischli-warrior:attack'].endsWith('.wav?v='+release));
+ assert.ok(ACTION_ACCENTS['trischli-warrior:attack:accent'].endsWith('.wav?v='+release));
+});

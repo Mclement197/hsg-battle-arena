@@ -1,6 +1,6 @@
 import * as THREE from './vendor/three.module.js';
 import { loadModel, modelFor, release } from './characters.js?v=20261018-previews';
-import { ARENA_WORLDS, BattleEvents, actionSoundTiming } from './battle-contract.js?v=20261020-action-sync-current1';
+import { ARENA_WORLDS, BattleEvents, MENSA_SCENE_GZIP, actionSoundTiming } from './battle-contract.js?v=20261021-festival-puck1';
 const v = a => new THREE.Vector3(...a);
 export const KO_DURATION = 2000;
 export const CELEBRATION_DURATION = 5000;
@@ -8,8 +8,33 @@ const CELEBRATION_POSE_DURATION = 2000;
 const CELEBRATION_LANDING = 1300;
 export function koPhase(ms){return ms<350?'stagger':ms<850?'knees':ms<1460?'fall':'flat';}
 
-
 const ease = t => { t = THREE.MathUtils.clamp(t,0,1); return t*t*(3-2*t); };
+
+// Exact evaluated Blender geometry, instanced without a new server route or room restart.
+export async function createMensa() {
+ const compressed=Uint8Array.from(atob(MENSA_SCENE_GZIP),c=>c.charCodeAt(0));
+ const recipe=await new Response(new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip'))).json();
+ const scene=new THREE.Group();scene.name='Mensa B / photographed architecture';
+ // Deterministic original micrograin, generated locally rather than taken from reference photographs.
+ const pixels=new Uint8Array(128*128*4);let seed=719;
+ for(let y=0;y<128;y++)for(let x=0;x<128;x++){seed=(1664525*seed+1013904223)>>>0;const i=(y*128+x)*4,value=220+(seed>>>29)*2+Math.sin(y*1.5)*5;pixels[i]=pixels[i+1]=pixels[i+2]=value;pixels[i+3]=255;}
+ const grain=new THREE.DataTexture(pixels,128,128);grain.wrapS=grain.wrapT=THREE.RepeatWrapping;grain.repeat.set(10,10);grain.needsUpdate=true;
+ const materials=recipe.materials.map(m=>{const color=new THREE.Color().setRGB(...m.color);return new THREE.MeshStandardMaterial({name:m.name,color,roughness:m.roughness,metalness:m.metalness,emissive:color,emissiveIntensity:m.emission,map:m.name.includes('concrete')?grain:null,bumpMap:m.name.includes('concrete')?grain:null,bumpScale:.008});});
+ const geometries=recipe.geometries.map(([positions,indices])=>{let g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setIndex(indices);g=g.toNonIndexed();g.computeVertexNormals();const p=g.getAttribute('position'),n=g.getAttribute('normal'),uv=[];
+  for(let i=0;i<p.count;i++){const axis=Math.abs(n.getZ(i))>.5?'z':Math.abs(n.getY(i))>.5?'y':'x';uv.push(axis==='x'?p.getY(i):p.getX(i),axis==='z'?p.getY(i):p.getZ(i));}
+  g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));return g;});
+ // Invisible parquet sides/undersides cost 92k triangles; retain the exact native upper surfaces.
+ const floor=new THREE.PlaneGeometry(1,1);floor.translate(0,0,.5);
+ const rotation=new THREE.Matrix4().makeRotationX(-Math.PI/2),matrix=new THREE.Matrix4();
+ for(const [geometry,material,transforms] of recipe.groups){
+  const mesh=new THREE.InstancedMesh(materials[material].name.startsWith('Parquet')?floor:geometries[geometry],materials[material],transforms.length);mesh.name=materials[material].name;
+  for(const [i,values] of transforms.entries())mesh.setMatrixAt(i,matrix.fromArray(values).premultiply(rotation));
+  mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();mesh.receiveShadow=true;mesh.castShadow=/bentwood|tubular|laminate/i.test(mesh.name);scene.add(mesh);
+ }
+ scene.add(new THREE.AmbientLight(0xe1e0d5,.80));
+ const fill=new THREE.PointLight(0xfff3db,12,25,2);fill.position.set(-4,3,5);scene.add(fill);
+ return {scene,animations:[]};
+}
 
 // Analytic timeline (not accumulated lerps): identical framing at 15/30/60 Hz and zero cut on return.
 export function actionCamera(config, event, progress, aspect = 1) {
@@ -46,6 +71,8 @@ export function selectionCamera(config, team = 'A', aspect = 1.6) {
  return { position, look: v(config.look), phase: 'selection-' + team };
 }
 
+// Exact per-vertex bounds, but each bone inverse product is invariant across its thousands of vertices.
+// Cache only within this evaluation: IK and cloth may change again before the next bounds query.
 export function fighterBounds(root) {
  const bounds=new THREE.Box3(),point=new THREE.Vector3(),base=new THREE.Vector3(),bones=new Map();
  root.updateWorldMatrix(false,true);
@@ -186,7 +213,6 @@ export function createMoveProps(label,color=0xffcf63) {
 
 function rigOffset(f,name,x=0,y=0,z=0){const bone=f.root.getObjectByName(THREE.PropertyBinding.sanitizeNodeName(name));if(bone)bone.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(x,y,z))).normalize();}
 function restoreFighter(f){if(!f?.home)return;f.holder.position.copy(f.home.position);f.holder.quaternion.copy(f.home.rotation);f.holder.scale.copy(f.home.scale);}
-
 function tintDefeated(f,amount){
  if(!f.koMaterials){f.koMaterials=[];f.root.traverse(o=>{if(o.isMesh)for(const m of Array.isArray(o.material)?o.material:[o.material])if(m?.color&&!f.koMaterials.some(x=>x[0]===m))f.koMaterials.push([m,m.color.clone()]);});}
  for(const [m,color] of f.koMaterials)m.color.copy(color).lerp(new THREE.Color(0x777777),amount*.8);
@@ -368,7 +394,7 @@ export function choreograph(world,progress){
   solveLimb(f,side,'leg',goal,local(i?-.02:.02,.45,1),plant.rotation);
  }
  // Skin weights extend the rubber sole slightly below the ankle's rigid plane when the knee bends.
- const sole=new THREE.Box3().setFromObject(f.holder,true).min.y;if(moving&&sole<a.y){f.holder.position.y+=a.y-sole;f.holder.updateMatrixWorld(true);}
+ const sole=fighterBounds(f.holder).min.y;if(moving&&sole<a.y){f.holder.position.y+=a.y-sole;f.holder.updateMatrixWorld(true);}
  // A two-hand prop's grip points are on its actual edges, not near a screen-space icon.
  const displayQ=world.propRotation||world.camera.quaternion,center=local(0,1.09,.31);
  // Surface frame tilted upward toward the stamp hand (not an upright billboard).
@@ -472,23 +498,23 @@ export class BattleWorld {
  async load(state) {
   const generation=this.generation;
   const world=ARENA_WORLDS[state.arenaId];
-  if(!world){this.fallback=true;this.container.dataset.worldStatus='unavailable';this.container.setAttribute('aria-label','Mensa B: 3D environment not modeled');return;}
-  this.config=world;this.container.dataset.worldStatus='loading';this.container.setAttribute('aria-label',state.arenaId==='library'?'Library: both fighters in the modeled 3D arena':'Trischli: both fighters in the modeled 3D arena');
+  if(!world){this.fallback=true;this.container.dataset.worldStatus='unavailable';this.container.setAttribute('aria-label','3D environment unavailable');return;}
+  this.config=world;this.container.dataset.worldStatus='loading';this.container.setAttribute('aria-label',({library:'Library',trischli:'Trischli','mensa-b':'Mensa B'})[state.arenaId]+': both fighters in the modeled 3D arena');
   const roots=[];
   try {
    for(const url of [world.model,...['A','B'].map(t=>modelFor(state.teams[t].characterId)?.model)]) {
     if(!url)throw Error('Unknown fighter');
-    const gltf=await loadModel(url);roots.push(gltf);
+    const gltf=url==='mensa-reconstruction'?await createMensa():await loadModel(url);roots.push(gltf);
     if(generation!==this.generation){for(const g of roots)release(g.scene);return;}
    }
-   this.scene=new THREE.Scene();this.scene.background=new THREE.Color(state.arenaId==='library'?0xadb6ad:0x151724);
+   this.scene=new THREE.Scene();this.scene.background=new THREE.Color(state.arenaId==='trischli'?0x151724:0xadb6ad);
    this.environment=roots[0].scene;
    // Exported punctual lighting is kept bounded; one shared key supplies coherent fighter shadows.
    this.environment.traverse(o=>{if(o.isLight)o.intensity=Math.min(o.intensity,12);if(o.isMesh){o.receiveShadow=true;}});
    // Keep exported fixtures but render at most three non-shadow punctual lights on phones.
    const fixtures=[];this.environment.traverse(o=>{if(o.isLight)fixtures.push(o);});fixtures.sort((a,b)=>b.intensity-a.intensity);for(const light of fixtures.slice(3))light.visible=false;
-   this.scene.add(this.environment,new THREE.HemisphereLight(0xdceaff,0x4d4940,state.arenaId==='library'?1.8:1.1));
-   const key=new THREE.DirectionalLight(state.arenaId==='library'?0xfff0d8:0xdee7ff,3.3);
+   this.scene.add(this.environment,new THREE.HemisphereLight(0xdceaff,0x4d4940,state.arenaId==='trischli'?1.1:state.arenaId==='library'?1.8:2.0));
+   const key=new THREE.DirectionalLight(state.arenaId==='trischli'?0xdee7ff:0xfff0d8,3.3);
    key.position.set(-2,6,-1);key.target.position.set(0,0,-4);key.castShadow=true;key.shadow.mapSize.set(1024,1024);
    Object.assign(key.shadow.camera,{left:-8,right:8,top:8,bottom:-8,near:.1,far:25});key.shadow.bias=-.0004;this.scene.add(key,key.target);
    for(const [i,team] of ['A','B'].entries()) {
@@ -498,7 +524,7 @@ export class BattleWorld {
     const bounds=new THREE.Box3().setFromObject(root);const holder=new THREE.Group();holder.name='fighter-'+team;
     root.position.y-=bounds.min.y;holder.add(root);holder.position.copy(v(world.fighters[i]));
     // glTF export changes Blender's -Y face direction to local +Z.
-    const other=v(world.fighters[1-i]);holder.rotation.y=Math.atan2(other.x-holder.position.x,other.z-holder.position.z);
+const other=v(world.fighters[1-i]);holder.rotation.y=Math.atan2(other.x-holder.position.x,other.z-holder.position.z);
     root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=false;o.frustumCulled=false;}});
     this.scene.add(holder);const mixer=new THREE.AnimationMixer(root),actions=new Map(gltf.animations.map(c=>[c.name,mixer.clipAction(c)]));
     this.fighters[team]={root,holder,mixer,actions,characterId:state.teams[team].characterId,clip:null,home:{position:holder.position.clone(),rotation:holder.quaternion.clone(),scale:holder.scale.clone()}};
@@ -519,8 +545,8 @@ export class BattleWorld {
    this.fallback=false;
    let last=performance.now();const tick=now=>{if(generation!==this.generation)return;this.raf=requestAnimationFrame(tick);if(document.hidden||now-last<1000/30)return;const dt=Math.min((now-last)/1000,.25);last=now;
     for(const [team,f] of Object.entries(this.fighters))if(!this.motion.matches&&team!==this.active?.actor&&!(this.active?.koStartedAt&&team===this.active.target))f.mixer.update(dt);
-    // KO dedup: existing BattleEvents consumes each authoritative result once per room/match.
-    if(!this.active&&this.events.pending.length)this.begin(this.events.pending.shift(),now);
+    // KO dedup: BattleEvents consumes each authoritative result once per room/match.
+  if(!this.active&&this.events.pending.length)this.begin(this.events.pending.shift(),now);
     const presentationNow=this.active?this.presentationTime(now):now;
     if(this.active)this.animate(presentationNow);else this.idleCamera(now);
     for(const [team,f] of Object.entries(this.fighters))if(f.koCalibrated&&f.koGroundChecks<3&&
@@ -534,8 +560,14 @@ export class BattleWorld {
     }
     if(this.active&&!this.motion.matches)this.renderer.shadowMap.needsUpdate=true;
     if(this.renderer&&this.scene){
+      const presentedAt=this.active?.characterId==='trischli-warrior'&&this.active.move==='attack'?performance.now():undefined;
       this.renderer.render(this.scene,this.camera);
-      if(this.active){this.onPresent?.(this.active,{elapsed:presentationNow-this.active.startedAt,tableau:this.motion.matches});if(this.active.koStartedAt&&!this.active.koSoundDone&&!document.hidden){this.active.koSoundDone=true;if(presentationNow-this.active.koStartedAt<=180)this.onKO?.(this.active);}}
+      if(this.active){
+        const frame={elapsed:presentationNow-this.active.startedAt,tableau:this.motion.matches};
+        if(presentedAt!==undefined)frame.presentedAt=presentedAt;
+        this.onPresent?.(this.active,frame);
+        if(this.active?.koStartedAt&&!this.active.koSoundDone&&!document.hidden){this.active.koSoundDone=true;if(presentationNow-this.active.koStartedAt<=180)this.onKO?.(this.active);}
+      }
     }
    };this.raf=requestAnimationFrame(tick);
   } catch(error) {
@@ -567,8 +599,8 @@ export class BattleWorld {
  frame(position,look){
   this.camera.position.copy(position);this.look.copy(look);
   // Framing tracks measured health, status, and action controls.
-  const host=this.container?.classList.contains('fight-stage');
   this.camera.lookAt(this.look);this.camera.updateMatrixWorld(true);
+  const host=this.container?.classList.contains('fight-stage');
   const inverse=this.camera.matrixWorldInverse,top=this.frameTop??(host?.43:.84),bottom=this.frameBottom??-.78;
   let tangent=Math.tan(THREE.MathUtils.degToRad(24/2)),minY=Infinity,maxY=-Infinity;
   const framePoints=[];
@@ -586,7 +618,7 @@ export class BattleWorld {
     points=[];for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z])points.push(new THREE.Vector3(x,y,z));
    }
    if(this.choreography&&!this.motion.matches){
-    f.holder.updateMatrixWorld(true);const live=new THREE.Box3().setFromObject(f.holder,true).expandByScalar(.07),corners=[];
+    f.holder.updateMatrixWorld(true);const live=fighterBounds(f.holder).expandByScalar(.07),corners=[];
     for(const x of [live.min.x,live.max.x])for(const y of [live.min.y,live.max.y])for(const z of [live.min.z,live.max.z])corners.push(new THREE.Vector3(x,y,z));
     const blend=this.choreography.weight;points=[...corners,...corners.map((p,i)=>p.clone().lerp(points[i]||p,1-blend))];
     // Hold both bodies for offensive actions: a prop crossing the aisle must never pull the camera off its source.
@@ -635,8 +667,10 @@ export class BattleWorld {
   if(this.active||!this.events.pending.length)return;
   const event=this.events.pending.shift();this.active=event;
   if(this.container){this.fallbackLabel=document.createElement('span');this.fallbackLabel.className='world-action-label';this.fallbackLabel.textContent=event.ability.label;this.container.append(this.fallbackLabel);}
+  // Full Dance Off ages from label creation, not its first possibly delayed RAF.
+  if(event.characterId==='trischli-warrior'&&event.move==='attack')event.startedAt=performance.now();
   const generation=this.generation;
-  if(this.container)this.fallbackRaf=requestAnimationFrame(()=>{if(generation===this.generation&&this.active===event&&!event.koStartedAt&&!document.hidden)this.onPresent?.(event,{fallback:true});});
+  if(this.container)this.fallbackRaf=requestAnimationFrame(()=>{if(generation===this.generation&&this.active===event&&!event.koStartedAt&&!document.hidden)this.onPresent?.(event,{fallback:true,...(event.characterId==='trischli-warrior'&&event.move==='attack'?{presentedAt:event.startedAt}:{})});});
   // Each tail starts on its own actual presented frame, even after a late timer.
   const tail=(phase,duration,next)=>{
    this.fallbackRaf=requestAnimationFrame(()=>{

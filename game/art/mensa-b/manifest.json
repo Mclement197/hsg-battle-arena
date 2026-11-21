@@ -1,0 +1,86 @@
+{
+  "schema": 1,
+  "date": "2026-10-19",
+  "reference": "Three user-supplied photographs; no source-photo pixels embedded",
+  "surveyed": false,
+  "geometry": "Native 279374 triangles; runtime 186914 after invisible parquet face removal",
+  "sources": {
+    "generate.py": {
+      "sha256": "1ad0141f4f6989224c6a9cf6e31f59a90c6dd7db21860de1fa00ac536a0bec69",
+      "bytes": 21730
+    },
+    "mensa-b.blend": {
+      "sha256": "372b5dbf03eb6fb1f4a8ec64d185c352dcb466b065f03fff3509b85ba5d67da2",
+      "bytes": 958821
+    },
+    "mensa-b.glb": {
+      "sha256": "892278b95826a0d6329620eb2c95cc4a15e43cb23ea6bc0c2bb2f0bcda8c2df7",
+      "bytes": 2836488
+    },
+    "scene.json": {
+      "sha256": "538b0d3b628977ba834b2af7a66b7a949b487423d50203323638474343c64056",
+      "bytes": 1099876
+    },
+    "render.mjs": {
+      "sha256": "e29d7fb28780d58a173bb4c2f53d8c99bcb7898586115a56bbeafc7c4923b369",
+      "bytes": 3498
+    }
+  },
+  "renders": {
+    "01-reference-central-aisle.png": {
+      "sha256": "8aace029347f7b84538c023e561b941d77125f76f9bd8f510a38fdceec74e1dd",
+      "bytes": 5251046,
+      "width": 1920,
+      "height": 1080
+    },
+    "02-reference-art-wall.png": {
+      "sha256": "81871eaee2fb1d07ddec0148a7f394135ec6e33b8e3684c82a8b06088682a844",
+      "bytes": 5376868,
+      "width": 1920,
+      "height": 1080
+    },
+    "03-reference-coffee-counter.png": {
+      "sha256": "bf6d51a22b42635a8b7f475ed5e041cf89dbe214d77d24230ee8b1dc9f5156ed",
+      "bytes": 5072396,
+      "width": 1920,
+      "height": 1080
+    },
+    "04-reverse-room.png": {
+      "sha256": "492d7f7afb56fc812d6ab932da00607e1270c0fa74a5fcbe8246288d1c0533c9",
+      "bytes": 5342594,
+      "width": 1920,
+      "height": 1080
+    },
+    "05-room-overall.png": {
+      "sha256": "a7b7e567626e0c21ae1851b4a10a5f93bc65b7987e9f502770877320de08f5f1",
+      "bytes": 5526490,
+      "width": 1920,
+      "height": 1080
+    },
+    "runtime-central-aisle.png": {
+      "sha256": "1479b5c217d5818c66bc16d6868d5be856f5e1fa4d210bf627cd50d7c0737fe1",
+      "bytes": 2130430,
+      "width": 1920,
+      "height": 1080
+    },
+    "runtime-art-wall.png": {
+      "sha256": "9578d5556ee272c57ec50a7d2ffe9ce24fe97acec4e048b44466778aae4610bc",
+      "bytes": 2360346,
+      "width": 1920,
+      "height": 1080
+    },
+    "runtime-coffee-counter.png": {
+      "sha256": "8fdfa4b99f07882ff6d4fd8701aaf0e5ebeaa0d2311f7e6372eb41cffb0456fc",
+      "bytes": 1717223,
+      "width": 1920,
+      "height": 1080
+    }
+  },
+  "preview": {
+    "file": "public/assets/arena-mensa-b.webp",
+    "sha256": "9e38a79ffa0c023189cecaa17270a6500481ecb5fbe7b6221026e149004b1fb0",
+    "bytes": 67870,
+    "width": 1280,
+    "height": 720
+  }
+}

@@ -106,7 +106,7 @@ img.model-ready{opacity:0;filter:none;transform:none;animation:none}
 /* Same actual arena remains visible while GLBs load or WebGL is unavailable. */
 .fight-stage,.player-world{background:#14271e url('./assets/arena-library.webp?v=96f7431-previews1') center/cover!important}
 body[data-arena=trischli] .fight-stage,body[data-arena=trischli] .player-world{background-image:url('./assets/arena-trischli.webp?v=96f7431-previews1')!important}
-body[data-arena=mensa-b] .fight-stage,body[data-arena=mensa-b] .player-world{background-image:none!important}
+body[data-arena=mensa-b] .fight-stage,body[data-arena=mensa-b] .player-world{background-image:url('./assets/arena-mensa-b.webp?v=20261019-mensa1')!important}
 .fight-stage:not([data-world-status=ready]) .fighter-visual{display:grid;place-items:center}
 .fight-stage:not([data-world-status=ready]) .fighter-art{height:clamp(150px,25vh,240px);max-width:220px}
 .fight-stage[data-world-status=error] .battle-world-canvas,.player-world[data-world-status=error] .battle-world-canvas{visibility:hidden}
@@ -121,6 +121,7 @@ body[data-screen=player] .player-preview img{display:block;height:60px;width:60p
 .solo-moves button,.move{height:auto;min-height:100px;min-width:0}
 .move strong{max-width:100%}
 @media(max-width:760px){.solo-moves strong,.move strong{font-size:1.08rem}.solo-moves button,.move{min-height:110px}}
+
 /* Viewport-sized setup surfaces: content may grow when zoom/keyboard makes fitting impossible. */
 body{display:grid;grid-template-rows:auto auto minmax(0,1fr);min-height:100vh;min-height:100svh;min-height:100dvh}
 main{display:grid;min-height:0;min-width:0}

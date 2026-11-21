@@ -85,17 +85,17 @@ During a running multiplayer battle, players can send six transient reactions: �
 
 The browser maps authoritative lastResult moves to four bounded CSS effects in public/app.js and public/styles.css: opponent slash for attack, actor shield for defend, actor healing glow for heal, and opponent energy burst for special. Presenter effects overlay the affected fighter; phone and victory screens show a compact result stamp where the opposing fighter is not displayed. Votes and local timer expiry never trigger effects. First snapshots on join/reconnect are history; room/match/turn-number deduplication consumes repeat snapshots. Effects clean up after 850 ms; reduced-motion mode uses a stationary fading cue. No new assets or dependencies.
 
-### Knockout and winner celebration (staging; release verification pending)
+### Knockout and winner celebration (deployed 2026-11-21)
 
 A newly observed authoritative zero-HP result completes its winning move, then holds the shared host/player battle view for the full two-second K.O. while the winner stays frozen. The defeated fighter transitions through knees to a flat, greyed-out pose and remains prone. Only then does the winner perform a five-second celebration (the original two-second choreography, then the held landing pose): step, jump and half-spin, arms-down power landing with visual **SIUUU!** and procedural dust, followed by the existing victory screen and victory cue. Bot, Friend and Groups use the same sequence in Library, Trischli and Mensa B; Friend phones run the same phases on their own local presentation clocks, not guaranteed wall-clock lockstep. Reduced motion uses stationary poses without the jump/spin/dust; the non-WebGL fallback retains the ordered K.O./celebration completion delays and labels.
 
 Only the host sees and can activate **Skip to victory**. During either K.O. or celebration it bypasses both remaining presentation phases on the host’s own screen; it does not skip the guest phone’s sequence, reset the room, or change the authoritative winner. Reset, disconnect, leaving the view and hidden-page handling cancel or consume pending presentation rather than replaying historical results.
 
-The K.O. cue still reuses the existing generic attack sample through the unchanged SFX path. The optional original `ronaldo_siuu.mp3` plays once with the landing text at celebration +1300 ms: complete 1.410-second buffer, rate 1, no loop, seek or trim, track gain 0.45 through **SFX / voice** and its slider. Nominal sound end is +2710 ms; victory is +5000 ms. On delayed frames, victory audio waits for actual source `ended`; natural cleanup never truncates SIUUU. Availability is frozen at the live finish edge and checked again at landing: reload, reconnect, duplicates, decode-late and unmute cannot replay it. Missing/failed decoding cannot disable base audio or block victory. Master mute, suspension, reset, disconnect, hide, context loss and leaving cancel pending/playing SIUUU and stale callbacks. Host Skip cancels SIUUU before the existing up-to-220 ms K.O. guard and before victory; guest phones remain independent. Other action SFX, combat rules, API fields and dependencies are unchanged. Source hash and rights caveat: [audio provenance](public/assets/audio/README.md). Static frontend refresh is required after an approved release; this staging description is not deployment or six-fighter visual sign-off.
+The K.O. cue still reuses the existing generic attack sample through the unchanged SFX path. The optional original `ronaldo_siuu.mp3` plays once with the landing text at celebration +1300 ms: complete 1.410-second buffer, rate 1, no loop, seek or trim, track gain 0.9 (twice the original 0.45) through **SFX / voice** and its slider. Nominal sound end is +2710 ms; victory is +5000 ms. On delayed frames, victory audio waits for actual source `ended`; natural cleanup never truncates SIUUU. Availability is frozen at the live finish edge and checked again at landing: reload, reconnect, duplicates, decode-late and unmute cannot replay it. Missing/failed decoding cannot disable base audio or block victory. Master mute, suspension, reset, disconnect, hide, context loss and leaving cancel pending/playing SIUUU and stale callbacks. Host Skip cancels SIUUU before the existing up-to-220 ms K.O. guard and before victory; guest phones remain independent. Other action SFX, combat rules, API fields and dependencies are unchanged. Source hash and rights caveat: [audio provenance](public/assets/audio/README.md). Deployed on 2026-11-21; refresh clients to load the new frontend. Automated Chromium checks are not physical-device or speaker sign-off.
 
 ### Character-themed resolved cues (integrated roster)
 
-Presentation definitions in `public/app.js` cover Luca Di Grazia (chalk/book), free rider (copied notes/credit), tryhard (formula/textbook), assessment hoodie (storm/luck), Trischli warrior (disco/wristband, no strobe), and bad teacher (red pen/exam/FAILED) for all four moves. The actor's theme colors, illustrated vector mark and per-move caption decorate the existing attack/defend/heal/special placement. The old generic effects remain the fallback; audio and game rules are unchanged. Motion is one-shot, clears after 850 ms, and becomes stationary with reduced motion.
+Presentation definitions in `public/app.js` cover Luca Di Grazia (chalk/book), free rider (copied notes/credit), tryhard (formula/textbook), Assessie with HSG hoodie (storm/luck), Trischli warrior (disco/wristband, no strobe), and bad teacher (red pen/exam/FAILED) for all four moves. The actor's theme colors, illustrated vector mark and per-move caption decorate the existing attack/defend/heal/special placement. The old generic effects remain the fallback; audio and game rules are unchanged. Motion is one-shot, clears after 850 ms, and becomes stationary with reduced motion.
 
 The presenter’s arena/character selections are validated by the server and shared with every client as state.arenaId and state.teams.A/B.characterId. The same stable identities drive roster portraits, health labels, winner art and resolved-move effects. Unknown/older identities retain the original Ace/Dynamo fallback.
 
@@ -103,7 +103,7 @@ The presenter’s arena/character selections are validated by the server and sha
 
 - **Main menu:** Play with a Friend (real online 1v1), Play with a Bot (solo), Play in Groups (presenter + voting teams). Join by room code, How to play, Return to your room and Main Menu remain available.
 - **Arena:** Library, Trischli and Mensa B. Presentation-only; all three use the same balanced rules.
-- **Fighters:** Luca Di Grazia, free rider in group project, tryhard, assessment student, Trischli warrior and bad teacher. Select the active Team A/Team B (or You/Bot) slot, then any fighter. Every fighter has four distinct command stats displayed as numbers and segmented bars. The shared profile module also drives server-authoritative combat; see below.
+- **Fighters:** Luca Di Grazia, Free rider, Tryhard, Assessie with HSG hoodie, Trischli warrior and Bad teacher. Select the active Team A/Team B (or You/Bot) slot, then any fighter. Every fighter has four distinct command stats displayed as numbers and segmented bars. The shared profile module also drives server-authoritative combat; see below.
 - **Battle:** two fighters, authoritative HP, timer, results, themed effects and sound activation. Phone participants see both fighters’ health above the original vote controls.
 - **Game over:** winning fighter, Play Again (same selections), Main Menu. Groups Play Again returns everyone to the lobby for the presenter to start. Friend and Bot replay immediately with the same fighters and restored HP. All preserve participant capabilities.
 
@@ -123,14 +123,29 @@ With an existing Playwright/Chromium installation (no new runtime dependency):
 
 This starts an isolated local origin on port 18993. Set LIVE_URL=https://afp.mclement.ch/game/ to exercise the live game instead; that intentionally creates disposable bot/friend/group rooms. EVIDENCE_DIR selects screenshots; default /tmp/hsg-five-screen-smoke. Checks desktop/phone bot victory and replay; real Friend host + isolated guest through victory, host/guest reloads, third-seat rejection, reset and replay; Groups host + two isolated voters through real timed resolution, vote replacement and reset; all 24 displayed stats against engine data; all five desktop/mobile screen captures and overflow.
 
+## Move names
+
+Move labels use title case, retaining acronyms and short connecting words. `public/battle-contract.js` is the shared source for controls, result captions and `CHARACTER_THEMES`; IDs, move types, stats and mechanics are unchanged. In attack / defend / heal / special order:
+
+| Fighter | Attack | Defend | Heal | Special |
+| --- | --- | --- | --- | --- |
+| Luca Di Grazia | Golden Chalk | Open Book | Good Work | Full Marks |
+| Free rider | Copy / Paste | Paper Decoy | Group Credit | AI Slop |
+| Tryhard | Formula | Textbook | Extra Credit | A+ |
+| Assessie with HSG hoodie | Bad Luck | Hood Up | Take Hoodie Off | Skip Maths A Lecture |
+| Trischli warrior | Dance Off | Call the Bouncer | Glass of Water | Throw a Beer |
+| Bad teacher | Red Pen | Curved Exam | Brian AI | Failed |
+
+Run `PLAYWRIGHT_MODULE=/path/to/playwright-core/index.mjs CHROMIUM_EXECUTABLE=/path/to/chrome node test/move-label-browser.mjs` for the isolated six-fighter label/layout check at 1440, 1280, 390 and 320 pixels (port 18997; screenshots/metrics in `/tmp/hsg-move-label-smoke`, or `EVIDENCE_DIR`). It checks all 24 labels, unclipped text, touch targets and real host/guest moves.
+
 ## Authoritative fighter profiles
 
 | Fighter | Attack (HP) | Defend (% next hit blocked) | Heal (HP) | Special (HP) |
 | --- | ---: | ---: | ---: | ---: |
 | Luca Di Grazia | 28 | 70 | 14 | 42 |
-| Free rider in group project | 17 | 62 | 11 | 30 |
+| Free rider | 17 | 62 | 11 | 30 |
 | Tryhard | 25 | 42 | 8 | 36 |
-| Assessment student | 19 | 56 | 13 | 31 |
+| Assessie with HSG hoodie | 19 | 56 | 13 | 31 |
 | Trischli warrior | 27 | 35 | 7 | 40 |
 | Bad teacher | 22 | 66 | 9 | 34 |
 
@@ -169,3 +184,6 @@ PLAYWRIGHT_MODULE=/path/to/playwright-core/index.mjs CHROMIUM_EXECUTABLE=/path/t
 ```
 
 The browser harness uses mocked overview data and checks login, tab storage/logout, polling/backoff, masking, display names, empty state and responsive layouts. Backend tests exercise real HTTP authentication and sanitized room responses. Polls have a ten-second total request/body deadline and show stale/reconnecting status on failure. Deployment remains pending a confirmed room-free restart window and private operator key setup.
+## Mensa B modeled environment (2026-10-19)
+
+Mensa B now shares the real 3D battle world with both fighters, based on three user-confirmed interior photographs: concrete beams and formwork, parquet, bentwood/chrome seating, pale tables, mineral-word artwork and the coffee counter. The chooser/loading fallback is rendered from that model. Dimensions, dates/seating and widened gameplay lane are explicitly qualified in [source and reproduction](art/mensa-b/README.md). Native Blender/GLB and compact evaluated instance recipe are included; no source-photo backdrop, new backend route, service restart, room reset, combat/audio change or new dependency. Library/Trischli and all six fighter assets remain unchanged.

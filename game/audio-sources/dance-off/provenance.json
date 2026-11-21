@@ -1,0 +1,96 @@
+{
+  "approval_message": "1562422528964690053",
+  "approved_concept": "Festival-techno 150BPM,2.2s,selected Puck voice",
+  "author": "OpenClaw game-sound-designer",
+  "date": "2026-10-21",
+  "music": "Original procedural synthesis, no external music sample/recording/melody quoted; maintainers determine original contribution distribution terms; no CC0 claim.",
+  "voice": {
+    "provider": "Official public hexgrad/Kokoro-TTS CPU demo",
+    "model": "hexgrad/Kokoro-82M v1.0",
+    "trained_by": "@rzvzn",
+    "stock_voice": "am_puck",
+    "text": "Dance off!",
+    "speed": 1.1,
+    "use_gpu": false,
+    "returned_phonemes": "d\u02c8\u00e6ns \u02c8\u0254f!",
+    "space_revision": "555d90e5a1eaaabd017f0b458069ad112867a6d4",
+    "model_repository_revision_observed": "f3ff3571791e39611d31c381e3a41a3af07b4987",
+    "actual_hosted_weight_bytes_independently_verified": false,
+    "raw_sha256": "3744281930af238f93c8b0255d9ba30d960e11bd7e4037f08498cd7517674bf8",
+    "approved_sha256": "3fe1c9b530c4da9738e03effc466745841579f1f8c550312fe0a499265f33013",
+    "preprocessing": {
+      "trim_threshold": 0.001,
+      "boundary_air_ms": 10,
+      "attack_ms": 3,
+      "release_ms": 15,
+      "normalized_peak_before_pcm16": 0.75,
+      "trim_start_raw_frame": 5062,
+      "trim_end_raw_frame_exclusive": 20859
+    },
+    "license_evidence": "Model/code Apache-2.0; official card welcomes production/commercial deployment; HF terms retain content ownership. No special noncommercial generated-WAV restriction found. No exclusive-copyright or third-party-rights warranty. No model/code packaged.",
+    "sources": [
+      "https://huggingface.co/hexgrad/Kokoro-82M",
+      "https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md",
+      "https://huggingface.co/spaces/hexgrad/Kokoro-TTS",
+      "https://github.com/hexgrad/kokoro/blob/main/LICENSE",
+      "https://huggingface.co/terms-of-service"
+    ],
+    "cost_usd": 0,
+    "rerendered_online_for_implementation": false
+  },
+  "bed_sha256": "5aceed8c434be8f170b99694282ed60c51bbb0acb2786f195a9f7b88137591e6",
+  "accent_sha256": "4d81c6ef373ee164caba24fadf74923acf79c0de7762adfafe98bc3a75f365ea",
+  "approved_preview_sha256": "60e83602d7972900f8e38d4180c44caff64a521087ed989e4c6b9527c2d85045",
+  "settings": {
+    "bpm": 150.0,
+    "drop_ms": 876.0,
+    "voice_onset_ms": 100,
+    "voice_end_ms": 758.2083333333334,
+    "marker_ms": 1276,
+    "marker_duration_ms": 320,
+    "master_gain": 0.6914083608294347,
+    "voice_waveform_max_float_error": 1.1102230246251565e-16,
+    "voice_gain_total": 0.5254703542303704,
+    "source_voice_sha256": "3fe1c9b530c4da9738e03effc466745841579f1f8c550312fe0a499265f33013",
+    "preview": {
+      "frames": 52800,
+      "duration_ms": 2200.0,
+      "peak": 0.573150634765625,
+      "peak_dbfs": -4.834624445470441,
+      "rms_dbfs": -19.122128540588037,
+      "clipped_samples": 0,
+      "first_last_sample": [
+        0,
+        0
+      ]
+    },
+    "bed": {
+      "frames": 52800,
+      "duration_ms": 2200.0,
+      "peak": 0.573150634765625,
+      "peak_dbfs": -4.834624445470441,
+      "rms_dbfs": -19.963539936260155,
+      "clipped_samples": 0,
+      "first_last_sample": [
+        0,
+        0
+      ]
+    },
+    "accent": {
+      "frames": 7680,
+      "duration_ms": 320.0,
+      "peak": 0.54681396484375,
+      "peak_dbfs": -5.243208054098324,
+      "rms_dbfs": -18.485647703777357,
+      "clipped_samples": 0,
+      "first_last_sample": [
+        0,
+        0
+      ]
+    },
+    "stem_peak_sum": 1.119964599609375,
+    "accent_exact_pcm_recovery": true,
+    "original_melody_recording_or_sample_quoted": false
+  },
+  "recomposition": "Integer sum of separately quantized bed and marker at frame30624; exact audition, zero PCM16 LSB error."
+}

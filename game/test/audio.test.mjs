@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 import {modelFor} from '../public/characters.js';
-import { ACTION_SOUNDS, AUDIO_SOUNDS, THEMED_ACTION_SOUNDS, ActionAudio, createActionCue, createBattleStartCue, createVictoryCue, ArenaClient } from '../public/app.js';
+import { ACTION_SOUNDS, AUDIO_SOUNDS, THEMED_ACTION_SOUNDS, ACTION_ACCENTS, ActionAudio, createActionCue, createBattleStartCue, createVictoryCue, ArenaClient } from '../public/app.js';
 import { buildSound, buildNamedSound, NAMED_DURATIONS } from '../public/assets/audio/generate.mjs';
 import { Arena, MOVES } from '../src/engine.mjs';
 import { createGameServer } from '../src/server.mjs';
@@ -161,7 +161,7 @@ test('native playback caches all mapped buffers, stops on mute and never queues 
   });
   assert.equal(player.play('attack'), false);
   await player.load(); await player.load();
-  assert.deepEqual(urls, [...Object.values(AUDIO_SOUNDS), ...Object.values(THEMED_ACTION_SOUNDS)]);
+  assert.deepEqual(urls, [...Object.values(AUDIO_SOUNDS), ...Object.values(THEMED_ACTION_SOUNDS), ...Object.values(ACTION_ACCENTS)]);
   assert.equal(context.starts.length, 0, 'loading must not replay a skipped action');
   for (const move of MOVES) {
     assert.equal(player.play(move), true);
@@ -198,16 +198,18 @@ async function serve(t, options = {}) {
 
 test('all mapped audio URLs serve with their audio MIME over HTTP, including HEAD; source/docs stay private', async t => {
   const get = await serve(t);
-  for (const url of [...Object.values(AUDIO_SOUNDS), ...Object.values(THEMED_ACTION_SOUNDS)]) {
+  for (const url of [...Object.values(AUDIO_SOUNDS), ...Object.values(THEMED_ACTION_SOUNDS), ...Object.values(ACTION_ACCENTS)]) {
     const route = '/game/' + url.slice(2);
     const response = await get(route);
     assert.equal(response.status, 200);
+    assert.equal(response.headers['cache-control'], 'no-store');
     assert.equal(response.headers['content-type'], url.endsWith('.webm') ? 'audio/webm' : url.endsWith('.mp3') ? 'audio/mpeg' : 'audio/wav');
     assert.deepEqual(response.body, await readFile(new URL('../public/' + url, import.meta.url)));
     const head = await get(route, 'HEAD');
     assert.equal(head.status, 200); assert.equal(head.body.length, 0);
+    assert.equal(head.headers['cache-control'], 'no-store');
   }
-  for (const route of ['/game/assets/audio/generate.mjs', '/game/assets/audio/README.md', '/game/assets/audio/generate-lobby.mjs', '/game/assets/audio/generate-countdown.py',
+  for (const route of ['/game/audio-sources/dance-off/puck-approved.wav', '/game/audio-sources/dance-off/puck-raw.wav', '/game/audio-sources/dance-off/provenance.json', '/game/assets/audio/generate-dance-off.py', '/game/assets/audio/generate.mjs', '/game/assets/audio/README.md', '/game/assets/audio/generate-lobby.mjs', '/game/assets/audio/generate-countdown.py',
     '/game/assets/audio/nested/attack-impact.wav', '/game/assets/audio/nested/battle-loop.webm',
     '/game/assets/audio/battle-loop.webm.bak', '/game/assets/audio/battle-loop.mp3', '/game/assets/battle-loop.webm', '/game/assets/audio/attack-impact.wav.bak',
     '/game/assets/audio/%2e%2e/app.js', '/game/assets/nested/attack-impact.wav']) {
@@ -548,7 +550,7 @@ test('24 original named mappings are deterministic, compact, click-free and ener
     assert.ok(db > -15 && db < -10.9, key + ' controlled 50 ms RMS: ' + db);
     rows.push({ key, bytes: wav.length, peak, max50msDb: Number(db.toFixed(3)) });
   }
-  assert.equal(totalBytes, 530976); // Reuse is allowed; route identity, not unique hashes, is the contract.
+  assert.equal(totalBytes, 632736); // Reuse is allowed; route identity, not unique hashes, is the contract.
   assert.ok(Math.max(...levels) - Math.min(...levels) < 4, 'objective short-window balance, not a listening claim');
   assert.throws(() => buildNamedSound('unknown', 'attack'), /Unknown named sound/);
   assert.throws(() => buildNamedSound('tryhard', 'unknown'), /Unknown named sound/);
@@ -652,7 +654,9 @@ test('all nine protected media files and intro/control code remain byte-identica
     assert.equal(createHash('sha256').update(bytes).digest('hex'), expected, file);
   }
   const source = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
-  assert.equal(createHash('sha256').update(source.slice(source.indexOf('// Arm only on a live edge.'), source.indexOf('// Consume server snapshots only'))).digest('hex'), '3957b37c13b353cdfd79277d548dd31ba48dd668f0aa8a206ac1b29e8cbc3687');
+  // The new landing cue has its own tests; keep byte-locking the pre-existing intro/victory helpers.
+  const existingCues = source.replace(/\/\/ Freeze availability on the live finish edge,[\s\S]*?(?=export function prebattleLabel)/, '');
+  assert.equal(createHash('sha256').update(existingCues.slice(existingCues.indexOf('// Arm only on a live edge.'), existingCues.indexOf('// Consume server snapshots only'))).digest('hex'), '3957b37c13b353cdfd79277d548dd31ba48dd668f0aa8a206ac1b29e8cbc3687');
   assert.equal(createHash('sha256').update(source.slice(source.indexOf('  function soundReady()'), source.indexOf('  function cue(kind'))).digest('hex'), '385d818a741ac1c85675825efdab24774e4acf5a91238a97fba9e1738419c9b7');
 });
 

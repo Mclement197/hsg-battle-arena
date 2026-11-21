@@ -20,7 +20,7 @@ test('queue historical reconnect, reordered duplicates, both actor directions an
  q.consume({...state(11),match:1});q.consume({...state(),match:1,phase:'lobby'});assert.equal(q.pending.length,0);
 });
 for(const id of Object.keys(ARENA_WORLDS))test(id+' original environment is valid geometry and safe floor placement',async()=>{
- const bytes=await readFile(new URL('../public/'+ARENA_WORLDS[id].model.slice(2),import.meta.url));
+ const bytes=await readFile(new URL(id==='mensa-b'?'../art/mensa-b/mensa-b.glb':'../public/'+ARENA_WORLDS[id].model.slice(2),import.meta.url));
  const result=await validator.validateBytes(bytes,{maxIssues:20});assert.equal(result.issues.numErrors,0,JSON.stringify(result.issues));assert.equal(result.issues.numWarnings,0,JSON.stringify(result.issues));
  assert.ok(bytes.length<6*1024*1024);const json=JSON.parse(bytes.toString('utf8',20,20+bytes.readUInt32LE(12)));
  assert.ok(json.meshes.length>=15);assert.ok(!json.nodes.some(n=>n.extras?.placeholder||/placeholder/i.test(n.name||'')));assert.ok(json.extensionsUsed.includes('KHR_lights_punctual'));

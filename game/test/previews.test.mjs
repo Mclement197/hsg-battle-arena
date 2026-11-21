@@ -17,7 +17,7 @@ test('all six portrait and both actual arena images match current source digests
 test('all active UI image consumers exclude legacy fighters, fake arenas and campus photo',async()=>{
  const files=await Promise.all(['app.js','index.html','styles.css','characters.js','battle-world.js'].map(f=>readFile(new URL('public/'+f,root),'utf8')));
  for(const source of files){for(const legacy of ['assessment-ace.svg','deadline-dynamo.svg','arena-library.svg','arena-trischli.svg','arena-mensa-b.svg','hsg-learning-center.webp','data:image'])assert.ok(!source.includes(legacy),legacy);assert.ok(!source.includes('serviceWorker.register'));}
- assert.ok(files[0].includes("'.webp?v=96f7431-previews1'"));assert.ok(files[2].includes('.fight-stage:not([data-world-status=ready]) .fighter-visual'));
+ assert.ok(files[0].includes("'96f7431-previews1'"));assert.ok(files[2].includes('.fight-stage:not([data-world-status=ready]) .fighter-visual'));
 });
 test('all current previews and models served with correct MIME, no-store and exact bytes',async t=>{
  const game=createGameServer();await new Promise(r=>game.server.listen(0,'127.0.0.1',r));t.after(()=>game.close());const base='http://127.0.0.1:'+game.server.address().port+'/game/';

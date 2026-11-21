@@ -197,7 +197,7 @@ Seven WAVs and the requested battle and victory WebM/Opus recordings now preload
 - **Included:** `victory.webm`, full original format 251 WebM/Opus download, **82,632 bytes**, byte-for-byte unchanged: no trimming, normalization, looping, transcoding, pitch/tempo edit or substitute. Native Chromium 1243 decode at 48 kHz: **5.4683125 seconds**, 2 channels, 262,479 frames.
 - **SHA-256 (download and included file):** `f0cf0be0c1cb3e061e12957d34300a49f24e5918feea6eb10e963997968046b7`.
 - **Acquisition:** existing yt-dlp runner, metadata dump followed by `--compat-options no-certifi --no-playlist -f 251`, honoring the runner CA. No login/cookies, access-control bypass, payments, new dependency or service.
-- **Playback:** only a live authoritative running → finished edge in the same room/match plays the complete source once on host and players. Battle music stops before victory starts. The synthesized win cue is removed; the final authoritative attack effect is retained. Victory uses Music (0.45 source gain × current Music slider), not SFX; battle-only 0.5 multiplier remains unchanged, as do lobby/countdown/SFX levels, default ON preference and exact labels/hint. Initial/reload/reconnect/duplicate/regressive/historical finished snapshots never replay it. Reset creates a new match and re-arms. Mute, suspension, disconnect, reset and leaving stop the active source. No load/unmute/gesture callback starts a skipped victory later. Optional victory fetch/decode failure leaves base audio ready, showing a separate unavailable hint without silently disabling lobby, battle or action audio. Native browser verification covers actual buffers/graph on desktop and touch-emulated Chromium; physical speakers and Safari remain unverified. No server restart, config change, deployment or live room mutation was performed.
+- **Playback:** only a live authoritative running → finished edge in the same room/match plays the complete source once on host and players. Battle music stops before victory starts. The synthesized win cue is removed; the final authoritative attack effect is retained. Victory uses Music (0.9 source gain × current Music slider), not SFX; battle-only 0.5 multiplier remains unchanged, as do lobby/countdown/SFX levels, default ON preference and exact labels/hint. Initial/reload/reconnect/duplicate/regressive/historical finished snapshots never replay it. Reset creates a new match and re-arms. Mute, suspension, disconnect, reset and leaving stop the active source. No load/unmute/gesture callback starts a skipped victory later. Optional victory fetch/decode failure leaves base audio ready, showing a separate unavailable hint without silently disabling lobby, battle or action audio. Native browser verification covers actual buffers/graph on desktop and touch-emulated Chromium; physical speakers and Safari remain unverified. No server restart, config change, deployment or live room mutation was performed.
 
 ## Approved named-action candidate (2026-10-20)
 
@@ -211,7 +211,7 @@ files; unique file hashes are not an acceptance requirement.
 
 ### Per-sound mapping and provenance
 
-For **every entry** below, author/source is OpenClaw game-sound-designer's original
+For **the23 unchanged named cues** below, author/source is OpenClaw game-sound-designer's original
 `buildNamedSound(characterId, move)` branch in `generate.mjs`, created 2026-10-20.
 These are newly synthesized originals with no external samples, recordings, source
 URL, third-party license/version or attribution obligations. No external clearance
@@ -229,11 +229,11 @@ checkout; they are not routing keys and are not rewritten by this candidate.
 | `luca-di-grazia` | Golden Chalk: striated chalk noise, 700 Hz contact, 1550→1300 Hz gold glint | Open Book: two page swishes and 600/900 Hz binding resonances | Good Work: approval tap, C5/E5/G5 rise | Full Marks: 500→1600 Hz shimmer, stamp, high glass partials and paper release | 240 / 340 / 520 / 700 |
 | `free-rider` | Copy / Paste: 900 Hz repeated digital clicks, stronger second click at 65 ms | Paper Decoy: fluttering thin-paper noise and hollow double lock | Group Credit: E5/G5/C6 contributions converge on a shared reward | AI Slop: accelerating computation, irregular stepped pulses and garbled noise splat | 260 / 340 / 560 / 700 |
 | `tryhard` | Formula: tight 700/1050/700 Hz calculator triplet, dry answer | Textbook: heavy cover clap, 480 Hz body, 1000 Hz binding catch | Extra Credit: accelerating D5/F-sharp5/A5 point increments | A+: 800→1800 Hz score preparation, bright emphatic grade ping | 240 / 320 / 520 / 660 |
-| `assessment-hoodie` | Bad Luck: unstable 950→380 Hz fall and electrical noise crack | Hood Up: low fabric swish, paired 650/850 Hz protective tucks | Take Hoodie Off: fabric peel opens into 450/675/900 Hz airy recovery | Skip Maths A Lecture: classroom ticks give way to syncopated 800/1050/1400 Hz exit accents | 280 / 340 / 560 / 700 |
-| `trischli-warrior` | Dance Off: syncopated 520/750 Hz footwork plus compact clap | Call the Bouncer: two call chirps answered by weighty 500/750 Hz guard lock | Glass of Water: three downward-curving 600/800/1000 Hz droplets and glass glint | Throw a Beer: 500→1500 Hz fizzy flight, broad splash, bouncing bubbles | 300 / 360 / 540 / 720 |
+| `assessment-hoodie` | Bad Luck: one original lightning crack at 55 ms and a short noisy thunder body | Hood Up: low fabric swish, paired 650/850 Hz protective tucks | Take Hoodie Off: fabric peel opens into 450/675/900 Hz airy recovery | Skip Maths A Lecture: classroom ticks give way to syncopated 800/1050/1400 Hz exit accents | 500 / 340 / 560 / 700 |
+| `trischli-warrior` | Dance Off: approved Puck voice then original150BPM festival-techno drop; separate1276ms marker | Call the Bouncer: two call chirps answered by weighty 500/750 Hz guard lock | Glass of Water: three downward-curving 600/800/1000 Hz droplets and glass glint | Throw a Beer: 500→1500 Hz fizzy flight, broad splash, bouncing bubbles | 2200 / 360 / 540 / 720 |
 | `bad-teacher` | Red Pen: high-mid scratch and clipped 1400→650 Hz correction stroke | Curved Exam: paper flex, 650→950→650 Hz bowed locking accents | Brian AI: soft 650/850 Hz learning taps, then reassuring rising E5/G-sharp5/C-sharp6 answer | Failed: 500→1200 Hz tension cut by rejection stamp and descending 700→350 Hz buzzer | 240 / 360 / 560 / 680 |
 
-Common generation: 24 kHz mono PCM16, xorshift32 seed `0x485347` reset per cue,
+Common generation for those23 unchanged cues: 24 kHz mono PCM16, xorshift32 seed `0x485347` reset per cue,
 sine/modal resonances and finite-harmonic pulses, band-shaped noise with 350 Hz
 bass rejection and per-layer lowpass/texture modulation. Each layer has its own
 attack, exponential decay and release. Whole-cue DC removal, `tanh(2.2 x/peak)`
@@ -243,11 +243,18 @@ RMS. First/last frames are zero. This is offline level control, not a mixer chan
 Reproduce all action WAVs with `node public/assets/audio/generate.mjs`; the four
 existing generic recipes produce their original byte-identical outputs.
 
-24 new WAVs total **530,976 bytes (518.53 KiB)**, duration **11.04 s** combined.
-Decoded mono float data is about 2.12 MB at 48 kHz, excluding object/decoder overhead.
+24 named WAVs total **632,736 bytes**, duration **13.16 s** combined, plus the **15,404-byte** Dance Off accent. The original common recipe above applies to the other23 named cues; Dance Off is superseded by the approved festival-techno recipe below.
+Named cues plus the marker decode to about 2.59 MB of mono floats at 48 kHz, excluding object/decoder overhead.
 Measured PCM peaks span **0.4164–0.6364** (worst −3.93 dBFS); maximum sliding
-50 ms RMS is approximately **−11.057 dBFS** for each. Matching this window metric
+50 ms RMS is approximately **−11.057 dBFS** for those23 cues. The revised Dance Off uses the separately documented approved recipe below. Matching this window metric
 does not establish equal perceived loudness, masking performance or name recognition.
+
+
+### Current-base integration (2026-10-20, private candidate)
+
+The current `3c84c6b` choreography is retained unchanged: `createMoveProps` creates the `jacket` secondary star/`FREEDOM` label; `choreograph`'s undress peel ends at `.36`, but its jacket secondary becomes visible only at `t >= .40 && t < .65`. Consequently Take Hoodie Off's semantic audio marker is now **.40 = 880 ms**, not the inherited .37 = 814 ms. The original clip accent remains **75 ms**. This aligns sound with the actual existing reveal rather than changing garment motion or treating shell clearance as the semantic reveal. `action-sync-current.test.mjs` renders the actual authored model at .36/.37/.399999 (hidden) and the exact .40 sampled marker (visible), and checks garment restoration plus fallback-RAF invalidation together. The native harness records actual FREEDOM visibility on the marker frame across single, queue, reduced and stalled presentations.
+
+The private candidate coordinates the index app query, app world query and both app/world contract queries at `20261020-action-sync-current1`; no markup/layout redesign is included. Independent merged QA remains a publication gate; this integration is not a deployment.
 
 ### Audio-only routing and integration
 
@@ -352,12 +359,6 @@ installed. Existing browser module:
 executable: `/home/mathis/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome`.
 Raw logs and the captured integration overlay are under
 `/tmp/hsg-named-sfx-evidence/`; these are local QA artifacts, not shipped assets.
-### Current-base integration (2026-10-20, private candidate)
-
-The current `3c84c6b` choreography is retained unchanged: `createMoveProps` creates the `jacket` secondary star/`FREEDOM` label; `choreograph`'s undress peel ends at `.36`, but its jacket secondary becomes visible only at `t >= .40 && t < .65`. Consequently Take Hoodie Off's semantic audio marker is now **.40 = 880 ms**, not the inherited .37 = 814 ms. The original clip accent remains **75 ms**. This aligns sound with the actual existing reveal rather than changing garment motion or treating shell clearance as the semantic reveal. `action-sync-current.test.mjs` renders the actual authored model at .36/.37/.399999 (hidden) and the exact .40 sampled marker (visible), and checks garment restoration plus fallback-RAF invalidation together. The native harness records actual FREEDOM visibility on the marker frame across single, queue, reduced and stalled presentations.
-
-The private candidate coordinates the index app query, app world query and both app/world contract queries at `20261020-action-sync-current1`; no markup/layout redesign is included. Independent merged QA remains a publication gate; this integration is not a deployment.
-
 
 ### Action/animation synchronization (timing only)
 
@@ -409,4 +410,271 @@ an already-started buildup can still leave that accent early by the stall durati
 
 - **Included:** `ronaldo_siuu.mp3`, copied byte-for-byte from the user-supplied `ronaldo_siuu.mp3` (23,449 bytes; 1.410 seconds effective duration from MP3 Info frame count and encoder delay/padding). No trimming, stretching, transcoding, normalization, or substitute sound.
 - **SHA-256 (supplied and included file):** `7321144635840f2b57545e7fb082397134912ff03097f2560a60f920490af01b`.
+- **Current playback:** full buffer at rate 1, offset 0, non-looping; SIUUU source gain 0.9 (twice its original 0.45) × SFX slider. The separate two-second KO and five-second celebration remain unchanged; victory waits for natural SIUUU completion.
 - **Provenance and rights:** supplied by the user on 2026-11-21; original source unknown. Reuse and redistribution rights have not been verified. No license or rights clearance is claimed; resolve permissions before publication.
+
+
+## Approved Dance Off — Festival Techno / Puck (2026-10-21)
+
+This section supersedes the original short Dance Off recipe and any earlier
+continuous-score discussion **for trischli-warrior:attack only**. Philippe approved
+this exact festival-techno audition (approval message1562422528964690053). There
+is no new audition gate; independent merged QA/publication remains main's scope.
+
+### Exact assets, source masters and reproducibility
+
+| Component | Destination | Format / length / SHA256 |
+| --- | --- | --- |
+| Voice-led festival-techno bed | trischli-warrior-attack.wav | mono PCM16,24kHz,2.2s,105644bytes;5aceed8c434be8f170b99694282ed60c51bbb0acb2786f195a9f7b88137591e6 |
+| Independent main marker | trischli-warrior-attack-accent.wav | same format,320ms,15404bytes;4d81c6ef373ee164caba24fadf74923acf79c0de7762adfafe98bc3a75f365ea |
+
+Normal-timing integer sum of the shipping bed and marker at sample30624 (1276ms)
+has SHA256 **60e83602d7972900f8e38d4180c44caff64a521087ed989e4c6b9527c2d85045**:
+byte-identical to the chosen audition, **zero PCM16 LSB difference**. Quantize each
+stem separately, then sum; do not independently normalize the stems.
+
+Music/drums/impact are newly composed original synthesis by OpenClaw
+game-sound-designer,2026-10-21:150BPM,D-minor octave/fifth brass stabs, harmonically
+saturated kick, FM/harmonic offbeat bass, seeded noise hats/clap/splash and short
+downshift. No famous track/recording, external musical sample, quoted melody or
+game recording was used. Original-contribution distribution terms are for project
+maintainers; no external CC0 or third-party clearance is invented.
+
+The voice is **the exact approved Kokoro stock am_puck recording**, not eSpeak.
+No named person, uploaded speaker sample or custom clone was requested. Text:
+Dance off!; provider speed1.1,CPU. Full phrase starts100ms and ends758.208ms;
+drop starts876ms. Voice receives uniform gain only: no re-render, pitch shift,
+time stretch, vocoder, saturation, compressor, reverb or EQ. Original file remains
+SHA2563fe1c9b530c4da9738e03effc466745841579f1f8c550312fe0a499265f33013.
+
+Durable inputs under game/audio-sources/dance-off/, **outside public serving**:
+- puck-raw.wav: original official-demo response (SHA2563744281930af238f93c8b0255d9ba30d960e11bd7e4037f08498cd7517674bf8).
+- puck-approved.wav: the exact selected phrase.
+- prepare-voice.py: deterministic offline raw-to-approved transform; trims only
+  outer silence (>0.001),10ms boundary air,3ms/15ms fades,peak0.75 before PCM16.
+  Frames5062..20858 of the raw render; no online service needed.
+- provenance.json: source/author/revisions,settings,hashes,approval and rights evidence.
+
+Generator generate-dance-off.py uses only Python standard library and the retained
+approved WAV. It writes **only** an explicit --output destination (otherwise WAV
+stdout). No live TTS engine/model/credential/network dependency. Reproduce just the
+authorized target from game/ without overwriting unrelated audio:
+
+    python3 public/assets/audio/generate-dance-off.py --stem bed --output /tmp/dance-bed.wav
+    python3 public/assets/audio/generate-dance-off.py --stem accent --output /tmp/dance-accent.wav
+    python3 public/assets/audio/generate-dance-off.py --stem combined --output /tmp/dance-combined.wav
+    python3 audio-sources/dance-off/prepare-voice.py --output /tmp/puck-approved.wav
+
+The JavaScript buildNamedSound target and buildDanceOffAccent delegate to this
+offline generator. The other23 named and all generic recipes remain unchanged.
+The global generate.mjs command still writes all assets; do not use it for a
+scoped production replacement.
+
+### Voice source and output-rights disposition
+
+Original generation: free public official https://huggingface.co/spaces/hexgrad/Kokoro-TTS
+CPU demo, serving https://huggingface.co/hexgrad/Kokoro-82M v1.0; trained by @rzvzn,
+architecture credited to StyleTTS2 authors, serving code by hexgrad. Recorded space
+revision555d90e5a1eaaabd017f0b458069ad112867a6d4; model repository revision observed
+f3ff3571791e39611d31c381e3a41a3af07b4987. Hosted weight bytes were not downloaded or
+independently fingerprinted; this does not claim a completely pinned remote runtime.
+
+Primary sources inspected2026-10-21:
+- https://huggingface.co/hexgrad/Kokoro-82M — Apache-2.0 model metadata; explicitly
+  welcomes production environments and commercial API deployment. Training-data
+  statements/CC BY acknowledgments are the model author's, not independently audited.
+- https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md — stock voice IDs.
+- https://huggingface.co/spaces/hexgrad/Kokoro-TTS/blob/main/README.md — Apache-2.0 space.
+- https://github.com/hexgrad/kokoro/blob/main/LICENSE — Apache License2.0 code license.
+- https://huggingface.co/terms-of-service — Your Content: creators retain created
+  content ownership; downloads remain subject to accompanying terms/licenses.
+
+These sources support commercial/game use of the generated WAV; no separate
+noncommercial-only output restriction was located for this official demo/model.
+No voice-model/code is embedded or distributed. No invented CC0 output dedication,
+exclusive copyright or blanket third-party identity/training-rights warranty.
+Retain this source/model provenance. Distributing model/code separately would
+require applicable Apache notices/license; model-training CC BY data does not by
+itself assign that license to every generated phrase. Initial generation cost$0;
+implementation made no online re-render,signup,payment or model/package installation.
+The old eSpeak voice/provenance is **not** this asset's source. Existing unrelated
+music rights/credits are unchanged and are not newly cleared by this replacement.
+
+### One authoritative event, two cancellable sources
+
+Reviewed split-stem playback is retained: one pending action owns bedDone and
+markerDone guards consumed before playback. Both sources keep the same actionId,
+SFX bus and actions cancellation set. No selection/submission playback or bed
+retrigger. If either decoded target is missing at receipt, generic selection is
+frozen for that event; a late optional decode cannot upgrade/replay it.
+
+Bed begins on its own first presentation, seeks actual elapsed age and suppresses
+expired2.2s scores. Marker follows the unchanged rendered .58 semantic sample,
+first reduced-motion tableau or fallback label. Target-only pre-render/label
+timestamp permits at most80ms stale callback age; consumed stale callbacks cannot
+retry. Its natural running-audio-clock duration is320ms. A fresh held marker may
+sound after an already-expired bed, never a restarted whole score. Natural final
+completion retains already emitted tails; mute,reset,suspend,hidden,reconnect,
+renderer-loss and leave still stop/invalidate both. Other action epochs/labels,
+poses,garment restoration,hit recovery,camera and presentation sampling unchanged.
+Continuous musical beats are not promised to lock to every delayed visual frame.
+
+### Verified on the current isolated merged game
+
+Targeted commands (game/):
+
+    node --test test/dance-off-assets.test.mjs test/dance-off.test.mjs test/dance-off-stems.test.mjs test/audio.test.mjs test/action-sync.test.mjs test/action-sync-current.test.mjs
+
+112passed,0failed,0skipped. Includes exact audition recomposition, raw/approved
+source identity and preprocessing, portable deterministic stems, cache chain,
+protected sources/gains, optional readiness/frozen fallback, authoritative identity,
+exactly-once guards,cancellation,garment reveal/fallback epochs and public MIME/HEAD
+with no-store. Private sources/generators/docs return404.
+
+Native harness uses existing Playwright/Chromium153.0.8010.12/Linuxx64,ANGLE Vulkan
+SwiftShader Device(Subzero),CSS1100x760/390x664/810x1080,DPR0.5. Phone/tablet are
+Chromium emulation, **not physical Safari/iOS testing**. It captures summed native
+PCM and matches the actual new marker waveform, without replacing source clocks,
+SSE,renderer or playback. Strict100ms /0.35 correlation thresholds unchanged.
+-15/15 normal,queued,reduced-motion and2.6s pre-onset-stall cases;9/9 renderer-loss
+  fresh/expired/recovery cases. Source-local captured PCM residual0.079..0.300ms;
+  estimated output-timestamp residual39.68..57.01ms is NOT acoustic measurement.
+-21/21 paired-source natural-tail/mute/suspend/hidden/reconnect/reset/leave cases,
+  both sources already emitted at each boundary.
+-3/3 after a2.3s block after native bed start: bed is not retriggered; short fresh
+  marker remains independently playable.
+-9/9 named-buffer-failure generic normal/queue cases, exactly one generic source
+  and no named stems; software PCM residual0.1..0.4ms.
+-Native48/96kHz conservative one-pair-plus-unchanged-music bounds, all3 layouts at
+  Music/SFX100%: battle<0.776401; victory with unchanged doubled gain<0.630889.
+-Actual max-slider desktop normal/queued summed peaks0.39794..0.44903 (3/3).
+  No limiter or protected gain changes; not a general arbitrary-polyphony promise.
+
+Combined PCM peak-4.835dBFS,zero clipped samples,zero boundary samples. All32 other
+pre-existing media are byte-identical. No subjective speaker/intelligibility or
+physical-device measurement is claimed; Philippe's preview choice is the taste
+approval. Unrelated full suite was intentionally not repeated. Detailed commands,
+logs and clocks are in the private final handoff/evidence, not shipped URLs.
+
+### Coherent cache graph / publication boundary
+
+Only changed dependencies are versioned20261021-festival-puck1: index app URL,
+app world URL,both app/world contract imports,bed URL and accent URL. Both imports
+resolve the same contract module instance. Other media/imports/styles unchanged.
+Existing server sets Cache-Control:no-store before routing, strips static query
+parameters and uses the existing flat WAV MIME/HEAD route; no server edit required.
+Publish the complete scoped asset/module graph atomically only after independent
+final QA. Do not publish an old eSpeak patch or replace colleagues' files wholesale.
+
+
+## Approved Bad Luck — lightning crack / short thunder (2026-11-09)
+
+Philippe approved this replacement (message 1569434922366799885). This section
+supersedes the earlier electronic falling-pulse recipe **only for
+assessment-hoodie:attack**. No further concept approval is required; independent
+merged QA remains the publication gate.
+
+- Destination: `assessment-hoodie-attack.wav`; original local JavaScript synthesis
+  by OpenClaw game-sound-designer, 2026-11-09, in the exact
+  `buildNamedSound('assessment-hoodie','attack')` branch of `generate.mjs`.
+  No recording, external sample, source URL, external license/version,
+  attribution obligation, new dependency or spend. Not a derivative of an
+  external recording; no invented CC0/rights-clearance claim. Maintainers decide
+  distribution terms for this original contribution.
+- 500 ms, 12,000 mono frames, 24 kHz PCM16, **24,044 bytes**; SHA-256
+  **0be036fd99b4bf6fbb283b64af660b849e260ff7d11194d9c5cb4b27b92535a7**.
+- Restrained 55 ms electrical air (seeded 4.8 kHz-shaped noise, amplitude .04,
+  decay 8/s). ONE crack begins at the existing **55 ms** internal accent:
+  two 3.5 kHz lowpass stages with 1.4 kHz bass subtraction, amplitude 2.3,
+  0.7 ms onset, 85 ms layer, decay 55/s. The second pole was added after native
+  resampling exposed excessive intersample overshoot in the first draft.
+- Continuous thunder starts with that same strike: 900 Hz lowpass noise minus
+  a 95 Hz lowpass, .85 amplitude, 5 ms attack, 445 ms layer, decay 9/s;
+  quiet 180→85 Hz modal weight, 400 ms, .18 amplitude, decay 12/s.
+  No later extra strike or detached impact stem. The body carries useful
+  300–1200 Hz energy for phone speakers rather than depending on sub-bass.
+  Existing seeded xorshift32 `0x485347` and common DC removal, soft shaping,
+  DC blocker, 3/25 ms boundary fades, .8 peak/.28 sliding 50 ms RMS caps remain
+  unchanged for every cue.
+- PCM peak **.605164 / −4.36 dBFS** at **58.792 ms** (crack onset remains 55 ms);
+  sliding 50 ms RMS **−11.057 dBFS**, DC **−1.45e−6**, zero clipped samples,
+  zero endpoint frames. Lead/body/late-tail RMS are .01829/.08054/.00713;
+  measured 300–1200 Hz body RMS over 120–300 ms is .04890. These are objective
+  waveform checks, not listening, recognition or perceived-loudness ratings.
+- Chromium 153.0.8010.12, Linux x64, native 48/96 kHz decoded peaks are
+  **.732950/.736072**, below .8. Conservative sums of individual peaks with
+  ONE action and the unchanged battle track are **≤.597183** at maximum sliders,
+  **≤.358069** at defaults; with unchanged doubled victory, **≤.451671**.
+  This is not standardized true-peak certification or an arbitrary-overlap bound.
+
+### Current marker and protected scope
+
+Rechecked the Nov 9 current checkout, not the stale Oct 31 audit:
+`battle-contract.js:NAMED_ACTION_TIMING` still gives Bad Luck phase **.59**,
+internal accent **.055 s**, action **2200 ms**; semantic marker **1298 ms**.
+`battle-world.js:choreograph`'s existing storm secondary bolt is visible for
+`t >= hit && t < hit + .13`. The bolt targets the opponent on both teams.
+No timing/offset or choreography change was needed. Smooth-frame available audio
+can lead by up to 55 ms; stalled/reduced/fallback presentations retain the
+existing seek-to-accent and 3 ms anti-click ramp. Hardware audio/display latency
+is not removed by this change.
+
+All **33 other WAV/WebM assets** are byte-identical, including Festival/Puck bed
+and accent, generic actions, music, countdown, Ready/Fight and victory. No
+scheduler, gameplay, backend, actor routing, deduplication/history suppression,
+loading/mute/suspend/hidden/reconnect/cancel/final-tail handling or gain changed.
+The only runtime source edit is the target asset cache query; the app script's
+entrypoint query advances with it. Battle world/contract and CSS URLs stay put.
+
+### Reproduce just this target (do not run the global generator)
+
+From `game/`:
+
+```sh
+node --input-type=module -e "import {writeFile} from 'node:fs/promises'; import {buildNamedSound} from './public/assets/audio/generate.mjs'; await writeFile('./public/assets/audio/assessment-hoodie-attack.wav',buildNamedSound('assessment-hoodie','attack'));"
+node --test test/bad-luck.test.mjs test/audio.test.mjs test/action-sync.test.mjs test/action-sync-current.test.mjs
+```
+
+Native scripts `test/bad-luck-browser.mjs` and `test/bad-luck-decode.mjs` use
+existing Playwright/Chromium installations via `PLAYWRIGHT_MODULE` and
+`CHROMIUM_EXECUTABLE`, and local in-memory loopback fixtures only. Bound each
+run using `timeout`. The native timing harness supports `SYNC_MATRIX=1`,
+`SYNC_GENERIC=1` (optional target decode fails), `SYNC_LIFECYCLE=1`,
+`SYNC_ONLY_LIFECYCLE=1 SYNC_FAST_TAIL=1`, `SYNC_DEVICES=desktop,phone,tablet`
+and `SYNC_EVIDENCE=/path`. Decoder metrics use `DECODE_EVIDENCE=/file.json`.
+
+### Safe integration/cache plan
+
+This private candidate is a snapshot of the current dirty colleagues' base at
+Git HEAD b6c5f3021282231b4320bb2c037d7851968ea6f7, NOT a proposal to replace those
+files wholesale. Apply only its scoped binary patch after independent QA;
+merge conflicts against newer work by hand. Keep all unrelated prerequisites.
+Do not regenerate the entire audio directory.
+
+Publish target WAV and the app's target query `?v=20261109-bad-luck1` together,
+then advance only the HTML app URL to `app.js?v=20261109-bad-luck1`. Existing
+static routes already permit the flat WAV and send no-store; no backend/config
+change, restart or live-room mutation is needed. Preserve the Festival/Puck
+queries and both existing world/contract imports to avoid duplicate module
+identities. Existing pages keep their already-decoded buffer until refreshed;
+there is no active-room hot swap. No shared checkout write, commit, push,
+publication, service change or live-room mutation was performed during production.
+
+Physical speaker listening, real iPhone/iPad hardware and Safari/iOS are NOT
+verified. Chromium phone/tablet emulation is not real-device acceptance. No full
+unrelated suite was rerun; the focused commands and their actual results are
+recorded in the private handoff/evidence.
+
+Final candidate checks (same WAV hash above): **93/93 focused unit tests passed**.
+Native Chromium 153.0.8010.12/Linux x64: **27 named full-render cases** passed
+(normal/queued/reduced/2600 ms stall on both teams for desktop + iPhone 13/iPad
+(gen 7) Chromium emulation, plus three final-hit stalls), all six invalidation
+boundaries with stale-queue consumption/fresh-event recovery on all three
+profiles, and three real WebGL-loss visible-label fallbacks. A separate desktop
+optional-target-decode-failure matrix passed **8/8**; active-tail/final completion
+checks passed **7/7** (natural, mute, suspend, hidden, reconnect, reset, leave).
+Scheduler-accent/render-submission residuals were **0–0.5 ms**; these are not
+microphone or display-scanout measurements. Native software-rendered cases sought
+to the 55 ms accent; smooth-frame prelude behavior is covered by the unit tests,
+not claimed as demonstrated by these slower native frames. The waveform peak is
+3.792 ms after onset; the existing seek ramp and hardware latency remain.
