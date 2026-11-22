@@ -1,11 +1,9 @@
 import { FIGHTER_DISPLAY_NAMES } from './fighter-data.js';
 
 const $ = id => document.getElementById(id);
-const STORAGE_KEY = 'hsg-admin-key';
 const REQUEST_TIMEOUT_MS = 10000;
-let key = sessionStorage.getItem(STORAGE_KEY);
 let timer = null, controller = null, generation = 0, failures = 0;
-let snapshot = null, revealCodes = false, nextAllowedAt = 0;
+let snapshot = null, nextAllowedAt = 0;
 
 function status(label, state) {
   $('connection').textContent = label;
@@ -13,44 +11,7 @@ function status(label, state) {
 }
 function schedule(delay) {
   clearTimeout(timer);
-  if (key && !document.hidden) timer = setTimeout(poll, Math.max(0, delay));
-}
-function clearView() {
-  snapshot = null;
-  revealCodes = false;
-  $('show-codes').setAttribute('aria-pressed', 'false');
-  $('show-codes').textContent = 'Show room codes';
-  for (const id of ['active-rooms', 'running-battles', 'players-online']) $(id).textContent = '—';
-  $('rooms-used').textContent = '— / 50';
-  $('updated').textContent = 'Awaiting first update';
-  $('rooms').replaceChildren();
-  $('room-message').textContent = 'Connecting to arena…';
-  $('room-message').hidden = false;
-}
-function stop() {
-  generation++;
-  clearTimeout(timer); timer = null;
-  controller?.abort(); controller = null;
-  failures = 0; nextAllowedAt = 0;
-}
-function loginScreen(message = '') {
-  stop();
-  key = null;
-  sessionStorage.removeItem(STORAGE_KEY);
-  $('admin-key').value = '';
-  clearView();
-  $('overview').hidden = true;
-  $('login').hidden = false;
-  $('login-message').hidden = !message;
-  $('login-message').textContent = message;
-  if (message) $('admin-key').focus();
-}
-function showOverview() {
-  $('login').hidden = true;
-  $('login-message').hidden = true;
-  $('overview').hidden = false;
-  status('Connecting…', 'connecting');
-  schedule(0);
+  if (!document.hidden) timer = setTimeout(poll, Math.max(0, delay));
 }
 function element(tag, className, value) {
   const node = document.createElement(tag);
@@ -79,12 +40,10 @@ function renderRooms(rooms) {
   for (const room of rooms) {
     const card = element('article', 'room');
     const meta = element('div', 'room-meta');
-    const code = element('strong', 'room-code', revealCodes ? room.roomCode : String(room.roomCode ?? '').slice(0, 2) + '••');
-    const codeGroup = element('div', 'code-group');
-    codeGroup.append(element('span', 'eyebrow', 'ROOM'), code);
+    const roomLabel = element('strong', 'room-number', Number.isInteger(room.roomNumber) && room.roomNumber > 0 ? 'Room ' + room.roomNumber : 'Room');
     const mode = { bot: 'BOT', friend: 'FRIEND', groups: 'GROUPS', online: 'GROUPS' }[room.mode] ?? 'UNKNOWN';
     const phase = { lobby: 'Lobby', countdown: 'Countdown', running: 'Running', finished: 'Finished' }[room.phase] ?? 'Unknown';
-    meta.append(codeGroup, element('span', 'pill', mode), element('span', 'phase', phase + (room.turnNumber == null ? '' : ' · Turn ' + room.turnNumber)));
+    meta.append(roomLabel, element('span', 'pill', mode), element('span', 'phase', phase + (room.turnNumber == null ? '' : ' · Turn ' + room.turnNumber)));
     const match = element('div', 'match');
     match.append(fighter('A', room.fighters?.A), element('span', 'vs', 'VS'), fighter('B', room.fighters?.B));
     card.append(meta, match, element('p', 'player-count', String(room.playerCount ?? 0) + ' human ' + (room.playerCount === 1 ? 'player' : 'players')));
@@ -105,7 +64,7 @@ function render(data) {
   renderRooms(data.rooms);
 }
 async function poll() {
-  if (!key || document.hidden || controller) return;
+  if (document.hidden || controller) return;
   if (Date.now() < nextAllowedAt) { schedule(nextAllowedAt - Date.now()); return; }
   const run = generation;
   const request = new AbortController(); controller = request;
@@ -118,12 +77,9 @@ async function poll() {
   const deadline = setTimeout(() => { timedOut = true; request.abort(); }, REQUEST_TIMEOUT_MS);
   try {
     const response = await Promise.race([fetch('/game/api/admin/overview', {
-      headers: { Authorization: 'Bearer ' + key },
-      credentials: 'same-origin', cache: 'no-store', signal: request.signal
+      cache: 'no-store', signal: request.signal
     }), aborted]);
     if (run !== generation || request.signal.aborted) return;
-    if (response.status === 401) { loginScreen('Admin key was not accepted. Try again.'); return; }
-    if (response.status === 404) { loginScreen('Admin overview is unavailable on this server.'); return; }
     if (response.status === 429) {
       failures++;
       const retry = Number(response.headers.get('Retry-After'));
@@ -153,31 +109,15 @@ async function poll() {
     if (run === generation) schedule(nextAllowedAt ? Math.max(0, nextAllowedAt - Date.now()) : 2000);
   }
 }
-$('login-form').addEventListener('submit', event => {
-  event.preventDefault();
-  const supplied = $('admin-key').value;
-  $('admin-key').value = '';
-  if (!supplied) return;
-  stop(); clearView();
-  key = supplied; sessionStorage.setItem(STORAGE_KEY, supplied);
-  showOverview();
-});
-$('logout').addEventListener('click', () => { loginScreen(); $('admin-key').focus(); });
-$('show-codes').addEventListener('click', () => {
-  revealCodes = !revealCodes;
-  $('show-codes').setAttribute('aria-pressed', String(revealCodes));
-  $('show-codes').textContent = revealCodes ? 'Hide room codes' : 'Show room codes';
-  if (snapshot) renderRooms(snapshot.rooms);
-});
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     generation++;
     clearTimeout(timer); timer = null;
     controller?.abort(); controller = null;
-    if (key) status('Paused · tab hidden', 'paused');
-  } else if (key) {
+    status('Paused · tab hidden', 'paused');
+  } else {
     status('Connecting…', 'connecting');
     schedule(Math.max(0, nextAllowedAt - Date.now()));
   }
 });
-if (key) showOverview();
+schedule(0);

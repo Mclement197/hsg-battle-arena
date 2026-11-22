@@ -24,7 +24,6 @@ const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve()
 function fixture() {
   let now = 100000, nextTimer = 0;
   const timers = new Map(), nodes = new Map(), listeners = new Map();
-  const storage = new Map([['hsg-admin-key', 'test-key']]);
   const requests = [];
   const node = () => ({
     textContent: '', dataset: {}, hidden: false, value: '', children: [],
@@ -46,11 +45,7 @@ function fixture() {
   vm.runInNewContext(script, {
     document, AbortController, FIGHTER_DISPLAY_NAMES: {},
     Date: class extends Date { static now() { return now; } },
-    sessionStorage: {
-      getItem: key => storage.get(key) ?? null,
-      setItem: (key, value) => storage.set(key, value),
-      removeItem: key => storage.delete(key)
-    },
+    sessionStorage: new Proxy({}, { get() { throw new Error('Public overview must not access credentials'); } }),
     setTimeout(callback, delay) {
       const id = ++nextTimer;
       timers.set(id, { callback, at: now + delay });
@@ -65,7 +60,7 @@ function fixture() {
     }
   }, { filename: 'admin.js' });
   return {
-    get, requests, storage,
+    get, requests,
     timerDelays: () => [...timers.values()].map(timer => timer.at - now).sort((a, b) => a - b),
     async advance(ms) {
       const target = now + ms;
@@ -86,10 +81,6 @@ function fixture() {
     async visible(visible) {
       document.hidden = !visible;
       listeners.get('visibilitychange')();
-      await flush();
-    },
-    async logout() {
-      get('logout').listeners.get('click')();
       await flush();
     }
   };
@@ -135,7 +126,7 @@ test('stalled fetch aborts at 10 seconds, retains stale data and retries with ex
   assert.equal(f.get('connection').dataset.state, 'connected');
   assert.equal(f.get('active-rooms').textContent, 4);
   assert.deepEqual(f.timerDelays(), [2000], 'success resets failure backoff');
-  await f.logout();
+  await f.visible(false);
 });
 
 test('stalled response.json shares the original 10-second deadline with fetch', async () => {
@@ -161,7 +152,7 @@ test('stalled response.json shares the original 10-second deadline with fetch', 
   assert.equal(f.get('connection').dataset.state, 'reconnecting');
   await f.advance(2000);
   assert.equal(f.requests.length, 3, 'stalled body does not block retry');
-  await f.logout();
+  await f.visible(false);
 });
 
 test('late fetch completion after timeout cannot render or interfere with a newer poll', async () => {
@@ -181,7 +172,7 @@ test('late fetch completion after timeout cannot render or interfere with a newe
   await flush();
   assert.equal(f.get('active-rooms').textContent, 5);
   assert.equal(f.get('connection').dataset.state, 'connected');
-  await f.logout();
+  await f.visible(false);
 });
 
 for (const stage of ['fetch', 'json']) {
@@ -211,35 +202,76 @@ for (const stage of ['fetch', 'json']) {
     f.requests[1].resolve(response(dto(2)));
     await flush();
     assert.equal(f.get('active-rooms').textContent, 2);
-    await f.logout();
+    await f.visible(false);
   });
 
-  test('logout clears a pending ' + stage + ' deadline and ignores late completion without polling again', async () => {
-    const f = fixture();
-    await seedSnapshot(f);
-    const request = f.requests[1], body = deferred();
-    if (stage === 'json') {
-      request.resolve({ status: 200, ok: true, json: () => body.promise });
-      await flush();
-    }
-    await f.advance(1000);
-    await f.logout();
-    assert.equal(request.signal.aborted, true);
-    assert.deepEqual(f.timerDelays(), [], 'logout clears both deadline and retry timers');
-    assert.equal(f.storage.has('hsg-admin-key'), false);
-    assert.equal(f.get('overview').hidden, true);
-    assert.equal(f.get('login').hidden, false);
-    assert.equal(f.get('active-rooms').textContent, '—');
-    if (stage === 'fetch') request.resolve(response(dto(99)));
-    else body.resolve(dto(99));
-    await flush();
-    await f.visible(false);
-    await f.visible(true);
-    await f.advance(120000);
-    assert.equal(f.requests.length, 2, 'no retry or visibility-resume polling after logout');
-    assert.deepEqual(f.timerDelays(), []);
-    assert.equal(f.get('active-rooms').textContent, '—');
-    assert.equal(f.get('updated').textContent, 'Awaiting first update');
-    assert.equal(f.get('overview').hidden, true);
-  });
 }
+
+test('overview starts anonymously without login, credential storage or authorization headers', async () => {
+  const f = fixture();
+  assert.equal(f.requests.length, 0);
+  assert.deepEqual(f.timerDelays(), [0]);
+  await f.advance(0);
+  assert.equal(f.requests.length, 1);
+  assert.equal(f.requests[0].url, '/game/api/admin/overview');
+  assert.equal(f.requests[0].cache, 'no-store');
+  assert.equal(f.requests[0].headers, undefined);
+  assert.deepEqual([...f.get('overview').listeners.keys()], []);
+  f.requests[0].resolve(response(dto(0)));
+  await flush();
+  assert.equal(f.get('room-message').textContent, 'No battles right now');
+  await f.visible(false);
+});
+
+test('rendering preserves authoritative countdown/running, lobby and finished ordering, not client sorting', async () => {
+  const f = fixture();
+  await f.advance(0);
+  const rooms = [[3, 'countdown'], [4, 'running'], [1, 'lobby'], [2, 'finished']]
+    .map(([roomNumber, phase]) => ({ roomNumber, phase, mode: 'groups', playerCount: 0, fighters: {} }));
+  f.requests[0].resolve(response({ ...dto(3), rooms }));
+  await flush();
+  const labels = () => Array.from(f.get('rooms').children[0].children, card => card.children[0].children[0].textContent);
+  assert.deepEqual(labels(), ['Room 3', 'Room 4', 'Room 1', 'Room 2']);
+  await f.advance(2000);
+  f.requests[1].resolve(response({ ...dto(3), rooms: [rooms[0], rooms[2], { ...rooms[1], phase: 'lobby' }, rooms[3]] }));
+  await flush();
+  assert.deepEqual(labels(), ['Room 3', 'Room 1', 'Room 4', 'Room 2'], 'phase changes never relabel rooms');
+  await f.visible(false);
+});
+
+test('429 respects Retry-After across visibility changes and resets backoff after recovery', async () => {
+  const f = fixture();
+  await seedSnapshot(f);
+  f.requests[1].resolve({ status: 429, ok: false, headers: { get: key => key === 'Retry-After' ? '7' : null } });
+  await flush();
+  assert.equal(f.get('connection').dataset.state, 'throttled');
+  assert.equal(f.get('active-rooms').textContent, 3);
+  assert.equal(f.get('updated').textContent, 'Last update is stale');
+  assert.deepEqual(f.timerDelays(), [7000]);
+  await f.advance(1000); await f.visible(false); await f.visible(true);
+  assert.deepEqual(f.timerDelays(), [6000]);
+  await f.advance(5999); assert.equal(f.requests.length, 2);
+  await f.advance(1); assert.equal(f.requests.length, 3);
+  f.requests[2].resolve({ status: 429, ok: false, headers: { get: () => 'invalid' } });
+  await flush();
+  assert.deepEqual(f.timerDelays(), [4000], 'invalid Retry-After falls back to exponential backoff');
+  await f.advance(4000);
+  f.requests[3].resolve(response(dto(4))); await flush();
+  assert.deepEqual(f.timerDelays(), [2000]);
+  assert.equal(f.get('connection').dataset.state, 'connected');
+  await f.visible(false);
+});
+
+test('non-200 responses reconnect without an obsolete login flow; backoff caps at 60 seconds', async () => {
+  const f = fixture();
+  await f.advance(0);
+  for (const delay of [2000, 4000, 8000, 16000, 32000, 60000, 60000]) {
+    f.requests.at(-1).resolve({ status: 401, ok: false });
+    await flush();
+    assert.equal(f.get('connection').dataset.state, 'reconnecting');
+    assert.equal(f.get('updated').textContent, 'Awaiting first update');
+    assert.deepEqual(f.timerDelays(), [delay]);
+    await f.advance(delay);
+  }
+  await f.visible(false);
+});
