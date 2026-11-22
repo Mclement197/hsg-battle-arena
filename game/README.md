@@ -162,28 +162,23 @@ Design context: [PRODUCT.md](PRODUCT.md), [arcade-surface.md](arcade-surface.md)
 Developed and verified in an isolated worktree, not the live static directory. Requires engine + frontend integration and an approved backend service restart; restart destroys in-memory rooms. Do not restart automatically. After QA, integrate at a room-free maintenance window, obtain restart approval, restart, then refresh clients. New client tolerates the old server’s immediate running transition (Ready/Fight only; no claimed server countdown). Old clients remain unable to vote in the new countdown phase, but must refresh to display its new UI. Do not advertise the timed intro as deployed until the new engine runs.
 
 
-## Optional admin overview (local implementation; not deployed)
+## Public read-only overview (candidate; not yet deployed)
 
-An independent read-only overview can be enabled with the startup environment variable `ADMIN_KEY`. Unset or empty disables both its standalone page and JSON endpoint with 404. No real key is supplied by this repository or enabled automatically. Configure a unique strong secret through the existing private service/environment mechanism; never commit it, put it in a URL or reuse a room capability. Placeholder only:
+Open `/game/admin/` directly for the standalone activity overview. It is always enabled and needs no account, password, environment secret or login. The page polls the anonymous same-origin `GET /game/api/admin/overview` every two seconds and maps public fighter IDs to display names. There are no public game-menu links.
 
-```sh
-ADMIN_KEY='<ADMIN_KEY>' npm start
-```
+Rooms are labeled **Room 1**, **Room 2**, and so on by creation order, never by a full, shortened or masked join code. Numbers are stable through reset and expiry of other rooms, never reused within an Arena's lifetime, and restart with a new Arena. Numbers are not accepted by join/game routes. Active battles/countdowns sort first, then lobbies, then finished rooms, with creation number breaking ties. Aggregate counts and human-seat semantics are unchanged; see [API.md](API.md) for the exact allowlisted DTO. No room IDs, participant names, join links, votes, IPs or game capabilities are returned.
 
-Open the private standalone `/game/admin/` path directly after deployment; there are no public game-menu links. The login shell is not secret; room data requires a bearer-authenticated GET to `/game/api/admin/overview`. The UI polls every two seconds and resolves fighter IDs through public display-name data. No game-control API is authorized by this key, and no participant names, votes, IPs or game capabilities are returned. See API.md for the exact DTO, human-seat counts, five-minute failed-auth blocks and trusted-IP rules.
+The existing HTTP server, anonymous per-client quotas, same-origin API checks, no-store headers and static-file protections are reused. No new dependency, service, account, persistent storage or SSE. No password-authentication subsystem or secret setup remains. Host/player authorization and all gameplay rules are unchanged. Reads never keep rooms alive, advance turns or open streams. An admin-only WeakMap tracker observes creation synchronously, so rooms created/deleted between polls and ticks still consume an ordinal, without editing the engine.
 
-Implementation reuses the existing HTTP server, Arena state and static-file protections, plus Node crypto only (no new dependency, service, account, persistence or SSE). Admin reads never keep rooms alive or advance gameplay; normal tick/expiry handling remains unchanged. Any later backend deployment/key rotation needs an explicitly approved restart and a room-free window because rooms are memory-only. This change performs no deployment or real-key setup.
-
-QA can inject a **fake** `adminKey` into `createGameServer` with the existing deterministic `Arena({now,pick})`, `autoTick:false` and `game.tick()` fixtures in `test/http.test.mjs`. `src/admin.mjs` exports the pure DTO builder and bounded authentication gate for targeted unit tests. Existing backend regression entry point: `node --test test/engine.test.mjs test/http.test.mjs`. Use temporary static fixtures for route/symlink checks; real keys and live rooms are unnecessary.
-
-Admin verification (fake credentials only):
+QA uses an isolated `createGameServer` with no authentication options, a deterministic `Arena({now,pick})`, `autoTick:false` and `game.tick()` for expiry. Initialize tracking by creating the server before lifecycle fixtures; existing injected rooms are numbered by insertion order. Tests must cover anonymous page/API access, exact DTO keys/no join-code leakage, stable numbering/reset/expiry/code reuse, phase ordering, human-seat counts, generic errors, query/origin rejection and bounded anonymous quotas. Real secrets and live rooms are unnecessary.
 
 ```sh
 node --test test/admin.test.mjs test/engine.test.mjs test/http.test.mjs test/profiles-modes.test.mjs
 PLAYWRIGHT_MODULE=/path/to/playwright-core/index.mjs CHROMIUM_EXECUTABLE=/path/to/chrome node test/admin-browser.mjs
 ```
 
-The browser harness uses mocked overview data and checks login, tab storage/logout, polling/backoff, masking, display names, empty state and responsive layouts. Backend tests exercise real HTTP authentication and sanitized room responses. Polls have a ten-second total request/body deadline and show stale/reconnecting status on failure. Deployment remains pending a confirmed room-free restart window and private operator key setup.
+The browser harness should use mocked code-free overview data to check automatic polling/backoff, public display names, empty/error/stale states and responsive layouts, without a login flow or credential storage. Independent QA owns these updated harnesses. Deployment requires QA/security sign-off and an approved room-free restart because rooms are memory-only; this implementation does not deploy, configure or restart anything.
+
 ## Mensa B modeled environment (2026-10-19)
 
 Mensa B now shares the real 3D battle world with both fighters, based on three user-confirmed interior photographs: concrete beams and formwork, parquet, bentwood/chrome seating, pale tables, mineral-word artwork and the coffee counter. The chooser/loading fallback is rendered from that model. Dimensions, dates/seating and widened gameplay lane are explicitly qualified in [source and reproduction](art/mensa-b/README.md). Native Blender/GLB and compact evaluated instance recipe are included; no source-photo backdrop, new backend route, service restart, room reset, combat/audio change or new dependency. Library/Trischli and all six fighter assets remain unchanged.
