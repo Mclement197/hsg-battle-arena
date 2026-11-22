@@ -239,3 +239,22 @@ unavailable; relevant source/callers/tests were inspected directly instead.
 Not checked: physical speakers, perceived loudness, actual Safari/iOS/WebKit, or
 new broad layout smoke (no layout change). Existing media-rights caveat remains.
 Graft executable is unavailable; scoped source and callers were inspected directly.
+
+## Known issue: native celebration timing sensitivity — 2026-11-22
+
+- `test/win-celebration-browser.mjs` intermittently fails its Bot 9.5-second
+  wall-clock upper bound or misses the phone `knees` phase observation with
+  software rendering / CPU-GPU contention. Integration recorded a concurrent
+  timing failure then a serial Bot pass at 9,401 ms; independent QA recorded
+  both failure types before a serial pass across Bot, Friend and Groups
+  (Friend tail 9,548 ms; the 9.5-second assertion applies only to Bot). A serial
+  rerun passing is not proof that the test is stable.
+- Production timing (2-second KO then separate 5-second celebration), audio
+  behavior and all test bounds/assertions are unchanged. Follow up with
+  deterministic phase/event checks that distinguish lifecycle correctness from
+  rendering/scheduling delays; do not relax timing bounds or remove phase
+  coverage to hide the flake.
+- Evidence: `/tmp/hsg-integration-hfoG23/reports/INTEGRATION.md`,
+  `native-win-concurrent-attempt.txt` and `native-win.txt` in that reports
+  directory; independent QA report for `cd66816` (2026-11-21). This entry
+  documents a test reliability follow-up, not a production fix or stability claim.
