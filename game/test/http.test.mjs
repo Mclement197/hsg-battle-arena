@@ -646,3 +646,19 @@ test('HTTP host toggle stays lobby-only and friend host/guest reactions work on 
   const rejected = await f.post(botUrl + '/react', { reaction: '😂' }, bot.hostToken);
   assert.equal(rejected.status, 409); assert.equal(rejected.data.error.code, 'invalid_mode');
 });
+
+
+test('bot creation validates difficulty before allocation and snapshots/reset/replay retain bot-only setting',async t=>{
+ const f=await fixture(t);const before=f.arena.rooms.size;
+ for(const difficulty of [null,17,{},[], 'HARD','unknown']) {
+  const response=await f.post('/game/api/rooms',{mode:'bot',difficulty});assert.equal(response.status,400,JSON.stringify(difficulty));assert.equal(f.arena.rooms.size,before,'invalid difficulty allocated no room');
+ }
+ const wrongMode=await f.post('/game/api/rooms',{mode:'friend',difficulty:'easy'});assert.equal(wrongMode.status,400);assert.equal(f.arena.rooms.size,before);
+ const defaultBot=await f.post('/game/api/rooms',{mode:'bot'});assert.equal(defaultBot.status,201);assert.equal(defaultBot.data.state.difficulty,'normal');
+ const defaultState=await f.state(defaultBot.data,defaultBot.data.hostToken);assert.equal(defaultState.data.state.difficulty,'normal');
+ const bot=await f.post('/game/api/rooms',{mode:'bot',difficulty:'hard'});assert.equal(bot.status,201);assert.equal(bot.data.state.difficulty,'hard');
+ const snapshot=await f.state(bot.data,bot.data.hostToken);assert.equal(snapshot.data.state.mode,'bot');assert.equal(snapshot.data.state.difficulty,'hard');
+ const online=await f.create();assert.equal(online.state.mode,'online');assert.equal(Object.hasOwn(online.state,'difficulty'),false);
+ const reset=await f.post('/game/api/rooms/'+bot.data.roomId+'/reset',{},bot.data.hostToken);assert.equal(reset.status,200);assert.equal(reset.data.state.mode,'bot');assert.equal(reset.data.state.difficulty,'hard');
+ const replay=await f.post('/game/api/rooms/'+bot.data.roomId+'/start',{},bot.data.hostToken);assert.equal(replay.status,200);assert.equal(replay.data.state.mode,'bot');assert.equal(replay.data.state.difficulty,'hard');
+});

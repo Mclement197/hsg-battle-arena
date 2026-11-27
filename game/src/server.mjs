@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import QRCode from 'qrcode';
 import { Arena, GameError, fail, fields } from './engine.mjs';
+import { BOT_DIFFICULTIES } from './bot-policy.mjs';
 import { adminStaticPath, adminOverview, trackAdminRooms } from './admin.mjs';
 
 export const LIMITS = Object.freeze({ bodyBytes: 2048, requestsPerMinute: 3000, createsPerMinute: 10,
@@ -216,11 +217,14 @@ export function createGameServer({ arena, publicOrigin = 'http://127.0.0.1:3210'
         if (ipEntry.creates >= limits.createsPerMinute) fail(429, 'rate_limit', 'Room creation rate exceeded');
         ipEntry.creates++;
         const setup = await body(req);
-        fields(setup, Object.hasOwn(setup || {}, 'mode') ? ['mode'] : []);
+        const hasDifficulty = Object.hasOwn(setup || {}, 'difficulty');
+        fields(setup, [...(Object.hasOwn(setup || {}, 'mode') ? ['mode'] : []), ...(hasDifficulty ? ['difficulty'] : [])]);
+        if (hasDifficulty && (setup.mode !== 'bot' || !BOT_DIFFICULTIES.includes(setup.difficulty)))
+          fail(400, 'invalid_difficulty', 'Difficulty requires bot mode and must be easy, normal or hard');
         if (Object.hasOwn(setup, 'mode') && !['bot', 'friend', 'groups'].includes(setup.mode)) fail(400, 'invalid_mode', 'Mode must be bot, friend or groups; omit mode for legacy group play');
         sweep();
         const room = arena.create();
-        if (setup.mode === 'bot') arena.enableBot(room);
+        if (setup.mode === 'bot') arena.enableBot(room, setup.difficulty);
         if (setup.mode === 'friend') arena.enableFriend(room);
         if (setup.mode === 'groups') room.mode = 'groups';
         return json(res, 201, { roomId: room.id, hostToken: room.hostToken, joinUrl: joinUrl(room),

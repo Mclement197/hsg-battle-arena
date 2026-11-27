@@ -1214,6 +1214,9 @@ if (typeof document !== 'undefined') (() => {
     client.stop(); resetReactionSession(); client.state = null;
     pendingSetupRoom = null;
     setupMode = mode; selectedTeam = 'A';
+    $('bot-difficulty').hidden = mode !== 'bot';
+    $('bot-difficulty').disabled = false;
+    $('bot-difficulty').querySelector('[value=normal]').checked = true;
     $('global-error').hidden = true;
     drawArenas(); show('arena');
   }
@@ -1278,11 +1281,16 @@ if (typeof document !== 'undefined') (() => {
   }
   let pendingSetupRoom = null;
   $('selection-next').addEventListener('click', async () => {
+    if (setupBusy) return;
     setupBusy = true; $('selection-next').disabled = true;
+    $('bot-difficulty').disabled = true;
     setText('selection-next', 'Preparing battle…');
     try {
       if (!pendingSetupRoom || client.room !== pendingSetupRoom) {
-        const room = await client.create({ mode: setupMode });
+        const setup = setupMode === 'bot'
+          ? { mode: 'bot', difficulty: $('bot-difficulty').querySelector(':checked').value }
+          : { mode: setupMode };
+        const room = await client.create(setup);
         pendingSetupRoom = room.roomId;
       }
       await client.mutate('configure', { arenaId: selectedArena, characterA: selectedCharacters.A, characterB: selectedCharacters.B });
@@ -1296,7 +1304,7 @@ if (typeof document !== 'undefined') (() => {
       battleStartCue({ ...client.state, serverNow: client.serverTime() }); actionCue(client.state); visualCue(client.state);
       $('global-error').hidden = true;
     } catch (error) { reportError(error.message); }
-    finally { setupBusy = false; $('selection-next').disabled = false; setText('selection-next', setupMode === 'bot' ? 'Start bot battle' : setupMode === 'friend' ? 'Invite your friend' : 'Open group room'); }
+    finally { setupBusy = false; $('selection-next').disabled = false; $('bot-difficulty').disabled = !!pendingSetupRoom; setText('selection-next', setupMode === 'bot' ? 'Start bot battle' : setupMode === 'friend' ? 'Invite your friend' : 'Open group room'); }
   });
   let soloPending = false;
   document.querySelectorAll('[data-solo-move]').forEach(button => button.addEventListener('click', async () => {

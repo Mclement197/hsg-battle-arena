@@ -109,7 +109,17 @@ The presenter’s arena/character selections are validated by the server and sha
 
 Groups retains the non-playing presenter/room/QR/join/balanced-team/SSE/voting game. Friend is a separate real online 1v1: the host automatically owns Player 1 (A), one guest owns Player 2 (B), and a third join is rejected. Both play on their own browsers; each accepted move resolves immediately, with random legal fallback after 15 seconds. Only the host configures fighters, starts, resets or replays. Reload reconnects the same seat through its saved capability; losing that capability does not free the seat. This is not local hot-seat or peer-to-peer play.
 
-Bot mode uses the same authoritative engine and server, not browser-controlled HP. The host controls Team A through the host-only solo action. A submitted move resolves on the next server tick (normally within 100 ms); Team B chooses a random legal move after one second. If the human does not choose within 15 seconds, the normal no-vote fallback applies. Bot rooms reject external joins. Bot mode requires a working server connection.
+Bot mode uses the same authoritative engine and server, not browser-controlled HP. The host controls Team A through the host-only solo action. A submitted move resolves on the next server tick (normally within 100 ms); Team B chooses a difficulty-based legal move after one second. If the human does not choose within 15 seconds, the normal no-vote fallback applies. Bot rooms reject external joins. Bot mode requires a working server connection.
+
+### Bot difficulty
+
+Bot creation accepts `{mode:"bot", difficulty:"easy"|"normal"|"hard"}` (omit difficulty for **Normal**). Difficulty is bot-only, immutable for the room and retained by reset/rematch. Invalid values or difficulty on any non-bot creation return 400 before allocating a room. Friend/Groups rules and human timeout fallback are unchanged.
+
+- **Easy:** uniform over engine-available moves, excluding heal at full HP.
+- **Normal:** an unbiased 50/50 choice between Easy and Hard on each bot turn.
+- **Hard:** attack for a KO first, otherwise special for a KO; heal only to survive an otherwise lethal strongest next-turn attack/special; otherwise special, defend if the opponent special is ready next turn, then attack. Damage predictions use actual fighter stats, shield percentage, rounding and minimum-one damage. Next-turn readiness includes a special becoming ready at the opponent next own-turn start. Healing must leave HP strictly greater than predicted incoming damage, including the bot existing shield.
+
+Pure server interface: `chooseBotMove({difficulty, active, opponent, availableMoves, maxHp}, pick)` in `src/bot-policy.mjs`; `pick(size)` is the engine injectable unbiased index picker. Teams supply public `{characterId,hp,shield,ownTurn,specialReadyOwnTurn}` combat state only; no votes, credentials or hidden information are used. The engine supplies its legal move list and HP cap. No combat stats, mechanics, timing, visuals or sounds change.
 
 ### Articulated character models
 

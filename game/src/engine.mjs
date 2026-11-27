@@ -1,5 +1,6 @@
 import { randomBytes, randomInt } from 'node:crypto';
 import { fighterStats } from '../public/fighter-data.js';
+import { BOT_DIFFICULTIES, chooseBotMove } from './bot-policy.mjs';
 
 export const RULES = Object.freeze({ turnMs: 15000, maxHp: 100, attack: 20, heal: 15, special: 30, specialCooldownOwnTurns: 3 });
 export const PREBATTLE_MS = 7157; // Three spoken beats + the unmodified 4.156375 s Ready/Fight clip.
@@ -46,11 +47,12 @@ export class Arena {
     this.rooms.set(room.id, room);
     return room;
   }
-  enableBot(room) {
+  enableBot(room, difficulty = 'normal') {
+    if (!BOT_DIFFICULTIES.includes(difficulty)) fail(400, 'invalid_difficulty', 'Difficulty must be easy, normal or hard');
     const human = this.join(room, { nickname: 'You' });
     const bot = this.join(room, { nickname: 'Campus Bot' });
     human.player.team = 'A'; bot.player.team = 'B';
-    room.mode = 'bot';
+    room.mode = 'bot'; room.difficulty = difficulty;
   }
   enableFriend(room) {
     const { player, playerToken } = this.join(room, { nickname: 'Player 1 (host)' });
@@ -194,10 +196,13 @@ export class Arena {
     const max = Math.max(...Object.values(voteCounts));
     const tiedMoves = max ? MOVES.filter(move => voteCounts[move] === max) : [];
     const candidates = totalVotes ? tiedMoves : this.available(room);
-    const move = candidates[this.pick(candidates.length)];
     const active = room.teams[turn.team];
     const otherTeam = turn.team === 'A' ? 'B' : 'A';
     const target = room.teams[otherTeam];
+    const move = room.mode === 'bot' && turn.team === 'B'
+      ? chooseBotMove({ difficulty: room.difficulty, active, opponent: target,
+        availableMoves: this.available(room), maxHp: RULES.maxHp }, this.pick)
+      : candidates[this.pick(candidates.length)];
     let damage = 0, healed = 0;
     if (move === 'attack' || move === 'special') {
       const power = fighterStats(active.characterId)[move];
@@ -226,7 +231,8 @@ export class Arena {
       startedAt: room.turn.startedAt, deadline: room.turn.deadline, availableMoves: this.available(room),
       voteCounts: this.counts(room), totalVotes: room.turn.votes.size };
     return { roomId: room.id, revision: room.revision, serverNow: this.now(), phase: room.phase,
-      mode: room.mode, arenaId: room.arenaId, match: room.match, winner: room.winner, rules: RULES, teams,
+      mode: room.mode, ...(room.mode === 'bot' ? { difficulty: room.difficulty } : {}),
+      arenaId: room.arenaId, match: room.match, winner: room.winner, rules: RULES, teams,
       players: players.map(({ id, nickname, team, connections }) => ({ id, nickname, team, connected: connections > 0 })),
       turn, prebattle: room.prebattle || null, lastResult: room.lastResult, recentResults: [...room.recentResults],
       reactions: { enabled: room.reactionsEnabled, recent: room.recentReactions.filter(reaction => this.now() - reaction.at < REACTION_TTL_MS).map(reaction => ({ ...reaction })) },

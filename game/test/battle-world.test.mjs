@@ -48,8 +48,8 @@ test('director is bounded, reduced motion stationary and scene cleanup cancels q
 });
 
 test('server history carries actual actor/target HP and clears on match reset',async()=>{
- const {Arena}=await import('../src/engine.mjs');let now=100;const arena=new Arena({now:()=>now,pick:()=>0});const room=arena.create();arena.enableBot(room);const host=arena.authenticate(room,room.hostToken);arena.configure(room,host,{arenaId:'trischli',characterA:CHARACTERS[0],characterB:CHARACTERS[1]});arena.start(room,host,{});now=room.prebattle.deadline;arena.advance(room);
- for(let i=0;i<12;i++){const team=room.turn.team;room.turn.votes.set('test','defend');now=room.turn.deadline;arena.advance(room);assert.equal(room.lastResult.targetTeam,team);}
+ const {Arena}=await import('../src/engine.mjs');let now=100;const arena=new Arena({now:()=>now,pick:()=>0});const room=arena.create();arena.enableFriend(room);const host=arena.authenticate(room,room.hostToken);const joined=arena.join(room,{nickname:'Opponent'});const guest=arena.authenticate(room,joined.playerToken);arena.configure(room,host,{arenaId:'trischli',characterA:CHARACTERS[0],characterB:CHARACTERS[1]});arena.start(room,host,{});now=room.prebattle.deadline;arena.advance(room);
+ for(let i=0;i<12;i++){const team=room.turn.team;if(team==='A')arena.play(room,host,{turnId:room.turn.id,move:'defend'});else arena.vote(room,guest,{turnId:room.turn.id,move:'defend'});now=room.turn.deadline;arena.advance(room);assert.equal(room.lastResult.targetTeam,team);}
  assert.equal(room.recentResults.length,8);assert.equal(arena.snapshot(room,host).recentResults.length,8);arena.reset(room,host,{});assert.deepEqual(room.recentResults,[]);
 });
 
